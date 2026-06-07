@@ -69,6 +69,17 @@
 - [x] Three-language support (EN / 中文 / ES) for all new strings
 - [x] iOS build green (`runChecks`) + live end-to-end verified via rollback harness: A→B send persists & creates a shared thread; B sees unread=1 + correct preview + other=A; B replies → A sees unread=1 + reply preview + last_sender=B; A opens → unread=0; thread total=2 msgs; non-friend send blocked; realtime enabled — all rolled back, production untouched
 
+## Chat polish: clean bubbles, photo messages, avatar upload
+
+- **Clean bubbles** — removed the custom `BubbleShape` tail/burr; both sides now use a uniform 20pt continuous rounded rectangle (iMessage-style); styling only, send logic untouched
+- **Avatar upload fixed** — the `avatars` Storage bucket never existed (uploads 400'd) and failures were silently swallowed while still showing "saved". Now: public `avatars` bucket + Storage RLS (anyone reads; a user writes only their own `{uid}/` folder), images compressed before upload, and upload failures raise a real error (no fake success). `avatar_url` is persisted and mirrored to the Me page / contacts / chat
+- **Photo messages** — the chat `+` button opens the photo library (system-keyboard emoji already work, so no custom panel); images upload to a **private** `chat-media` bucket and display via short-lived signed URLs
+- [x] `dm_messages` gained `message_type` (`text`/`image`), `image_url` (private path), `image_width`/`image_height`; body CHECK relaxed so an image may have an empty caption; added `dm_messages_image_present` CHECK
+- [x] `send_dm_media` SECURITY DEFINER fn (friends-only, mirrors `send_dm`); `send_dm` + `list_dm_threads` recreated to track `last_message_type`; the list shows a localized `[图片]`/`[Photo]`/`[Foto]` preview for caption-less images
+- [x] Private `chat-media` bucket with thread-scoped Storage RLS — only the two thread participants (verified by the thread id in the object path) can read/write; client fetches via `createSignedURL`, cached by path so realtime reloads don't re-sign
+- [x] `ChatThreadViewModel.sendImage` (upload → `send_dm_media` → reload), `ChatDetailView` image bubbles + `PhotosPicker`, `ChatsListView` `[图片]` preview; three-language strings (EN / 中文 / ES)
+- [x] iOS build green (`runChecks`) + live rollback harness verified: empty-caption image stored as `type=image` w/ dimensions; recipient sees unread=1 + `last_type=image` + `[图片]` preview; captioned image shows its caption; non-friend image blocked; buckets+policies present; realtime enabled — all rolled back, production untouched
+
 ## Design
 
 - **Welcome screen**: The Wefluens logo centered on a warm gradient background, with email and password fields and Sign In / Create Account buttons. A subtle loading animation appears while authenticating

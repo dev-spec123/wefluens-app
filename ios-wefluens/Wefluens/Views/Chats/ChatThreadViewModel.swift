@@ -18,6 +18,7 @@ final class ChatThreadViewModel {
     var messages: [ChatMessage] = []
     var isLoading = true
     var sendFailed = false
+    var isSendingImage = false
 
     private var channel: RealtimeChannelV2?
     private var listenTask: Task<Void, Never>?
@@ -52,6 +53,29 @@ final class ChatThreadViewModel {
         } catch {
             sendFailed = true
             print("⚠️ send_dm failed: \(error)")
+        }
+    }
+
+    /// Uploads a picked photo to the private `chat-media` bucket and sends it as an
+    /// image message via `send_dm_media` (friends-only). Re-reads from the DB on
+    /// success; surfaces a real error on failure (never a silent no-op).
+    func sendImage(_ imageData: Data) async {
+        guard !isSendingImage else { return }
+        isSendingImage = true
+        defer { isSendingImage = false }
+        do {
+            let upload = try await data.uploadChatImage(threadId: route.threadId, imageData: imageData)
+            try await data.sendImageMessage(
+                to: route.otherUserId,
+                imagePath: upload.path,
+                caption: "",
+                width: upload.width,
+                height: upload.height
+            )
+            await reload()
+        } catch {
+            sendFailed = true
+            print("⚠️ send_dm_media failed: \(error)")
         }
     }
 

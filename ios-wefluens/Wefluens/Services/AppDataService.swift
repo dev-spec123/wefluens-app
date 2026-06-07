@@ -8,6 +8,7 @@
 
 import Foundation
 import Supabase
+import UIKit
 
 @Observable
 final class AppDataService {
@@ -123,22 +124,46 @@ final class AppDataService {
 
     // MARK: - Avatar
 
+    /// Uploads a compressed avatar to the public `avatars` bucket and returns its
+    /// public URL. THROWS on failure — the caller must surface the error and must
+    /// NOT pretend the save succeeded. The path is `{uid}/avatar-{uuid}.jpg`
+    /// (lowercased to match the Storage RLS policy).
     @MainActor
-    func uploadAvatar(userId: UUID, imageData: Data) async -> String? {
-        let filePath = "\(userId.uuidString)/avatar-\(UUID().uuidString).jpg"
-        do {
-            let file = File(name: filePath, data: imageData, fileName: "avatar.jpg", contentType: "image/jpeg")
-            try await supabase.storage
-                .from("avatars")
-                .upload(filePath, data: imageData)
-            let publicURL = try supabase.storage
-                .from("avatars")
-                .getPublicURL(path: filePath)
-            return publicURL.absoluteString
-        } catch {
-            print("⚠️ Avatar upload failed: \(error)")
-            return nil
-        }
+    func uploadAvatar(userId: UUID, imageData: Data) async throws -> String {
+        let compressed = Self.compressedJPEG(imageData, maxDimension: 512, quality: 0.82) ?? imageData
+        let folder = userId.uuidString.lowercased()
+        let filePath = "\(folder)/avatar-\(UUID().uuidString.lowercased()).jpg"
+        try await supabase.storage
+            .from("avatars")
+            .upload(filePath, data: compressed, options: FileOptions(contentType: "image/jpeg", upsert: true))
+        let publicURL = try supabase.storage
+            .from("avatars")
+            .getPublicURL(path: filePath)
+        return publicURL.absoluteString
+    }
+
+    /// Downscales + JPEG-compresses image data so uploads stay small and fast.
+    nonisolated static func compressedJPEG(_ data: Data, maxDimension: CGFloat, quality: CGFloat) -> Data? {
+        guard let image = UIImage(data: data) else { return nil }
+        let size = image.size
+        guard size.width > 0, size.height > 0 else { return nil }
+        let scale = min(1, maxDimension / max(size.width, size.height))
+        let target = CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: target, format: format)
+        let resized = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: target)) }
+        return resized.jpegData(compressionQuality: quality)
+    }
+
+    /// Pixel dimensions of encoded image data (for chat image layout).
+    nonisolated static func pixelSize(_ data: Data) -> (width: Int, height: Int)? {
+        guard let image = UIImage(data: data) else { return nil }
+        let w = Int((image.size.width * image.scale).rounded())
+        let h = Int((image.size.height * image.scale).rounded())
+        guard w > 0, h > 0 else { return nil }
+        return (w, h)
     }
 
     /// Persist profile fields to Supabase via upsert — works even if the row
@@ -173,9 +198,8 @@ final class AppDataService {
             profile?.name = name
             profile?.bio = bio
             profile?.location = location
-            if let url = avatarUrl {
-                profile?.avatarUrl = url
-            }
+            // Always mirror the avatar (including a freshly uploaded one).
+            profile?.avatarUrl = avatarUrl
         } else {
             profile = UserProfile(
                 name: name, handle: "", role: "",
@@ -225,7 +249,8 @@ final class AppDataService {
                     otherUserId: row.otherId,
                     avatarInitials: Self.initials(from: displayName),
                     lastMessageAt: row.lastMessageAt,
-                    lastFromMe: row.lastSenderId == uid
+                    lastFromMe: row.lastSenderId == uid,
+                    lastMessageIsImage: (row.lastMessageType ?? "text") == "image"
                 )
             }
         } catch {
@@ -518,6 +543,62 @@ final class AppDataService {
         return threadId
     }
 
+    /// Result of uploading a chat image: the private storage path plus pixel size.
+    struct ChatImageUpload: Sendable { let path: String; let width: Int; let height: Int }
+
+    /// Compresses + uploads an image into the private `chat-media` bucket under
+    /// `{threadId}/{uuid}.jpg`. Storage RLS only lets the two thread participants
+    /// write here. Returns the path (stored in `dm_messages.image_url`) + dimensions.
+    @MainActor
+    func uploadChatImage(threadId: UUID, imageData: Data) async throws -> ChatImageUpload {
+        let compressed = Self.compressedJPEG(imageData, maxDimension: 1280, quality: 0.8) ?? imageData
+        let dims = Self.pixelSize(compressed) ?? (width: 1, height: 1)
+        let folder = threadId.uuidString.lowercased()
+        let path = "\(folder)/\(UUID().uuidString.lowercased()).jpg"
+        try await supabase.storage
+            .from("chat-media")
+            .upload(path, data: compressed, options: FileOptions(contentType: "image/jpeg", upsert: false))
+        return ChatImageUpload(path: path, width: dims.width, height: dims.height)
+    }
+
+    /// Sends an image message via the friend-validated `send_dm_media` function.
+    /// Pure DB — never any email. Refreshes the conversation list afterwards.
+    @MainActor
+    @discardableResult
+    func sendImageMessage(to otherId: UUID, imagePath: String, caption: String, width: Int, height: Int) async throws -> UUID {
+        let raw: String = try await supabase
+            .rpc("send_dm_media", params: SendDMMediaParams(
+                p_other: otherId.uuidString,
+                p_image_url: imagePath,
+                p_caption: caption,
+                p_width: width,
+                p_height: height
+            ))
+            .execute()
+            .value
+        await loadConversations()
+        guard let threadId = UUID(uuidString: raw) else {
+            throw DataError(message: "Invalid thread id")
+        }
+        return threadId
+    }
+
+    /// Short-lived signed URLs for private chat images, cached by path so the
+    /// realtime-driven reloads don't re-sign the same image on every insert.
+    private var signedURLCache: [String: (url: URL, expires: Date)] = [:]
+
+    @MainActor
+    func signedChatImageURL(path: String) async throws -> URL {
+        if let cached = signedURLCache[path], cached.expires > Date().addingTimeInterval(120) {
+            return cached.url
+        }
+        let url = try await supabase.storage
+            .from("chat-media")
+            .createSignedURL(path: path, expiresIn: 3600)
+        signedURLCache[path] = (url, Date().addingTimeInterval(3600))
+        return url
+    }
+
     /// Loads all messages in a thread (RLS limits this to the two participants),
     /// mapped to the UI `ChatMessage` model.
     @MainActor
@@ -532,11 +613,16 @@ final class AppDataService {
                 .execute()
                 .value
             return rows.map { row in
-                ChatMessage(
+                let isImage = (row.messageType ?? "text") == "image"
+                return ChatMessage(
                     id: row.id,
                     text: row.body,
                     sender: row.senderId == uid ? .me : .them,
-                    time: Self.clockTime(from: row.createdAt)
+                    time: Self.clockTime(from: row.createdAt),
+                    kind: isImage ? .image : .text,
+                    imagePath: row.imageUrl,
+                    imageWidth: row.imageWidth,
+                    imageHeight: row.imageHeight
                 )
             }
         } catch {

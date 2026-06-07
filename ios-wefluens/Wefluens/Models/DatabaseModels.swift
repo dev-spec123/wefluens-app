@@ -286,6 +286,7 @@ nonisolated struct DMThreadListRow: Codable, Identifiable, Sendable {
     let lastMessage: String?
     let lastMessageAt: Date?
     let lastSenderId: UUID?
+    let lastMessageType: String?
     let unreadCount: Int
 
     var id: UUID { threadId }
@@ -300,6 +301,7 @@ nonisolated struct DMThreadListRow: Codable, Identifiable, Sendable {
         case lastMessage = "last_message"
         case lastMessageAt = "last_message_at"
         case lastSenderId = "last_sender_id"
+        case lastMessageType = "last_message_type"
         case unreadCount = "unread_count"
     }
 }
@@ -311,6 +313,10 @@ nonisolated struct DMMessageRow: Codable, Identifiable, Sendable {
     let senderId: UUID
     let recipientId: UUID
     let body: String
+    let messageType: String?
+    let imageUrl: String?
+    let imageWidth: Int?
+    let imageHeight: Int?
     let readAt: Date?
     let createdAt: Date?
 
@@ -319,6 +325,10 @@ nonisolated struct DMMessageRow: Codable, Identifiable, Sendable {
         case threadId = "thread_id"
         case senderId = "sender_id"
         case recipientId = "recipient_id"
+        case messageType = "message_type"
+        case imageUrl = "image_url"
+        case imageWidth = "image_width"
+        case imageHeight = "image_height"
         case readAt = "read_at"
         case createdAt = "created_at"
     }
@@ -331,6 +341,14 @@ nonisolated struct GetOrCreateThreadParams: Encodable, Sendable {
 nonisolated struct SendDMParams: Encodable, Sendable {
     let p_other: String
     let p_body: String
+}
+
+nonisolated struct SendDMMediaParams: Encodable, Sendable {
+    let p_other: String
+    let p_image_url: String
+    let p_caption: String
+    let p_width: Int
+    let p_height: Int
 }
 
 nonisolated struct MarkThreadReadParams: Encodable, Sendable {

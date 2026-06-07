@@ -198,11 +198,15 @@ private struct ConversationRow: View {
     let conversation: Conversation
 
     /// Prepends a localized "You: " when I sent the last message (WeChat-style).
+    /// A caption-less image shows a localized "[Photo]" placeholder.
     private var previewText: String {
-        guard !conversation.lastMessage.isEmpty else { return "" }
-        return conversation.lastFromMe
-            ? l10n.t(.chatYouPrefix) + conversation.lastMessage
+        let base = (conversation.lastMessageIsImage && conversation.lastMessage.isEmpty)
+            ? l10n.t(.chatImagePreview)
             : conversation.lastMessage
+        guard !base.isEmpty else { return "" }
+        return conversation.lastFromMe
+            ? l10n.t(.chatYouPrefix) + base
+            : base
     }
 
     var body: some View {

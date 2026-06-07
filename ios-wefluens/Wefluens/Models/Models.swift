@@ -14,17 +14,34 @@ enum MessageSender: Equatable {
     case them
 }
 
+/// A direct message is either plain text or an image (with an optional caption).
+enum ChatMessageKind: Equatable {
+    case text
+    case image
+}
+
 struct ChatMessage: Identifiable, Equatable {
     let id: UUID
     let text: String
     let sender: MessageSender
     let time: String
+    let kind: ChatMessageKind
+    /// Storage path in the private `chat-media` bucket (image messages only).
+    let imagePath: String?
+    let imageWidth: Int?
+    let imageHeight: Int?
 
-    init(id: UUID = UUID(), text: String, sender: MessageSender, time: String) {
+    init(id: UUID = UUID(), text: String, sender: MessageSender, time: String,
+         kind: ChatMessageKind = .text, imagePath: String? = nil,
+         imageWidth: Int? = nil, imageHeight: Int? = nil) {
         self.id = id
         self.text = text
         self.sender = sender
         self.time = time
+        self.kind = kind
+        self.imagePath = imagePath
+        self.imageWidth = imageWidth
+        self.imageHeight = imageHeight
     }
 }
 
@@ -50,8 +67,10 @@ struct Conversation: Identifiable {
     let lastMessageAt: Date?
     /// True when the last message was sent by me (drives the "You: " preview prefix).
     let lastFromMe: Bool
+    /// True when the last message is an image — shows a localized "[Photo]" preview when there's no caption.
+    let lastMessageIsImage: Bool
 
-    init(id: UUID = UUID(), name: String, avatar: String, avatarColors: [UInt], lastMessage: String, time: String, unread: Int, isPinned: Bool, isOfficial: Bool, isOnline: Bool, isGroup: Bool, participantCount: Int, messages: [ChatMessage], otherUserId: UUID? = nil, avatarInitials: String? = nil, lastMessageAt: Date? = nil, lastFromMe: Bool = false) {
+    init(id: UUID = UUID(), name: String, avatar: String, avatarColors: [UInt], lastMessage: String, time: String, unread: Int, isPinned: Bool, isOfficial: Bool, isOnline: Bool, isGroup: Bool, participantCount: Int, messages: [ChatMessage], otherUserId: UUID? = nil, avatarInitials: String? = nil, lastMessageAt: Date? = nil, lastFromMe: Bool = false, lastMessageIsImage: Bool = false) {
         self.id = id
         self.name = name
         self.avatar = avatar
@@ -69,6 +88,7 @@ struct Conversation: Identifiable {
         self.avatarInitials = avatarInitials
         self.lastMessageAt = lastMessageAt
         self.lastFromMe = lastFromMe
+        self.lastMessageIsImage = lastMessageIsImage
     }
 }
 

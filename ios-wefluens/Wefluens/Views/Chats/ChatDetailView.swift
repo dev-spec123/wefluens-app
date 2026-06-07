@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 struct ChatDetailView: View {
     @Environment(LocalizationManager.self) private var l10n
@@ -18,6 +19,7 @@ struct ChatDetailView: View {
 
     @State private var vm: ChatThreadViewModel?
     @State private var draft: String = ""
+    @State private var photoItem: PhotosPickerItem?
 
     private var messages: [ChatMessage] { vm?.messages ?? [] }
 
@@ -139,12 +141,7 @@ struct ChatDetailView: View {
 
     private var inputBar: some View {
         HStack(spacing: 10) {
-            Button {
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Theme.inkSecondary(for: colorScheme))
-            }
+            plusButton
 
             HStack {
                 TextField(l10n.t(.chatDetailMessagePlaceholder), text: $draft, axis: .vertical)
@@ -173,6 +170,32 @@ struct ChatDetailView: View {
         .padding(.top, 10)
         .padding(.bottom, 6)
         .background(Theme.paper(for: colorScheme))
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            Task {
+                let loaded = try? await item.loadTransferable(type: Data.self)
+                photoItem = nil
+                if let loaded { await vm?.sendImage(loaded) }
+            }
+        }
+    }
+
+    /// The "+" opens the photo library (a spinner replaces it while sending).
+    /// System-keyboard emoji already type straight into the text field.
+    @ViewBuilder
+    private var plusButton: some View {
+        if vm?.isSendingImage == true {
+            ProgressView()
+                .tint(Theme.coral)
+                .frame(width: 30, height: 30)
+        } else {
+            PhotosPicker(selection: $photoItem, matching: .images) {
+                Image(systemName: "plus")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                    .frame(width: 30, height: 30)
+            }
+        }
     }
 
     private var canSend: Bool {

@@ -233,6 +233,10 @@ export type Database = {
           body: string
           created_at: string | null
           id: string
+          image_height: number | null
+          image_url: string | null
+          image_width: number | null
+          message_type: string
           read_at: string | null
           recipient_id: string
           sender_id: string
@@ -242,6 +246,10 @@ export type Database = {
           body: string
           created_at?: string | null
           id?: string
+          image_height?: number | null
+          image_url?: string | null
+          image_width?: number | null
+          message_type?: string
           read_at?: string | null
           recipient_id: string
           sender_id: string
@@ -251,6 +259,10 @@ export type Database = {
           body?: string
           created_at?: string | null
           id?: string
+          image_height?: number | null
+          image_url?: string | null
+          image_width?: number | null
+          message_type?: string
           read_at?: string | null
           recipient_id?: string
           sender_id?: string
@@ -286,6 +298,7 @@ export type Database = {
           id: string
           last_message: string | null
           last_message_at: string | null
+          last_message_type: string
           last_sender_id: string | null
           user_high: string
           user_low: string
@@ -295,6 +308,7 @@ export type Database = {
           id?: string
           last_message?: string | null
           last_message_at?: string | null
+          last_message_type?: string
           last_sender_id?: string | null
           user_high: string
           user_low: string
@@ -304,6 +318,7 @@ export type Database = {
           id?: string
           last_message?: string | null
           last_message_at?: string | null
+          last_message_type?: string
           last_sender_id?: string | null
           user_high?: string
           user_low?: string
@@ -568,6 +583,7 @@ export type Database = {
         Returns: {
           last_message: string
           last_message_at: string
+          last_message_type: string
           last_sender_id: string
           other_avatar_url: string
           other_handle: string
@@ -598,6 +614,16 @@ export type Database = {
         }[]
       }
       send_dm: { Args: { p_body: string; p_other: string }; Returns: string }
+      send_dm_media: {
+        Args: {
+          p_caption?: string
+          p_height?: number
+          p_image_url: string
+          p_other: string
+          p_width?: number
+        }
+        Returns: string
+      }
       send_friend_request: {
         Args: { message?: string; target_id: string }
         Returns: string

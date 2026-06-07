@@ -45,7 +45,7 @@ enum L10n: String {
     // ChatDetail
     case chatDetailActiveNow, chatDetailOffline, chatDetailToday, chatDetailMessagePlaceholder
     case chatDetailGroupMembers
-    case chatYouPrefix, chatThreadEmpty, chatStartError, chatSendError
+    case chatYouPrefix, chatThreadEmpty, chatStartError, chatSendError, chatImagePreview
 
     // Contacts
     case contactsTitle, contactsSubtitle, contactsSearch, contactsInvite, contactsTopTalent, contactsBrands
@@ -163,6 +163,7 @@ final class LocalizationManager {
             .chatThreadEmpty: "Say hello 👋",
             .chatStartError: "Couldn't open the chat. Please try again.",
             .chatSendError: "Couldn't send. Please try again.",
+            .chatImagePreview: "[Photo]",
             .contactsTitle: "Contacts", .contactsSubtitle: "creators & partners", .contactsSearch: "Search contacts",
             .contactsInvite: "Invite", .contactsTopTalent: "Top Talent", .contactsBrands: "Brands",
             .contactsNewFriends: "New Friends", .contactsFriendRequests: "Friend Request",
@@ -287,6 +288,7 @@ final class LocalizationManager {
             .chatThreadEmpty: "打个招呼吧 👋",
             .chatStartError: "无法打开聊天，请重试。",
             .chatSendError: "发送失败，请重试。",
+            .chatImagePreview: "[图片]",
             .contactsTitle: "通讯录", .contactsSubtitle: "位创作者与合作伙伴", .contactsSearch: "搜索联系人",
             .contactsInvite: "邀请", .contactsTopTalent: "顶尖网红", .contactsBrands: "品牌",
             .contactsNewFriends: "新的朋友", .contactsFriendRequests: "好友申请",
@@ -411,6 +413,7 @@ final class LocalizationManager {
             .chatThreadEmpty: "Saluda 👋",
             .chatStartError: "No se pudo abrir el chat. Inténtalo de nuevo.",
             .chatSendError: "No se pudo enviar. Inténtalo de nuevo.",
+            .chatImagePreview: "[Foto]",
             .contactsTitle: "Contactos", .contactsSubtitle: "creadores y socios", .contactsSearch: "Buscar contactos",
             .contactsInvite: "Invitar", .contactsTopTalent: "Top Talento", .contactsBrands: "Marcas",
             .contactsNewFriends: "Nuevos Amigos", .contactsFriendRequests: "Solicitud de Amistad",

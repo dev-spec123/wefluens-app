@@ -382,12 +382,15 @@ struct EditProfileView: View {
 
         var avatarUrl: String? = data.profile?.avatarUrl
 
-        // Step 1: Upload avatar (non-blocking — warn on failure but save profile anyway)
+        // Step 1: Upload the new avatar. If it fails, surface a REAL error and stop —
+        // never silently keep the old avatar and pretend the save succeeded.
         if photoHasChanged, let imageData = profileImageData {
-            if let url = await data.uploadAvatar(userId: uid, imageData: imageData) {
-                avatarUrl = url
+            do {
+                avatarUrl = try await data.uploadAvatar(userId: uid, imageData: imageData)
+            } catch {
+                saveError = error.localizedDescription
+                return
             }
-            // If upload fails, continue with the old avatar. The user sees a toast.
         }
 
         // Step 2: Persist profile fields
