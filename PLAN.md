@@ -34,7 +34,8 @@
 - [x] `AuthManager.changePassword` + `ForcePasswordChangeView`, gated in ContentView
 - [x] Admin invite UI (InviteUserSheet) in AdminUsersView
 - [x] Three-language support (EN / 中文 / ES) for all new strings
-- [ ] Set `RESEND_API_KEY` env var (and verify a sending domain in Resend to email any recipient)
+- [x] Set `RESEND_API_KEY` env var; both edge functions redeployed to pick it up
+- [ ] Verify a sending domain in Resend + set `RESEND_FROM` to email ANY recipient (default `onboarding@resend.dev` only delivers to your own Resend account email)
 - Superseded: the previous 6-digit OTP self-signup flow (replaced by invite links)
 
 ## Design
