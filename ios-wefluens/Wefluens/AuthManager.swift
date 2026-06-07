@@ -16,7 +16,15 @@ final class AuthManager {
     var showError = false
     var errorMessage = ""
     var isAdmin = false
-    var showVerificationSent = false
+
+    // MARK: Email verification (6-digit OTP)
+
+    /// When true, the UI shows the 6-digit code entry screen.
+    var needsVerification = false
+    /// Email awaiting verification — used to verify and resend the OTP.
+    var pendingEmail = ""
+    var isVerifying = false
+    var isResending = false
 
     /// The authenticated user's UUID from Supabase Auth.
     var userId: UUID? {
@@ -84,12 +92,64 @@ final class AuthManager {
             isAuthenticated = session != nil
 
             if session == nil {
-                // Email confirmation required — show verification-sent popup
-                showVerificationSent = true
+                // Email confirmation required — switch to 6-digit code entry.
+                pendingEmail = email
+                needsVerification = true
             }
         } catch {
             setError(error.localizedDescription)
         }
+    }
+
+    // MARK: - Verify OTP
+
+    /// Verifies the 6-digit signup code the user received by email.
+    @MainActor
+    func verifyCode(_ token: String) async {
+        let trimmed = token.trimmingCharacters(in: .whitespaces)
+        guard !isVerifying, !pendingEmail.isEmpty, !trimmed.isEmpty else { return }
+        isVerifying = true
+        defer { isVerifying = false }
+
+        do {
+            let response = try await supabase.auth.verifyOTP(
+                email: pendingEmail,
+                token: trimmed,
+                type: .signup
+            )
+            session = response.session
+            isAuthenticated = response.session != nil
+            if isAuthenticated {
+                needsVerification = false
+                pendingEmail = ""
+            }
+        } catch {
+            setError(error.localizedDescription)
+        }
+    }
+
+    /// Resends the signup verification code to `pendingEmail`.
+    @MainActor
+    func resendCode() async {
+        guard !isResending, !pendingEmail.isEmpty else { return }
+        isResending = true
+        defer { isResending = false }
+
+        do {
+            try await supabase.auth.resend(
+                email: pendingEmail,
+                type: .signup
+            )
+        } catch {
+            setError(error.localizedDescription)
+        }
+    }
+
+    /// Cancels verification and returns to the sign-up form.
+    @MainActor
+    func cancelVerification() {
+        needsVerification = false
+        pendingEmail = ""
     }
 
     // MARK: - Sign In

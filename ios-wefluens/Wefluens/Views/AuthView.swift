@@ -33,7 +33,36 @@ struct AuthView: View {
                 .offset(y: keyboardHeight > 0 ? -200 : -60)
                 .animation(.easeOut(duration: 0.4), value: keyboardHeight)
 
-            VStack(spacing: 0) {
+            if auth.needsVerification {
+                VerificationView()
+                    .transition(.opacity)
+            } else {
+                authForm
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: auth.needsVerification)
+        .alert("Error", isPresented: $auth.showError) {
+            Button("OK") {}
+        } message: {
+            Text(auth.errorMessage)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notif in
+            if let frame = notif.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                keyboardHeight = frame.height
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardHeight = 0
+        }
+    }
+
+    // MARK: - Sign in / sign up form
+
+    private var authForm: some View {
+        @Bindable var auth = auth
+
+        return VStack(spacing: 0) {
                 Spacer()
 
                 // Logo
@@ -206,27 +235,6 @@ struct AuthView: View {
                 }
                 .padding(.horizontal, 32)
                 .padding(.bottom, 50)
-            }
-        }
-        .alert("Error", isPresented: $auth.showError) {
-            Button("OK") {}
-        } message: {
-            Text(auth.errorMessage)
-        }
-        .alert(l10n.t(.authVerificationSentTitle), isPresented: $auth.showVerificationSent) {
-            Button(l10n.t(.authVerificationSentOk)) {
-                auth.showVerificationSent = false
-            }
-        } message: {
-            Text(l10n.t(.authVerificationSentMessage))
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notif in
-            if let frame = notif.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
-                keyboardHeight = frame.height
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            keyboardHeight = 0
         }
     }
 

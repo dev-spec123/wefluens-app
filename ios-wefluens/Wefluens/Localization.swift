@@ -102,6 +102,8 @@ enum L10n: String {
     case authConfirmPasswordPlaceholder, authPasswordMismatch
     case authSignUpButton, authSignInButton, authNoAccount, authHaveAccount
     case authVerificationSentTitle, authVerificationSentMessage, authVerificationSentOk
+    case authVerifyTitle, authVerifySubtitle, authVerifyButton
+    case authResendCode, authResendIn, authChangeEmail, authCodeResent
 
     // Admin
     case adminTitle, adminAllUsers, adminDeactivate, adminDelete, adminDeactivateConfirm
@@ -193,6 +195,13 @@ final class LocalizationManager {
             .authVerificationSentTitle: "Link Sent",
             .authVerificationSentMessage: "A verification link has been sent to your email. Please check your inbox and tap the link to activate your account.",
             .authVerificationSentOk: "OK",
+            .authVerifyTitle: "Verify your email",
+            .authVerifySubtitle: "Enter the 6-digit code we sent to",
+            .authVerifyButton: "Verify",
+            .authResendCode: "Resend code",
+            .authResendIn: "Resend in",
+            .authChangeEmail: "Change email",
+            .authCodeResent: "A new code has been sent",
             .adminTitle: "Backend Management",
             .adminBadge: "ADMIN",
             .adminAllUsers: "All Users",
@@ -266,6 +275,13 @@ final class LocalizationManager {
             .authVerificationSentTitle: "链接已发送",
             .authVerificationSentMessage: "验证链接已发送到你的邮箱。请查看收件箱并点击链接来激活你的账号。",
             .authVerificationSentOk: "好的",
+            .authVerifyTitle: "验证你的邮箱",
+            .authVerifySubtitle: "请输入我们发送到以下邮箱的 6 位验证码",
+            .authVerifyButton: "验证",
+            .authResendCode: "重新发送验证码",
+            .authResendIn: "重新发送",
+            .authChangeEmail: "更换邮箱",
+            .authCodeResent: "新验证码已发送",
             .adminTitle: "后端管理",
             .adminBadge: "管理员",
             .adminAllUsers: "全部用户",
@@ -339,6 +355,13 @@ final class LocalizationManager {
             .authVerificationSentTitle: "Enlace Enviado",
             .authVerificationSentMessage: "Se ha enviado un enlace de verificación a tu correo. Revisa tu bandeja de entrada y haz clic en el enlace para activar tu cuenta.",
             .authVerificationSentOk: "OK",
+            .authVerifyTitle: "Verifica tu correo",
+            .authVerifySubtitle: "Ingresa el código de 6 dígitos que enviamos a",
+            .authVerifyButton: "Verificar",
+            .authResendCode: "Reenviar código",
+            .authResendIn: "Reenviar en",
+            .authChangeEmail: "Cambiar correo",
+            .authCodeResent: "Se ha enviado un nuevo código",
             .adminTitle: "Gestión de Backend",
             .adminBadge: "ADMIN",
             .adminAllUsers: "Todos los Usuarios",

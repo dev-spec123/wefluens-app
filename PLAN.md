@@ -23,8 +23,11 @@
 
 ## Email Verification
 
-- [x] Verification-sent popup appears after signup ("Link Sent" / "链接已发送")
+- [x] Switched from email link to 6-digit OTP code (mobile-friendly, no localhost redirect)
+- [x] In-app code entry screen with auto-submit, 60s resend cooldown, and change-email option
+- [x] `verifyOTP(type: .signup)` + `resend(type: .signup)` wired through AuthManager
 - [x] Three-language support for all verification and admin strings
+- [ ] Supabase "Confirm signup" email template switched from `{{ .ConfirmationURL }}` to `{{ .Token }}` (manual dashboard step)
 
 ## Design
 
