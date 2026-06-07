@@ -64,6 +64,22 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // TEMP diagnostic — reports only whether secrets are PRESENT (never their values).
+  // Removed in the follow-up deploy once secret propagation is confirmed.
+  if (new URL(req.url).searchParams.get("selfcheck") === "wefluens-diag") {
+    const key = Deno.env.get("RESEND_API_KEY") ?? "";
+    return jsonResponse({
+      ok: true,
+      diag: true,
+      hasResendKey: key.length > 0,
+      resendKeyLen: key.length,
+      resendKeyPrefix: key.slice(0, 3),
+      from: Deno.env.get("RESEND_FROM") ?? null,
+      hasServiceRole: (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "").length > 0,
+      hasSupabaseUrl: (Deno.env.get("SUPABASE_URL") ?? "").length > 0,
+    });
+  }
+
   try {
     const { user } = await requireUser(req);
     const admin = createAdminClient();
