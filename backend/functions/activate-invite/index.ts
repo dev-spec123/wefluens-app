@@ -7,9 +7,18 @@ import { corsHeaders, createAdminClient } from "../_shared/auth.ts";
 const INITIAL_PASSWORD = "11111111";
 
 function htmlResponse(body: string, status = 200) {
-  return new Response(body, {
+  // Encode the body explicitly as UTF-8 bytes so the charset is unambiguous
+  // regardless of the edge runtime's default string encoding, and always declare
+  // `text/html; charset=utf-8`. Without this exact header the gateway falls back
+  // to `text/plain`, which makes browsers render the markup as raw source AND
+  // misread the Chinese bytes as Latin-1 (the "源代码 + 乱码" symptom).
+  return new Response(new TextEncoder().encode(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
   });
 }
 
