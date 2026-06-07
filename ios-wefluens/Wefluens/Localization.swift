@@ -116,7 +116,7 @@ enum L10n: String {
     case adminBadge
     case adminInvite, adminInviteTitle, adminInviteSubtitle, adminInviteEmailPlaceholder
     case adminInviteSend, adminInviteSent, adminInviteErrInvalid, adminInviteErrExists
-    case adminInviteErrEmail, adminInviteErrGeneric
+    case adminInviteErrEmail, adminInviteErrSend, adminInviteErrGeneric
 }
 
 /// App-wide localization manager. Persists the chosen language.
@@ -240,6 +240,7 @@ final class LocalizationManager {
             .adminInviteErrInvalid: "That email doesn't look right",
             .adminInviteErrExists: "That email is already registered",
             .adminInviteErrEmail: "Email service isn't configured yet — contact the developer",
+            .adminInviteErrSend: "Couldn't send the email — the sender domain or address was rejected. Please try again.",
             .adminInviteErrGeneric: "Couldn't send the invite. Please try again.",
         ],
         .chinese: [
@@ -340,6 +341,7 @@ final class LocalizationManager {
             .adminInviteErrInvalid: "邮箱格式不正确",
             .adminInviteErrExists: "该邮箱已注册",
             .adminInviteErrEmail: "邮件服务尚未配置，请联系开发者",
+            .adminInviteErrSend: "邮件发送失败（发件域名或地址被拒），请稍后重试",
             .adminInviteErrGeneric: "邀请发送失败，请重试。",
         ],
         .spanish: [
@@ -440,6 +442,7 @@ final class LocalizationManager {
             .adminInviteErrInvalid: "Ese correo no parece válido",
             .adminInviteErrExists: "Ese correo ya está registrado",
             .adminInviteErrEmail: "El servicio de correo no está configurado — contacta al desarrollador",
+            .adminInviteErrSend: "No se pudo enviar el correo (dominio o dirección del remitente rechazada). Inténtalo de nuevo.",
             .adminInviteErrGeneric: "No se pudo enviar la invitación. Inténtalo de nuevo.",
         ],
     ]

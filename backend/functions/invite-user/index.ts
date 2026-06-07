@@ -22,6 +22,28 @@ function randomToken(): string {
     .join("");
 }
 
+// Rork private env vars (RESEND_API_KEY / RESEND_FROM) do NOT reach the Supabase
+// edge runtime, so we keep them in the service-role-only `app_secrets` table and
+// load them here. Env still wins if present (in case injection is ever fixed),
+// then the DB value, then a sane default for the non-secret sender address.
+const DEFAULT_FROM = "Wefluens <invite@wefluens.com>";
+
+async function loadEmailConfig(
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<{ resendKey: string; from: string }> {
+  const db: Record<string, string> = {};
+  const { data } = await admin
+    .from("app_secrets")
+    .select("key,value")
+    .in("key", ["RESEND_API_KEY", "RESEND_FROM"]);
+  for (const row of (data ?? []) as Array<{ key: string; value: string }>) {
+    db[row.key] = row.value;
+  }
+  const resendKey = (Deno.env.get("RESEND_API_KEY") || db["RESEND_API_KEY"] || "").trim();
+  const from = (Deno.env.get("RESEND_FROM") || db["RESEND_FROM"] || DEFAULT_FROM).trim();
+  return { resendKey, from };
+}
+
 function inviteEmailHtml(link: string): string {
   return `<!DOCTYPE html>
 <html lang="zh">
@@ -64,17 +86,16 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // TEMP diagnostic — reports only whether secrets are PRESENT (never their values).
-  // Removed in the follow-up deploy once secret propagation is confirmed.
+  // Sanitized diagnostic — gated behind a secret param, reports only whether the
+  // email config resolves (never the key itself). Handy for future debugging.
   if (new URL(req.url).searchParams.get("selfcheck") === "wefluens-diag") {
-    const key = Deno.env.get("RESEND_API_KEY") ?? "";
+    const admin = createAdminClient();
+    const { resendKey, from } = await loadEmailConfig(admin);
     return jsonResponse({
       ok: true,
       diag: true,
-      hasResendKey: key.length > 0,
-      resendKeyLen: key.length,
-      resendKeyPrefix: key.slice(0, 3),
-      from: Deno.env.get("RESEND_FROM") ?? null,
+      hasResendKey: resendKey.length > 0,
+      from,
       hasServiceRole: (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "").length > 0,
       hasSupabaseUrl: (Deno.env.get("SUPABASE_URL") ?? "").length > 0,
     });
@@ -127,13 +148,12 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, error: "DB_ERROR" });
     }
 
-    const resendKey = Deno.env.get("RESEND_API_KEY");
+    const { resendKey, from } = await loadEmailConfig(admin);
     if (!resendKey) {
-      console.error("RESEND_API_KEY is not configured");
+      console.error("RESEND_API_KEY is not configured (env + app_secrets both empty)");
       return jsonResponse({ ok: false, error: "EMAIL_NOT_CONFIGURED" });
     }
 
-    const from = Deno.env.get("RESEND_FROM") ?? "Wefluens <invite@wefluens.com>";
     const link = `${Deno.env.get("SUPABASE_URL")}/functions/v1/activate-invite?token=${token}`;
 
     const resp = await fetch("https://api.resend.com/emails", {

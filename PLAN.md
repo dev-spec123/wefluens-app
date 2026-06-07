@@ -35,8 +35,10 @@
 - [x] Admin invite UI (InviteUserSheet) in AdminUsersView
 - [x] Three-language support (EN / 中文 / ES) for all new strings
 - [x] Set `RESEND_API_KEY` env var; both edge functions redeployed to pick it up
-- [x] Set `RESEND_FROM` to `Wefluens <invite@wefluens.com>`; `invite-user` redeployed to pick it up
-- [ ] Verify the `wefluens.com` sending domain in Resend so invites reach ANY recipient (Resend rejects unverified custom domains)
+- [x] Set `RESEND_FROM` to `Wefluens <invite@wefluens.com>`
+- [x] Verified the `wefluens.com` sending domain in Resend (root-domain, GoDaddy) — sends to any recipient
+- [x] Root cause of "邮件服务尚未配置" fixed: Rork private env vars never reach the Supabase edge runtime (`Deno.env` only exposes the auto-injected `SUPABASE_*`). Secrets now live in a service-role-only `app_secrets` table that `invite-user` reads at runtime — verified end-to-end with a live Resend send returning HTTP 200 + a real email id
+- [x] Split `EMAIL_NOT_CONFIGURED` vs `EMAIL_SEND_FAILED` into distinct in-app messages (EN / 中文 / ES)
 - Superseded: the previous 6-digit OTP self-signup flow (replaced by invite links)
 
 ## Design

@@ -564,7 +564,8 @@ private struct InviteUserSheet: View {
         switch code {
         case "INVALID_EMAIL": return l10n.t(.adminInviteErrInvalid)
         case "ALREADY_REGISTERED": return l10n.t(.adminInviteErrExists)
-        case "EMAIL_NOT_CONFIGURED", "EMAIL_SEND_FAILED": return l10n.t(.adminInviteErrEmail)
+        case "EMAIL_NOT_CONFIGURED": return l10n.t(.adminInviteErrEmail)
+        case "EMAIL_SEND_FAILED": return l10n.t(.adminInviteErrSend)
         default: return l10n.t(.adminInviteErrGeneric)
         }
     }
