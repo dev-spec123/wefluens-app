@@ -11,6 +11,7 @@ struct ContactsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var searchText: String = ""
     @State private var showRequestDetail: UUID? = nil
+    @State private var showAddFriend: Bool = false
 
     private var contacts: [Contact] { data.contacts }
     private var requests: [FriendRequest] { data.friendRequests }
@@ -73,12 +74,40 @@ struct ContactsView: View {
             }
             .background(Theme.paper(for: colorScheme).ignoresSafeArea())
             .navigationBarHidden(true)
+            .refreshable { await data.loadContacts() }
             .navigationDestination(for: UUID.self) { id in
                 if let contact = contacts.first(where: { $0.id == id }) {
                     ContactDetailView(contact: contact)
                 }
             }
+            .sheet(isPresented: $showAddFriend) {
+                AddFriendView()
+            }
+            .alert(l10n.t(.friendAcceptedTitle), isPresented: acceptedAlertBinding) {
+                Button(l10n.t(.authVerificationSentOk), role: .cancel) { }
+            } message: {
+                Text(acceptedMessage)
+            }
+            .onAppear {
+                Task { await data.loadContacts() }
+            }
         }
+    }
+
+    /// True while there are unseen "your request was accepted" notifications.
+    /// Dismissing clears them server-side.
+    private var acceptedAlertBinding: Binding<Bool> {
+        Binding(
+            get: { !data.friendAcceptedNames.isEmpty },
+            set: { isShown in
+                if !isShown { Task { await data.markAcceptancesSeen() } }
+            }
+        )
+    }
+
+    private var acceptedMessage: String {
+        let names = data.friendAcceptedNames.joined(separator: ", ")
+        return "\(names) \(l10n.t(.friendAcceptedMessage))"
     }
 
     // MARK: - Friend Requests Section
@@ -128,7 +157,12 @@ struct ContactsView: View {
 
     private var quickActions: some View {
         HStack(spacing: 12) {
-            quickAction(icon: "person.badge.plus", title: l10n.t(.contactsInvite))
+            Button {
+                showAddFriend = true
+            } label: {
+                quickAction(icon: "person.badge.plus", title: l10n.t(.contactsAddFriend))
+            }
+            .buttonStyle(.plain)
             quickAction(icon: "star.fill", title: l10n.t(.contactsTopTalent))
             quickAction(icon: "building.2.fill", title: l10n.t(.contactsBrands))
         }
@@ -190,11 +224,14 @@ private struct FriendRequestRow: View {
 
 struct FriendRequestDetailView: View {
     @Environment(LocalizationManager.self) private var l10n
+    @Environment(AppDataService.self) private var data
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     let request: FriendRequest
     @State private var accepted: Bool = false
     @State private var declined: Bool = false
+    @State private var isProcessing: Bool = false
+    @State private var errorText: String? = nil
 
     var body: some View {
         VStack(spacing: 24) {
@@ -222,55 +259,46 @@ struct FriendRequestDetailView: View {
                 .padding(.horizontal, 32)
 
             if accepted {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(Color(hex: 0x2AD17E))
-                    Text("Friend added!")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color(hex: 0x2AD17E))
-                }
-                .padding(.top, 8)
+                resultLabel(icon: "checkmark.circle.fill", tint: Color(hex: 0x2AD17E), text: l10n.t(.friendRequestAdded))
             } else if declined {
-                HStack(spacing: 8) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(Theme.inkTertiary(for: colorScheme))
-                    Text("Declined")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Theme.inkTertiary(for: colorScheme))
-                }
-                .padding(.top, 8)
+                resultLabel(icon: "xmark.circle.fill", tint: Theme.inkTertiary(for: colorScheme), text: l10n.t(.friendRequestDeclined))
             } else {
-                HStack(spacing: 16) {
-                    Button {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                            declined = true
+                VStack(spacing: 12) {
+                    HStack(spacing: 16) {
+                        Button { respond(accept: false) } label: {
+                            Text(l10n.t(.friendRequestDecline))
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                                .frame(width: 140)
+                                .padding(.vertical, 14)
+                                .background(Theme.card(for: colorScheme))
+                                .clipShape(Capsule())
+                                .overlay(Capsule().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
                         }
-                    } label: {
-                        Text(l10n.t(.friendRequestDecline))
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Theme.inkSecondary(for: colorScheme))
-                            .frame(width: 140)
-                            .padding(.vertical, 14)
-                            .background(Theme.card(for: colorScheme))
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
-                    }
 
-                    Button {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                            accepted = true
+                        Button { respond(accept: true) } label: {
+                            Text(l10n.t(.friendRequestAccept))
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 140)
+                                .padding(.vertical, 14)
+                                .background(Theme.sunset)
+                                .clipShape(Capsule())
+                                .shadow(color: Theme.coral.opacity(0.35), radius: 12, y: 6)
                         }
-                    } label: {
-                        Text(l10n.t(.friendRequestAccept))
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 140)
-                            .padding(.vertical, 14)
-                            .background(Theme.sunset)
-                            .clipShape(Capsule())
-                            .shadow(color: Theme.coral.opacity(0.35), radius: 12, y: 6)
+                    }
+                    .disabled(isProcessing)
+                    .opacity(isProcessing ? 0.6 : 1)
+
+                    if isProcessing {
+                        ProgressView().tint(Theme.coral)
+                    }
+                    if let errorText {
+                        Text(errorText)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color.red)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
                     }
                 }
             }
@@ -292,6 +320,43 @@ struct FriendRequestDetailView: View {
             }
             .padding(.leading, 16)
             .padding(.top, 8)
+        }
+    }
+
+    private func resultLabel(icon: String, tint: Color, text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 18))
+                .foregroundStyle(tint)
+            Text(text)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(tint)
+        }
+        .padding(.top, 8)
+    }
+
+    /// Calls respond_friend_request, refreshes data (so the new friend appears
+    /// and the request disappears), then dismisses. Pure DB — no email.
+    private func respond(accept: Bool) {
+        guard !isProcessing else { return }
+        isProcessing = true
+        errorText = nil
+        Task {
+            do {
+                try await data.respondToFriendRequest(requestId: request.id, accept: accept)
+                await data.loadContacts()
+                isProcessing = false
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                    if accept { accepted = true } else { declined = true }
+                }
+                if accept { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+                try? await Task.sleep(for: .seconds(1.1))
+                dismiss()
+            } catch {
+                isProcessing = false
+                errorText = l10n.t(.friendRequestError)
+                print("⚠️ respond_friend_request failed: \(error)")
+            }
         }
     }
 }

@@ -214,6 +214,58 @@ nonisolated struct BrandRow: Codable, Identifiable, Sendable {
     }
 }
 
+// MARK: - Friendships & Friend RPCs
+
+/// Lightweight row for reading the friend graph (`select("friend_id")`).
+nonisolated struct FriendshipFriendRow: Codable, Sendable {
+    let friendId: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case friendId = "friend_id"
+    }
+}
+
+/// One result from the `search_users` RPC. Email is intentionally NOT included —
+/// the server matches on it but never returns it.
+nonisolated struct SearchUserResult: Codable, Identifiable, Sendable {
+    let id: UUID
+    let name: String
+    let handle: String
+    let role: String
+    let avatarUrl: String?
+    let followers: String
+    /// One of: "none", "friends", "request_sent", "request_received".
+    let relationship: String
+    /// When relationship == "request_received", the id of that pending request
+    /// so it can be accepted inline.
+    let incomingRequestId: UUID?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, handle, role, followers, relationship
+        case avatarUrl = "avatar_url"
+        case incomingRequestId = "incoming_request_id"
+    }
+}
+
+nonisolated struct SearchUsersParams: Encodable, Sendable {
+    let search_query: String
+}
+
+nonisolated struct SendFriendRequestParams: Encodable, Sendable {
+    let target_id: String
+    let message: String
+}
+
+nonisolated struct RespondFriendRequestParams: Encodable, Sendable {
+    let request_id: String
+    let accept: Bool
+}
+
+/// Marks a sender's accepted request as seen (clears the in-app prompt).
+nonisolated struct SeenBySenderUpdate: Encodable, Sendable {
+    let seen_by_sender: Bool
+}
+
 // MARK: - Campaign
 
 nonisolated struct CampaignRow: Codable, Identifiable, Sendable {

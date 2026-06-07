@@ -48,10 +48,17 @@ enum L10n: String {
 
     // Contacts
     case contactsTitle, contactsSubtitle, contactsSearch, contactsInvite, contactsTopTalent, contactsBrands
-    case contactsNewFriends, contactsFriendRequests
+    case contactsNewFriends, contactsFriendRequests, contactsAddFriend
+
+    // Add Friend (search + request)
+    case addFriendSearchPlaceholder, addFriendHint, addFriendNoResults, addFriendSearching
+    case addFriendAdd, addFriendRequested, addFriendFriends, addFriendSent
+    case addFriendAlreadyFriends, addFriendIncoming, addFriendError
+    case friendAcceptedTitle, friendAcceptedMessage
 
     // FriendRequestDetail
     case friendRequestAccept, friendRequestDecline, friendRequestMessage
+    case friendRequestAdded, friendRequestDeclined, friendRequestError
 
     // ContactDetail
     case contactDetailFollowers, contactDetailPlatform, contactDetailStatus
@@ -153,8 +160,24 @@ final class LocalizationManager {
             .contactsTitle: "Contacts", .contactsSubtitle: "creators & partners", .contactsSearch: "Search contacts",
             .contactsInvite: "Invite", .contactsTopTalent: "Top Talent", .contactsBrands: "Brands",
             .contactsNewFriends: "New Friends", .contactsFriendRequests: "Friend Request",
+            .contactsAddFriend: "Add Friend",
+            .addFriendSearchPlaceholder: "Search by email or @handle",
+            .addFriendHint: "Find people by their email or username, then send a friend request.",
+            .addFriendNoResults: "No users found",
+            .addFriendSearching: "Searching…",
+            .addFriendAdd: "Add",
+            .addFriendRequested: "Requested",
+            .addFriendFriends: "Friends",
+            .addFriendSent: "Friend request sent!",
+            .addFriendAlreadyFriends: "You're already friends",
+            .addFriendIncoming: "They already sent you a request — check New Friends",
+            .addFriendError: "Something went wrong. Please try again.",
+            .friendAcceptedTitle: "New Friend",
+            .friendAcceptedMessage: "accepted your friend request",
             .friendRequestAccept: "Accept", .friendRequestDecline: "Decline",
             .friendRequestMessage: "Hello! I'd like to add you as a friend.",
+            .friendRequestAdded: "Friend added!", .friendRequestDeclined: "Declined",
+            .friendRequestError: "Couldn't complete. Please try again.",
             .contactDetailFollowers: "Followers", .contactDetailPlatform: "Platform",
             .contactDetailStatus: "Status", .contactDetailOnline: "Online", .contactDetailAway: "Away",
             .contactDetailMessage: "Message", .contactDetailDetails: "Details",
@@ -254,8 +277,24 @@ final class LocalizationManager {
             .contactsTitle: "通讯录", .contactsSubtitle: "位创作者与合作伙伴", .contactsSearch: "搜索联系人",
             .contactsInvite: "邀请", .contactsTopTalent: "顶尖网红", .contactsBrands: "品牌",
             .contactsNewFriends: "新的朋友", .contactsFriendRequests: "好友申请",
+            .contactsAddFriend: "添加好友",
+            .addFriendSearchPlaceholder: "搜索邮箱或用户名",
+            .addFriendHint: "通过邮箱或用户名找到对方，然后发送好友申请。",
+            .addFriendNoResults: "未找到用户",
+            .addFriendSearching: "搜索中…",
+            .addFriendAdd: "添加",
+            .addFriendRequested: "已申请",
+            .addFriendFriends: "已是好友",
+            .addFriendSent: "好友申请已发送！",
+            .addFriendAlreadyFriends: "你们已经是好友了",
+            .addFriendIncoming: "对方已向你发送申请，请在「新的朋友」中处理",
+            .addFriendError: "出错了，请重试。",
+            .friendAcceptedTitle: "新好友",
+            .friendAcceptedMessage: "通过了你的好友申请",
             .friendRequestAccept: "接受", .friendRequestDecline: "拒绝",
             .friendRequestMessage: "你好！我想加你为好友。",
+            .friendRequestAdded: "已添加好友！", .friendRequestDeclined: "已拒绝",
+            .friendRequestError: "操作失败，请重试。",
             .contactDetailFollowers: "粉丝", .contactDetailPlatform: "平台",
             .contactDetailStatus: "状态", .contactDetailOnline: "在线", .contactDetailAway: "离开",
             .contactDetailMessage: "发消息", .contactDetailDetails: "详细资料",
@@ -355,8 +394,24 @@ final class LocalizationManager {
             .contactsTitle: "Contactos", .contactsSubtitle: "creadores y socios", .contactsSearch: "Buscar contactos",
             .contactsInvite: "Invitar", .contactsTopTalent: "Top Talento", .contactsBrands: "Marcas",
             .contactsNewFriends: "Nuevos Amigos", .contactsFriendRequests: "Solicitud de Amistad",
+            .contactsAddFriend: "Agregar amigo",
+            .addFriendSearchPlaceholder: "Busca por correo o @usuario",
+            .addFriendHint: "Encuentra personas por su correo o usuario y envía una solicitud de amistad.",
+            .addFriendNoResults: "No se encontraron usuarios",
+            .addFriendSearching: "Buscando…",
+            .addFriendAdd: "Agregar",
+            .addFriendRequested: "Solicitado",
+            .addFriendFriends: "Amigos",
+            .addFriendSent: "¡Solicitud enviada!",
+            .addFriendAlreadyFriends: "Ya son amigos",
+            .addFriendIncoming: "Ya te envió una solicitud — revisa Nuevos Amigos",
+            .addFriendError: "Algo salió mal. Inténtalo de nuevo.",
+            .friendAcceptedTitle: "Nuevo amigo",
+            .friendAcceptedMessage: "aceptó tu solicitud de amistad",
             .friendRequestAccept: "Aceptar", .friendRequestDecline: "Rechazar",
             .friendRequestMessage: "¡Hola! Me gustaría agregarte como amigo.",
+            .friendRequestAdded: "¡Amigo agregado!", .friendRequestDeclined: "Rechazada",
+            .friendRequestError: "No se pudo completar. Inténtalo de nuevo.",
             .contactDetailFollowers: "Seguidores", .contactDetailPlatform: "Plataforma",
             .contactDetailStatus: "Estado", .contactDetailOnline: "En línea", .contactDetailAway: "Ausente",
             .contactDetailMessage: "Mensaje", .contactDetailDetails: "Detalles",

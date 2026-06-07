@@ -238,6 +238,7 @@ export type Database = {
           name: string
           request_message: string | null
           role: string | null
+          seen_by_sender: boolean | null
           status: string | null
           to_user_id: string
         }
@@ -250,6 +251,7 @@ export type Database = {
           name: string
           request_message?: string | null
           role?: string | null
+          seen_by_sender?: boolean | null
           status?: string | null
           to_user_id: string
         }
@@ -262,6 +264,7 @@ export type Database = {
           name?: string
           request_message?: string | null
           role?: string | null
+          seen_by_sender?: boolean | null
           status?: string | null
           to_user_id?: string
         }
@@ -276,6 +279,42 @@ export type Database = {
           {
             foreignKeyName: "friend_requests_to_user_id_fkey"
             columns: ["to_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      friendships: {
+        Row: {
+          created_at: string | null
+          friend_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          friend_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          friend_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "friendships_friend_id_fkey"
+            columns: ["friend_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "friendships_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -425,6 +464,27 @@ export type Database = {
       }
       admin_delete_user: { Args: { target_id: string }; Returns: undefined }
       is_admin: { Args: { uid: string }; Returns: boolean }
+      respond_friend_request: {
+        Args: { accept: boolean; request_id: string }
+        Returns: string
+      }
+      search_users: {
+        Args: { search_query: string }
+        Returns: {
+          avatar_url: string
+          followers: string
+          handle: string
+          id: string
+          incoming_request_id: string
+          name: string
+          relationship: string
+          role: string
+        }[]
+      }
+      send_friend_request: {
+        Args: { message?: string; target_id: string }
+        Returns: string
+      }
       user_id: { Args: never; Returns: string }
     }
     Enums: {

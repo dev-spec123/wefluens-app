@@ -41,6 +41,20 @@
 - [x] Split `EMAIL_NOT_CONFIGURED` vs `EMAIL_SEND_FAILED` into distinct in-app messages (EN / 中文 / ES)
 - Superseded: the previous 6-digit OTP self-signup flow (replaced by invite links)
 
+## Friends (application-based add-friend)
+
+- **Add Friend** — the Contacts 「邀请」 quick action is now 「添加好友」 (EN: Add Friend / ES: Agregar amigo) and opens a user search sheet. This is friend-to-friend only and never sends any email (completely separate from the admin `invite-user` flow)
+- **Search by email or @handle/name** — privacy-safe: a `search_users` SECURITY DEFINER function matches on email but never returns it, and reports my relationship to each result (none / request_sent / request_received / friends)
+- **Application-based** — sending creates a `pending` request; the recipient sees it under 「新的朋友」 and can Accept/Decline for real
+- **Mutual friends** — accepting creates a bidirectional `friendships` graph; the contact list and the "X creators & partners" count both derive from it
+- **In-app prompt** — when my sent request is accepted I get an in-app "X accepted your friend request" alert (no email/push)
+- [x] `friendships` table (bidirectional, RLS read/delete own; writes only via SECURITY DEFINER fn). DELETE policy reserved for a future "remove friend" (no UI yet)
+- [x] `friend_requests`: status CHECK (pending/accepted/rejected), partial unique index blocking duplicate pending, `seen_by_sender` flag, sender-side UPDATE policy
+- [x] `search_users`, `send_friend_request`, `respond_friend_request` SECURITY DEFINER functions (grant authenticated)
+- [x] `AddFriendView` search sheet + wired 添加好友 button; `FriendRequestDetailView` Accept/Decline now call `respond_friend_request` for real (was local-only); contacts derive from `friendships`
+- [x] Three-language support (EN / 中文 / ES) for all new strings
+- [x] Live end-to-end verified: A sends → B accepts → friendship a↔b, counts A=1/B=1, request=accepted, RLS isolates each side (no leak), search-by-email returns the user with email hidden
+
 ## Design
 
 - **Welcome screen**: The Wefluens logo centered on a warm gradient background, with email and password fields and Sign In / Create Account buttons. A subtle loading animation appears while authenticating

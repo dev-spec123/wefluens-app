@@ -14,6 +14,9 @@ final class AppDataService {
     var conversations: [Conversation] = []
     var contacts: [Contact] = []
     var friendRequests: [FriendRequest] = []
+    /// Names of people who accepted a request *I* sent, not yet shown to me.
+    /// Drives the in-app "X accepted your friend request" prompt.
+    var friendAcceptedNames: [String] = []
     var brands: [Brand] = []
     var campaigns: [Campaign] = []
     var profile: UserProfile?
@@ -258,31 +261,38 @@ final class AppDataService {
         defer { isLoadingContacts = false }
 
         do {
-            let cRows: [ContactDBRow] = try await supabase
-                .from("contacts")
-                .select()
+            // Friends are derived from the `friendships` graph (the source of truth
+            // for both the contact list and the count). Each accepted request
+            // produces two rows, so "my friends" is simply user_id = me.
+            let links: [FriendshipFriendRow] = try await supabase
+                .from("friendships")
+                .select("friend_id")
                 .eq("user_id", value: uid.uuidString)
                 .execute()
                 .value
 
-            contacts = cRows.map { row in
-                Contact(
-                    id: row.id,
-                    name: row.name,
-                    handle: row.handle ?? "",
-                    role: row.role ?? "",
-                    platform: row.platform ?? "",
-                    followers: row.followers ?? "0",
-                    avatarColors: parseColors(row.avatarColors),
-                    isOnline: row.isOnline ?? false
-                )
+            let friendIds = links.map { $0.friendId.uuidString }
+            if friendIds.isEmpty {
+                contacts = []
+            } else {
+                let profs: [ProfileRow] = try await supabase
+                    .from("profiles")
+                    .select()
+                    .in("id", values: friendIds)
+                    .execute()
+                    .value
+                contacts = profs
+                    .map { contact(from: $0) }
+                    .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
             }
 
+            // Pending friend requests addressed to me (the "New Friends" section).
             let fRows: [FriendRequestDBRow] = try await supabase
                 .from("friend_requests")
                 .select()
                 .eq("to_user_id", value: uid.uuidString)
                 .eq("status", value: "pending")
+                .order("created_at", ascending: false)
                 .execute()
                 .value
 
@@ -296,11 +306,143 @@ final class AppDataService {
                     requestMessage: row.requestMessage ?? ""
                 )
             }
+
+            // In-app prompts: requests I sent that were accepted and not yet seen.
+            await loadAcceptanceNotifications(uid: uid)
         } catch {
             print("⚠️ Contacts load failed: \(error)")
             contacts = SampleData.contacts
             friendRequests = SampleData.friendRequests
         }
+    }
+
+    // MARK: - Friends (search / send / respond)
+
+    /// Searches existing platform users by email, @handle, or name via the
+    /// `search_users` security function. Email is matched server-side but never
+    /// returned. Includes my relationship to each result.
+    @MainActor
+    func searchUsers(query: String) async throws -> [SearchUserResult] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 else { return [] }
+        let results: [SearchUserResult] = try await supabase
+            .rpc("search_users", params: SearchUsersParams(search_query: trimmed))
+            .execute()
+            .value
+        return results
+    }
+
+    /// Sends a friend request (pure DB, no email). Returns the server status:
+    /// "sent", "already_sent", "already_friends", or "incoming_exists".
+    @MainActor
+    func sendFriendRequest(to targetId: UUID, message: String) async throws -> String {
+        let status: String = try await supabase
+            .rpc("send_friend_request", params: SendFriendRequestParams(
+                target_id: targetId.uuidString,
+                message: message
+            ))
+            .execute()
+            .value
+        return status
+    }
+
+    /// Accepts or rejects a received request. On accept the server creates the
+    /// bidirectional friendship atomically. Returns the resulting status.
+    @MainActor
+    @discardableResult
+    func respondToFriendRequest(requestId: UUID, accept: Bool) async throws -> String {
+        let status: String = try await supabase
+            .rpc("respond_friend_request", params: RespondFriendRequestParams(
+                request_id: requestId.uuidString,
+                accept: accept
+            ))
+            .execute()
+            .value
+        return status
+    }
+
+    /// Loads the names of people who accepted a request I sent (unseen).
+    @MainActor
+    private func loadAcceptanceNotifications(uid: UUID) async {
+        do {
+            let rows: [FriendRequestDBRow] = try await supabase
+                .from("friend_requests")
+                .select()
+                .eq("from_user_id", value: uid.uuidString)
+                .eq("status", value: "accepted")
+                .eq("seen_by_sender", value: false)
+                .execute()
+                .value
+            guard !rows.isEmpty else { friendAcceptedNames = []; return }
+
+            // The accepter is `to_user_id` — fetch their display names.
+            let accepterIds = rows.map { $0.toUserId.uuidString }
+            let profs: [ProfileRow] = try await supabase
+                .from("profiles")
+                .select()
+                .in("id", values: accepterIds)
+                .execute()
+                .value
+            let nameById = Dictionary(
+                profs.map { ($0.id, $0.name ?? $0.handle ?? "Someone") },
+                uniquingKeysWith: { first, _ in first }
+            )
+            friendAcceptedNames = rows.compactMap { nameById[$0.toUserId] }
+        } catch {
+            print("⚠️ Acceptance notifications load failed: \(error)")
+            friendAcceptedNames = []
+        }
+    }
+
+    /// Marks all of my accepted requests as seen, clearing the in-app prompt.
+    @MainActor
+    func markAcceptancesSeen() async {
+        guard let uid = userId else { return }
+        friendAcceptedNames = []
+        do {
+            try await supabase
+                .from("friend_requests")
+                .update(SeenBySenderUpdate(seen_by_sender: true))
+                .eq("from_user_id", value: uid.uuidString)
+                .eq("status", value: "accepted")
+                .eq("seen_by_sender", value: false)
+                .execute()
+        } catch {
+            print("⚠️ Mark acceptances seen failed: \(error)")
+        }
+    }
+
+    /// Maps a friend's profile into the Contact model used by the UI. Profiles
+    /// have no avatar palette, so we derive a stable gradient from their id.
+    private func contact(from p: ProfileRow) -> Contact {
+        Contact(
+            id: p.id,
+            name: p.name ?? p.handle ?? "User",
+            handle: p.handle ?? "",
+            role: p.role ?? "",
+            platform: "",
+            followers: p.followers ?? "0",
+            avatarColors: Self.avatarPalette(for: p.id),
+            isOnline: false
+        )
+    }
+
+    /// Deterministic two-color gradient chosen from a fixed palette by user id,
+    /// so each friend keeps a consistent look across sessions.
+    nonisolated static func avatarPalette(for id: UUID) -> [UInt] {
+        let palettes: [[UInt]] = [
+            [0xFF4D6D, 0xFF9A5A],
+            [0x7B2FF7, 0xF107A3],
+            [0x2AF598, 0x009EFD],
+            [0xFFB75E, 0xED8F03],
+            [0x6C5CE7, 0xA29BFE],
+            [0x00C6FB, 0x005BEA],
+            [0xF953C6, 0xB91D73],
+            [0x11998E, 0x38EF7D]
+        ]
+        let b = id.uuid
+        let sum = UInt(b.0) &+ UInt(b.5) &+ UInt(b.7) &+ UInt(b.15)
+        return palettes[Int(sum % UInt(palettes.count))]
     }
 
     // MARK: - Discover
