@@ -56,6 +56,19 @@
 - [x] Live end-to-end verified: A sends → B accepts → friendship a↔b, counts A=1/B=1, request=accepted, RLS isolates each side (no leak), search-by-email returns the user with email hidden
 - [x] **Remove friend** — `remove_friend(target_id)` SECURITY DEFINER fn atomically deletes both friendship rows (A→B and B→A) + any leftover requests so re-adding works; `ContactDetailView` has a destructive "Delete Friend" action behind a confirmation dialog (EN/中文/ES). Both sides' contact lists + counts auto-update (derive from `friendships`). Verified via rollback harness: two-sided delete leaves 0 rows on both sides
 
+## Chat (1:1 direct messages)
+
+- **Real one-on-one text chat** — friends-only; sending a message never sends any email (pure database, completely separate from the admin invite flow)
+- **Shared conversations** — both people see the same thread and each other's messages, with live updates via Supabase Realtime
+- **Unread + previews** — the conversation list shows the last-message preview, relative time, and an unread badge; the Chats tab shows a total-unread red dot; opening a thread marks it read
+- [x] `dm_threads` (one row per user pair, `user_low < user_high` normalized + unique) and `dm_messages` (sender/recipient/`read_at`, 1–4000 char CHECK), both RLS participant-only SELECT; no client write policies (all writes via SECURITY DEFINER fns)
+- [x] `get_or_create_thread`, `send_dm`, `mark_thread_read`, `list_dm_threads` SECURITY DEFINER functions; friends-only enforced via `are_friends` in `send_dm`/`get_or_create_thread`
+- [x] `dm_threads`/`dm_messages` added to the `supabase_realtime` publication (RLS-scoped live delivery to both participants only)
+- [x] `ContactDetailView` 「发消息」 button wired to `get_or_create_thread` → real chat screen; `ChatThreadViewModel` sends via `send_dm` and subscribes to live inserts; `ChatsListView` uses `list_dm_threads`; `RootTabView` `observeInbox` keeps the tab badge live
+- [x] Old per-user `conversations`/`messages` tables kept but deprecated (not deleted) per request
+- [x] Three-language support (EN / 中文 / ES) for all new strings
+- [x] iOS build green (`runChecks`) + live end-to-end verified via rollback harness: A→B send persists & creates a shared thread; B sees unread=1 + correct preview + other=A; B replies → A sees unread=1 + reply preview + last_sender=B; A opens → unread=0; thread total=2 msgs; non-friend send blocked; realtime enabled — all rolled back, production untouched
+
 ## Design
 
 - **Welcome screen**: The Wefluens logo centered on a warm gradient background, with email and password fields and Sign In / Create Account buttons. A subtle loading animation appears while authenticating
