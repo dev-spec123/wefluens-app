@@ -19,9 +19,14 @@ struct ContentView: View {
                 launchScreen
             } else if auth.isAuthenticated, let uid = auth.userId {
                 if let ds = dataService {
-                    RootTabView()
-                        .environment(ds)
-                        .transition(.opacity)
+                    if auth.mustChangePassword {
+                        ForcePasswordChangeView()
+                            .transition(.opacity)
+                    } else {
+                        RootTabView()
+                            .environment(ds)
+                            .transition(.opacity)
+                    }
                 } else {
                     // Brief loading while we set up the data service
                     ProgressView()
@@ -33,8 +38,8 @@ struct ContentView: View {
                             let ds = AppDataService(userId: uid)
                             // Sync profile first — this creates the profile row if it doesn't exist
                             await ds.syncProfile(userId: uid, email: auth.userEmail)
-                            // Then check admin status — profile must exist for this to work
-                            await auth.checkAdminStatus()
+                            // Then read account flags (admin + forced password change) — profile must exist for this to work
+                            await auth.checkAccountFlags()
                             await ds.loadConversations()
                             await ds.loadContacts()
                             await ds.loadDiscover()
@@ -50,6 +55,7 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.35), value: auth.isAuthenticated)
         .animation(.easeInOut(duration: 0.35), value: auth.isLoading)
+        .animation(.easeInOut(duration: 0.35), value: auth.mustChangePassword)
         .onChange(of: auth.isAuthenticated) { _, authenticated in
             if !authenticated {
                 dataService = nil

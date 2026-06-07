@@ -2,7 +2,9 @@
 //  AuthManager.swift
 //  Wefluens
 //
-//  Native Supabase Auth — email/password sign-up and sign-in.
+//  Native Supabase Auth — invite-only sign-in.
+//  Accounts are created by an admin invite (see AdminUsersView + the
+//  invite-user / activate-invite edge functions). There is no public sign-up.
 //
 
 import SwiftUI
@@ -17,14 +19,9 @@ final class AuthManager {
     var errorMessage = ""
     var isAdmin = false
 
-    // MARK: Email verification (6-digit OTP)
-
-    /// When true, the UI shows the 6-digit code entry screen.
-    var needsVerification = false
-    /// Email awaiting verification — used to verify and resend the OTP.
-    var pendingEmail = ""
-    var isVerifying = false
-    var isResending = false
+    /// True when the signed-in user must change their initial password before
+    /// they can use the app. Set from the `must_change_password` profile flag.
+    var mustChangePassword = false
 
     /// The authenticated user's UUID from Supabase Auth.
     var userId: UUID? {
@@ -75,83 +72,6 @@ final class AuthManager {
         }
     }
 
-    // MARK: - Sign Up
-
-    @MainActor
-    func signUp(email: String, password: String) async {
-        guard !isSigningIn else { return }
-        isSigningIn = true
-        defer { isSigningIn = false }
-
-        do {
-            let response = try await supabase.auth.signUp(
-                email: email,
-                password: password
-            )
-            session = response.session
-            isAuthenticated = session != nil
-
-            if session == nil {
-                // Email confirmation required — switch to 6-digit code entry.
-                pendingEmail = email
-                needsVerification = true
-            }
-        } catch {
-            setError(error.localizedDescription)
-        }
-    }
-
-    // MARK: - Verify OTP
-
-    /// Verifies the 6-digit signup code the user received by email.
-    @MainActor
-    func verifyCode(_ token: String) async {
-        let trimmed = token.trimmingCharacters(in: .whitespaces)
-        guard !isVerifying, !pendingEmail.isEmpty, !trimmed.isEmpty else { return }
-        isVerifying = true
-        defer { isVerifying = false }
-
-        do {
-            let response = try await supabase.auth.verifyOTP(
-                email: pendingEmail,
-                token: trimmed,
-                type: .signup
-            )
-            session = response.session
-            isAuthenticated = response.session != nil
-            if isAuthenticated {
-                needsVerification = false
-                pendingEmail = ""
-            }
-        } catch {
-            setError(error.localizedDescription)
-        }
-    }
-
-    /// Resends the signup verification code to `pendingEmail`.
-    @MainActor
-    func resendCode() async {
-        guard !isResending, !pendingEmail.isEmpty else { return }
-        isResending = true
-        defer { isResending = false }
-
-        do {
-            try await supabase.auth.resend(
-                email: pendingEmail,
-                type: .signup
-            )
-        } catch {
-            setError(error.localizedDescription)
-        }
-    }
-
-    /// Cancels verification and returns to the sign-up form.
-    @MainActor
-    func cancelVerification() {
-        needsVerification = false
-        pendingEmail = ""
-    }
-
     // MARK: - Sign In
 
     @MainActor
@@ -183,31 +103,56 @@ final class AuthManager {
         session = nil
         isAuthenticated = false
         isAdmin = false
+        mustChangePassword = false
     }
 
-    // MARK: - Admin
+    // MARK: - Account flags (admin + forced password change)
 
     @MainActor
-    func checkAdminStatus() async {
+    func checkAccountFlags() async {
         guard let uid = userId else { return }
         do {
-            struct AdminCheck: Codable {
+            struct Flags: Codable {
                 let isAdmin: Bool?
+                let mustChangePassword: Bool?
                 enum CodingKeys: String, CodingKey {
                     case isAdmin = "is_admin"
+                    case mustChangePassword = "must_change_password"
                 }
             }
-            let rows: [AdminCheck] = try await supabase
+            let rows: [Flags] = try await supabase
                 .from("profiles")
-                .select("is_admin")
+                .select("is_admin,must_change_password")
                 .eq("id", value: uid.uuidString)
                 .execute()
                 .value
             isAdmin = rows.first?.isAdmin ?? false
+            mustChangePassword = rows.first?.mustChangePassword ?? false
         } catch {
-            print("⚠️ Admin check failed: \(error)")
+            print("⚠️ Account flags check failed: \(error)")
             isAdmin = false
         }
+    }
+
+    // MARK: - Change Password
+
+    /// Updates the signed-in user's password and clears the forced-change flag.
+    /// Throws so the caller can surface a meaningful message.
+    @MainActor
+    func changePassword(to newPassword: String) async throws {
+        try await supabase.auth.update(user: UserAttributes(password: newPassword))
+
+        if let uid = userId {
+            struct PasswordFlagUpdate: Encodable, Sendable {
+                let must_change_password: Bool
+            }
+            try await supabase
+                .from("profiles")
+                .update(PasswordFlagUpdate(must_change_password: false))
+                .eq("id", value: uid.uuidString)
+                .execute()
+        }
+        mustChangePassword = false
     }
 
     // MARK: - Helpers

@@ -17,6 +17,7 @@ struct AdminUsersView: View {
     @State private var isLoading = true
     @State private var alertState: AdminAlertState?
     @State private var errorMessage: String?
+    @State private var showInvite = false
 
     enum AdminAlertState: Identifiable {
         case ban(AdminUser)
@@ -47,6 +48,15 @@ struct AdminUsersView: View {
         .navigationTitle(l10n.t(.adminTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    showInvite = true
+                } label: {
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.coral)
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     Task { await loadUsers() }
@@ -56,6 +66,9 @@ struct AdminUsersView: View {
                         .foregroundStyle(Theme.coral)
                 }
             }
+        }
+        .sheet(isPresented: $showInvite) {
+            InviteUserSheet { Task { await loadUsers() } }
         }
         .task { await loadUsers() }
         .alert("Error", isPresented: .init(
@@ -138,6 +151,40 @@ struct AdminUsersView: View {
 
     private var usersList: some View {
         List {
+            Section {
+                Button {
+                    showInvite = true
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "envelope.badge.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background(Theme.sunset)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(l10n.t(.adminInvite))
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Theme.ink(for: colorScheme))
+                            Text(l10n.t(.adminInviteSubtitle))
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                                .lineLimit(2)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                    }
+                    .padding(12)
+                    .cardStyle(cornerRadius: 16)
+                }
+                .buttonStyle(.plain)
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
+
             Section(l10n.t(.adminAllUsers)) {
                 ForEach(users) { user in
                     UserRow(
@@ -258,6 +305,17 @@ nonisolated struct AdminDeleteParams: Encodable, Sendable {
     let target_id: UUID
 }
 
+// MARK: - Invite edge function
+
+nonisolated struct InviteRequest: Encodable, Sendable {
+    let email: String
+}
+
+nonisolated struct InviteResponse: Codable, Sendable {
+    let ok: Bool?
+    let error: String?
+}
+
 // MARK: - Models
 
 struct AdminUser: Identifiable {
@@ -356,6 +414,159 @@ private struct UserRow: View {
         }
         .padding(12)
         .cardStyle(cornerRadius: 16)
+    }
+}
+
+// MARK: - Invite User Sheet
+
+private struct InviteUserSheet: View {
+    @Environment(LocalizationManager.self) private var l10n
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dismiss) private var dismiss
+
+    let onInvited: () -> Void
+
+    @State private var email = ""
+    @State private var isSending = false
+    @State private var feedback: Feedback?
+    @FocusState private var emailFocused: Bool
+
+    private struct Feedback: Equatable {
+        let isSuccess: Bool
+        let message: String
+    }
+
+    private var canSend: Bool {
+        let t = email.trimmingCharacters(in: .whitespaces)
+        return t.contains("@") && t.contains(".") && !isSending
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.paper(for: colorScheme).ignoresSafeArea()
+
+                VStack(spacing: 18) {
+                    ZStack {
+                        Circle()
+                            .fill(Theme.sunset.opacity(0.15))
+                            .frame(width: 84, height: 84)
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 32, weight: .medium))
+                            .foregroundStyle(Theme.coral)
+                    }
+                    .padding(.top, 12)
+
+                    Text(l10n.t(.adminInviteTitle))
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundStyle(Theme.ink(for: colorScheme))
+
+                    Text(l10n.t(.adminInviteSubtitle))
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+
+                    HStack(spacing: 10) {
+                        Image(systemName: "envelope.fill")
+                            .font(.system(size: 15))
+                            .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                            .frame(width: 22)
+                        TextField(l10n.t(.adminInviteEmailPlaceholder), text: $email)
+                            .font(.system(size: 16))
+                            .foregroundStyle(Theme.ink(for: colorScheme))
+                            .textContentType(.emailAddress)
+                            .keyboardType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .focused($emailFocused)
+                            .onChange(of: email) { _, _ in feedback = nil }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .cardStyle(cornerRadius: 14)
+                    .padding(.horizontal, 20)
+
+                    if let feedback {
+                        HStack(spacing: 8) {
+                            Image(systemName: feedback.isSuccess ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                            Text(feedback.message)
+                                .font(.system(size: 13, weight: .medium))
+                                .multilineTextAlignment(.leading)
+                            Spacer(minLength: 0)
+                        }
+                        .foregroundStyle(feedback.isSuccess ? Color(hex: 0x2AD17E) : Color(hex: 0xFF6B6B))
+                        .padding(.horizontal, 24)
+                        .transition(.opacity)
+                    }
+
+                    Button {
+                        Task { await send() }
+                    } label: {
+                        Group {
+                            if isSending {
+                                ProgressView().tint(.white)
+                            } else {
+                                Text(l10n.t(.adminInviteSend))
+                                    .font(.system(size: 17, weight: .semibold))
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 15)
+                        .foregroundStyle(.white)
+                        .background(canSend ? AnyShapeStyle(Theme.sunset) : AnyShapeStyle(Theme.inkTertiary(for: colorScheme)))
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .disabled(!canSend)
+                    .padding(.horizontal, 20)
+
+                    Spacer()
+                }
+            }
+            .navigationTitle(l10n.t(.adminInvite))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(l10n.t(.settingsDone)) { dismiss() }
+                        .foregroundStyle(Theme.coral)
+                }
+            }
+            .onAppear { emailFocused = true }
+            .animation(.easeInOut(duration: 0.2), value: feedback)
+        }
+    }
+
+    @MainActor
+    private func send() async {
+        let target = email.trimmingCharacters(in: .whitespaces).lowercased()
+        guard canSend else { return }
+        isSending = true
+        defer { isSending = false }
+
+        do {
+            let resp: InviteResponse = try await supabase.functions.invoke(
+                "invite-user",
+                options: .init(body: InviteRequest(email: target))
+            )
+            if resp.ok == true {
+                feedback = Feedback(isSuccess: true, message: l10n.t(.adminInviteSent))
+                onInvited()
+                email = ""
+            } else {
+                feedback = Feedback(isSuccess: false, message: message(for: resp.error))
+            }
+        } catch {
+            feedback = Feedback(isSuccess: false, message: l10n.t(.adminInviteErrGeneric))
+        }
+    }
+
+    private func message(for code: String?) -> String {
+        switch code {
+        case "INVALID_EMAIL": return l10n.t(.adminInviteErrInvalid)
+        case "ALREADY_REGISTERED": return l10n.t(.adminInviteErrExists)
+        case "EMAIL_NOT_CONFIGURED", "EMAIL_SEND_FAILED": return l10n.t(.adminInviteErrEmail)
+        default: return l10n.t(.adminInviteErrGeneric)
+        }
     }
 }
 

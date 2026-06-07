@@ -21,13 +21,21 @@
 - [x] `admin_delete_user` database function for secure user deletion
 - [x] Admin-only UI section in ProfileView
 
-## Email Verification
+## Invite-Only Registration (current)
 
-- [x] Switched from email link to 6-digit OTP code (mobile-friendly, no localhost redirect)
-- [x] In-app code entry screen with auto-submit, 60s resend cooldown, and change-email option
-- [x] `verifyOTP(type: .signup)` + `resend(type: .signup)` wired through AuthManager
-- [x] Three-language support for all verification and admin strings
-- [ ] Supabase "Confirm signup" email template switched from `{{ .ConfirmationURL }}` to `{{ .Token }}` (manual dashboard step)
+- **Invite only** — public sign-up removed; the login screen is email + password only
+- **Admin invites by email** — admin enters an email in Backend Management; we email an activation link
+- **Activation link** — opens a Wefluens-branded web page that creates the account with initial password `11111111`
+- **Forced password change** — on first login the user must set a new password before entering the app
+- **Voluntary change** — "Change Password" is also available under Privacy & Security
+- [x] `invites` table + `must_change_password` flag on profiles (with RLS)
+- [x] `invite-user` edge function (admin-only) sends the activation email via Resend
+- [x] `activate-invite` edge function (public) creates the confirmed user + branded landing page
+- [x] `AuthManager.changePassword` + `ForcePasswordChangeView`, gated in ContentView
+- [x] Admin invite UI (InviteUserSheet) in AdminUsersView
+- [x] Three-language support (EN / 中文 / ES) for all new strings
+- [ ] Set `RESEND_API_KEY` env var (and verify a sending domain in Resend to email any recipient)
+- Superseded: the previous 6-digit OTP self-signup flow (replaced by invite links)
 
 ## Design
 
@@ -36,7 +44,8 @@
 
 ## Screens
 
-- **Welcome screen** — App icon + tagline + email field + password field + Sign In button + toggle for Sign Up. Shown to anyone not yet logged in
+- **Welcome screen** — App icon + tagline + email field + password field + Sign In button. Invite-only, so no public sign-up toggle
+- **Set new password** — Shown right after the first login; the user must replace the initial password `11111111`
 - **Main app (4 tabs)** — Same Chats / Contacts / Discover / Me layout you already have, now loading real data from the cloud database
 - **Profile** — Shows your real name and email from your login account. The Edit Profile screen saves changes to the cloud. Sign Out actually works now
 - **Admin Backend** — Admin-only user management dashboard accessible from the Me tab

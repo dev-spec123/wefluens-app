@@ -104,11 +104,19 @@ enum L10n: String {
     case authVerificationSentTitle, authVerificationSentMessage, authVerificationSentOk
     case authVerifyTitle, authVerifySubtitle, authVerifyButton
     case authResendCode, authResendIn, authChangeEmail, authCodeResent
+    case authInviteOnly
+
+    // Forced password change
+    case forcePwTitle, forcePwSubtitle, forcePwSubtitleOptional, forcePwNew, forcePwConfirm
+    case forcePwSave, forcePwTooShort, forcePwSameAsInitial, forcePwChangePassword
 
     // Admin
     case adminTitle, adminAllUsers, adminDeactivate, adminDelete, adminDeactivateConfirm
     case adminDeleteConfirm, adminCancel, adminNoUsers, adminStatusActive, adminStatusDeactivated
     case adminBadge
+    case adminInvite, adminInviteTitle, adminInviteSubtitle, adminInviteEmailPlaceholder
+    case adminInviteSend, adminInviteSent, adminInviteErrInvalid, adminInviteErrExists
+    case adminInviteErrEmail, adminInviteErrGeneric
 }
 
 /// App-wide localization manager. Persists the chosen language.
@@ -202,6 +210,16 @@ final class LocalizationManager {
             .authResendIn: "Resend in",
             .authChangeEmail: "Change email",
             .authCodeResent: "A new code has been sent",
+            .authInviteOnly: "Invite only — ask your admin for access",
+            .forcePwTitle: "Set a new password",
+            .forcePwSubtitle: "For your security, please replace the initial password before continuing.",
+            .forcePwSubtitleOptional: "Choose a new password for your account.",
+            .forcePwNew: "New password",
+            .forcePwConfirm: "Confirm new password",
+            .forcePwSave: "Save & Continue",
+            .forcePwTooShort: "Password must be at least 8 characters",
+            .forcePwSameAsInitial: "Please pick a password different from the initial one",
+            .forcePwChangePassword: "Change Password",
             .adminTitle: "Backend Management",
             .adminBadge: "ADMIN",
             .adminAllUsers: "All Users",
@@ -213,6 +231,16 @@ final class LocalizationManager {
             .adminNoUsers: "No users found",
             .adminStatusActive: "Active",
             .adminStatusDeactivated: "Deactivated",
+            .adminInvite: "Invite a User",
+            .adminInviteTitle: "Invite a new user",
+            .adminInviteSubtitle: "Enter their email — we'll send an activation link. The initial password is 11111111.",
+            .adminInviteEmailPlaceholder: "User's email",
+            .adminInviteSend: "Send Invite",
+            .adminInviteSent: "Invite sent! Ask them to check their inbox.",
+            .adminInviteErrInvalid: "That email doesn't look right",
+            .adminInviteErrExists: "That email is already registered",
+            .adminInviteErrEmail: "Email service isn't configured yet — contact the developer",
+            .adminInviteErrGeneric: "Couldn't send the invite. Please try again.",
         ],
         .chinese: [
             .tabChats: "聊天", .tabContacts: "通讯录", .tabDiscover: "发现", .tabMe: "我",
@@ -282,6 +310,16 @@ final class LocalizationManager {
             .authResendIn: "重新发送",
             .authChangeEmail: "更换邮箱",
             .authCodeResent: "新验证码已发送",
+            .authInviteOnly: "仅限受邀用户 · 如需账号请联系管理员",
+            .forcePwTitle: "设置新密码",
+            .forcePwSubtitle: "为了账号安全，请先修改初始密码再继续使用。",
+            .forcePwSubtitleOptional: "为你的账号设置一个新密码。",
+            .forcePwNew: "新密码",
+            .forcePwConfirm: "确认新密码",
+            .forcePwSave: "保存并进入",
+            .forcePwTooShort: "密码至少需要 8 位",
+            .forcePwSameAsInitial: "新密码不能与初始密码相同",
+            .forcePwChangePassword: "修改密码",
             .adminTitle: "后端管理",
             .adminBadge: "管理员",
             .adminAllUsers: "全部用户",
@@ -293,6 +331,16 @@ final class LocalizationManager {
             .adminNoUsers: "暂无用户",
             .adminStatusActive: "正常",
             .adminStatusDeactivated: "已注销",
+            .adminInvite: "邀请用户",
+            .adminInviteTitle: "邀请新用户",
+            .adminInviteSubtitle: "输入对方邮箱，我们会发送注册激活链接。初始密码为 11111111。",
+            .adminInviteEmailPlaceholder: "用户邮箱",
+            .adminInviteSend: "发送邀请",
+            .adminInviteSent: "邀请已发送！请提醒对方查收邮件。",
+            .adminInviteErrInvalid: "邮箱格式不正确",
+            .adminInviteErrExists: "该邮箱已注册",
+            .adminInviteErrEmail: "邮件服务尚未配置，请联系开发者",
+            .adminInviteErrGeneric: "邀请发送失败，请重试。",
         ],
         .spanish: [
             .tabChats: "Chats", .tabContacts: "Contactos", .tabDiscover: "Descubrir", .tabMe: "Yo",
@@ -362,6 +410,16 @@ final class LocalizationManager {
             .authResendIn: "Reenviar en",
             .authChangeEmail: "Cambiar correo",
             .authCodeResent: "Se ha enviado un nuevo código",
+            .authInviteOnly: "Solo por invitación — pide acceso a tu administrador",
+            .forcePwTitle: "Establece una nueva contraseña",
+            .forcePwSubtitle: "Por tu seguridad, cambia la contraseña inicial antes de continuar.",
+            .forcePwSubtitleOptional: "Elige una nueva contraseña para tu cuenta.",
+            .forcePwNew: "Nueva contraseña",
+            .forcePwConfirm: "Confirmar nueva contraseña",
+            .forcePwSave: "Guardar y Continuar",
+            .forcePwTooShort: "La contraseña debe tener al menos 8 caracteres",
+            .forcePwSameAsInitial: "Elige una contraseña distinta de la inicial",
+            .forcePwChangePassword: "Cambiar Contraseña",
             .adminTitle: "Gestión de Backend",
             .adminBadge: "ADMIN",
             .adminAllUsers: "Todos los Usuarios",
@@ -373,6 +431,16 @@ final class LocalizationManager {
             .adminNoUsers: "No se encontraron usuarios",
             .adminStatusActive: "Activo",
             .adminStatusDeactivated: "Desactivado",
+            .adminInvite: "Invitar a un Usuario",
+            .adminInviteTitle: "Invitar a un nuevo usuario",
+            .adminInviteSubtitle: "Ingresa su correo — enviaremos un enlace de activación. La contraseña inicial es 11111111.",
+            .adminInviteEmailPlaceholder: "Correo del usuario",
+            .adminInviteSend: "Enviar Invitación",
+            .adminInviteSent: "¡Invitación enviada! Pídele que revise su correo.",
+            .adminInviteErrInvalid: "Ese correo no parece válido",
+            .adminInviteErrExists: "Ese correo ya está registrado",
+            .adminInviteErrEmail: "El servicio de correo no está configurado — contacta al desarrollador",
+            .adminInviteErrGeneric: "No se pudo enviar la invitación. Inténtalo de nuevo.",
         ],
     ]
 }

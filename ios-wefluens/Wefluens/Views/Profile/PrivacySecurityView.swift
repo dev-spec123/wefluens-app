@@ -11,6 +11,7 @@ struct PrivacySecurityView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showActivity: Bool = true
     @State private var dataSharing: Bool = false
+    @State private var showChangePassword: Bool = false
 
     var body: some View {
         ScrollView {
@@ -18,6 +19,14 @@ struct PrivacySecurityView: View {
                 groupTitle(l10n.t(.privacyTitle))
 
                 VStack(spacing: 0) {
+                    actionRow(
+                        icon: "lock.rotation",
+                        title: l10n.t(.forcePwChangePassword),
+                        subtitle: l10n.t(.forcePwSubtitleOptional)
+                    ) {
+                        showChangePassword = true
+                    }
+                    Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 64)
                     privacyRow(
                         icon: "person.crop.circle.badge.xmark",
                         title: l10n.t(.privacyBlockedAccounts),
@@ -53,6 +62,33 @@ struct PrivacySecurityView: View {
         .background(Theme.paper(for: colorScheme).ignoresSafeArea())
         .navigationTitle(l10n.t(.privacyTitle))
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showChangePassword) {
+            ForcePasswordChangeView(forced: false)
+        }
+    }
+
+    private func actionRow(icon: String, title: String, subtitle: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                iconBadge(icon)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Theme.ink(for: colorScheme))
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func groupTitle(_ text: String) -> some View {
