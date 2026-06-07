@@ -42,8 +42,16 @@ struct Conversation: Identifiable {
     let isGroup: Bool
     let participantCount: Int
     let messages: [ChatMessage]
+    /// For real 1:1 DM threads: the other participant's user id (nil for sample data).
+    let otherUserId: UUID?
+    /// Initials to render in the avatar for DM threads (profiles have no SF symbol).
+    let avatarInitials: String?
+    /// Raw timestamp of the last message, used for sorting.
+    let lastMessageAt: Date?
+    /// True when the last message was sent by me (drives the "You: " preview prefix).
+    let lastFromMe: Bool
 
-    init(id: UUID = UUID(), name: String, avatar: String, avatarColors: [UInt], lastMessage: String, time: String, unread: Int, isPinned: Bool, isOfficial: Bool, isOnline: Bool, isGroup: Bool, participantCount: Int, messages: [ChatMessage]) {
+    init(id: UUID = UUID(), name: String, avatar: String, avatarColors: [UInt], lastMessage: String, time: String, unread: Int, isPinned: Bool, isOfficial: Bool, isOnline: Bool, isGroup: Bool, participantCount: Int, messages: [ChatMessage], otherUserId: UUID? = nil, avatarInitials: String? = nil, lastMessageAt: Date? = nil, lastFromMe: Bool = false) {
         self.id = id
         self.name = name
         self.avatar = avatar
@@ -57,7 +65,24 @@ struct Conversation: Identifiable {
         self.isGroup = isGroup
         self.participantCount = participantCount
         self.messages = messages
+        self.otherUserId = otherUserId
+        self.avatarInitials = avatarInitials
+        self.lastMessageAt = lastMessageAt
+        self.lastFromMe = lastFromMe
     }
+}
+
+/// Lightweight, Hashable navigation route to open a 1:1 chat from anywhere
+/// (the chat list or a contact's detail screen).
+struct DMChatRoute: Hashable, Identifiable {
+    let threadId: UUID
+    let otherUserId: UUID
+    let title: String
+    let avatarColors: [UInt]
+    let initials: String
+    let isOnline: Bool
+
+    var id: UUID { threadId }
 }
 
 // MARK: - Contacts

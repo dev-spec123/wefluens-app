@@ -14,6 +14,9 @@ struct ContactDetailView: View {
     @State private var showRemoveConfirm: Bool = false
     @State private var isRemoving: Bool = false
     @State private var showRemoveError: Bool = false
+    @State private var openingChat: Bool = false
+    @State private var chatRoute: DMChatRoute?
+    @State private var showChatError: Bool = false
 
     var body: some View {
         ScrollView {
@@ -40,6 +43,12 @@ struct ContactDetailView: View {
         }
         .alert(l10n.t(.contactDetailRemoveFriendError), isPresented: $showRemoveError) {
             Button(l10n.t(.authVerificationSentOk), role: .cancel) { }
+        }
+        .alert(l10n.t(.chatStartError), isPresented: $showChatError) {
+            Button(l10n.t(.authVerificationSentOk), role: .cancel) { }
+        }
+        .navigationDestination(item: $chatRoute) { route in
+            ChatDetailView(route: route)
         }
         .overlay(alignment: .topLeading) {
             Button { dismiss() } label: {
@@ -112,16 +121,25 @@ struct ContactDetailView: View {
     private var actions: some View {
         HStack(spacing: 12) {
             Button {
+                startChat()
             } label: {
-                Label(l10n.t(.contactDetailMessage), systemImage: "bubble.left.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 15)
-                    .background(Theme.sunset)
-                    .clipShape(Capsule())
-                    .shadow(color: Theme.coral.opacity(0.35), radius: 12, y: 6)
+                HStack(spacing: 8) {
+                    if openingChat {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "bubble.left.fill")
+                    }
+                    Text(l10n.t(.contactDetailMessage))
+                }
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 15)
+                .background(Theme.sunset)
+                .clipShape(Capsule())
+                .shadow(color: Theme.coral.opacity(0.35), radius: 12, y: 6)
             }
+            .disabled(openingChat)
 
             Button {
             } label: {
@@ -133,6 +151,30 @@ struct ContactDetailView: View {
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
             }
+        }
+    }
+
+    /// Opens (or creates) the 1:1 thread with this friend via get_or_create_thread,
+    /// then pushes the real chat screen. Pure DB — never sends any email.
+    private func startChat() {
+        guard !openingChat else { return }
+        openingChat = true
+        Task {
+            do {
+                let threadId = try await data.getOrCreateThread(with: contact.id)
+                chatRoute = DMChatRoute(
+                    threadId: threadId,
+                    otherUserId: contact.id,
+                    title: contact.name,
+                    avatarColors: contact.avatarColors,
+                    initials: contact.initials,
+                    isOnline: contact.isOnline
+                )
+            } catch {
+                print("⚠️ get_or_create_thread failed: \(error)")
+                showChatError = true
+            }
+            openingChat = false
         }
     }
 

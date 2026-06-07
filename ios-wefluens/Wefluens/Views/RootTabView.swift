@@ -32,6 +32,7 @@ enum AppTab: Int, CaseIterable {
 struct RootTabView: View {
     @Environment(LocalizationManager.self) private var l10n
     @Environment(ThemeManager.self) private var theme
+    @Environment(AppDataService.self) private var data
     @Environment(\.colorScheme) private var colorScheme
     @State private var selection: AppTab = .chats
 
@@ -43,6 +44,7 @@ struct RootTabView: View {
         TabView(selection: $selection) {
             ChatsListView()
                 .tabItem { Label(l10n.t(AppTab.chats.titleKey), systemImage: AppTab.chats.icon) }
+                .badge(data.totalUnread)
                 .tag(AppTab.chats)
 
             ContactsView()
@@ -58,6 +60,7 @@ struct RootTabView: View {
                 .tag(AppTab.me)
         }
         .tint(Theme.coral)
+        .task { await data.observeInbox() }
     }
 
     /// Configures a clean, opaque WeChat-style bottom tab bar with a top hairline.

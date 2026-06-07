@@ -272,6 +272,71 @@ nonisolated struct SeenBySenderUpdate: Encodable, Sendable {
     let seen_by_sender: Bool
 }
 
+// MARK: - Direct Messages (1:1 chat)
+
+/// One row from the `list_dm_threads` RPC — a thread plus the other participant's
+/// profile, last-message preview, and my unread count.
+nonisolated struct DMThreadListRow: Codable, Identifiable, Sendable {
+    let threadId: UUID
+    let otherId: UUID
+    let otherName: String?
+    let otherHandle: String?
+    let otherRole: String?
+    let otherAvatarUrl: String?
+    let lastMessage: String?
+    let lastMessageAt: Date?
+    let lastSenderId: UUID?
+    let unreadCount: Int
+
+    var id: UUID { threadId }
+
+    enum CodingKeys: String, CodingKey {
+        case threadId = "thread_id"
+        case otherId = "other_id"
+        case otherName = "other_name"
+        case otherHandle = "other_handle"
+        case otherRole = "other_role"
+        case otherAvatarUrl = "other_avatar_url"
+        case lastMessage = "last_message"
+        case lastMessageAt = "last_message_at"
+        case lastSenderId = "last_sender_id"
+        case unreadCount = "unread_count"
+    }
+}
+
+/// A single direct message row from `dm_messages`.
+nonisolated struct DMMessageRow: Codable, Identifiable, Sendable {
+    let id: UUID
+    let threadId: UUID
+    let senderId: UUID
+    let recipientId: UUID
+    let body: String
+    let readAt: Date?
+    let createdAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, body
+        case threadId = "thread_id"
+        case senderId = "sender_id"
+        case recipientId = "recipient_id"
+        case readAt = "read_at"
+        case createdAt = "created_at"
+    }
+}
+
+nonisolated struct GetOrCreateThreadParams: Encodable, Sendable {
+    let p_other: String
+}
+
+nonisolated struct SendDMParams: Encodable, Sendable {
+    let p_other: String
+    let p_body: String
+}
+
+nonisolated struct MarkThreadReadParams: Encodable, Sendable {
+    let p_thread: String
+}
+
 // MARK: - Campaign
 
 nonisolated struct CampaignRow: Codable, Identifiable, Sendable {

@@ -58,17 +58,31 @@ struct ChatsListView: View {
             }
             .background(Theme.paper(for: colorScheme).ignoresSafeArea())
             .navigationBarHidden(true)
-            .navigationDestination(for: UUID.self) { id in
-                if let convo = conversations.first(where: { $0.id == id }) {
-                    ChatDetailView(conversation: convo)
-                }
+            .refreshable { await data.loadConversations() }
+            .navigationDestination(for: DMChatRoute.self) { route in
+                ChatDetailView(route: route)
             }
             .fullScreenCover(isPresented: $showCreateGroup) {
                 NavigationStack {
                     CreateGroupView()
                 }
             }
+            .onAppear {
+                Task { await data.loadConversations() }
+            }
         }
+    }
+
+    /// Builds the navigation route for a real DM thread.
+    private func route(for convo: Conversation) -> DMChatRoute {
+        DMChatRoute(
+            threadId: convo.id,
+            otherUserId: convo.otherUserId ?? convo.id,
+            title: convo.name,
+            avatarColors: convo.avatarColors,
+            initials: convo.avatarInitials ?? "?",
+            isOnline: convo.isOnline
+        )
     }
 
     private var header: some View {
@@ -151,7 +165,7 @@ struct ChatsListView: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, convo in
-                    NavigationLink(value: convo.id) {
+                    NavigationLink(value: route(for: convo)) {
                         ConversationRow(conversation: convo)
                     }
                     .buttonStyle(.plain)
@@ -179,17 +193,35 @@ struct ChatsListView: View {
 }
 
 private struct ConversationRow: View {
+    @Environment(LocalizationManager.self) private var l10n
     @Environment(\.colorScheme) private var colorScheme
     let conversation: Conversation
 
+    /// Prepends a localized "You: " when I sent the last message (WeChat-style).
+    private var previewText: String {
+        guard !conversation.lastMessage.isEmpty else { return "" }
+        return conversation.lastFromMe
+            ? l10n.t(.chatYouPrefix) + conversation.lastMessage
+            : conversation.lastMessage
+    }
+
     var body: some View {
         HStack(spacing: 14) {
-            Avatar(
-                colors: conversation.avatarColors,
-                symbol: conversation.avatar,
-                size: 54,
-                isOnline: conversation.isOnline
-            )
+            if let initials = conversation.avatarInitials {
+                Avatar(
+                    colors: conversation.avatarColors,
+                    initials: initials,
+                    size: 54,
+                    isOnline: conversation.isOnline
+                )
+            } else {
+                Avatar(
+                    colors: conversation.avatarColors,
+                    symbol: conversation.avatar,
+                    size: 54,
+                    isOnline: conversation.isOnline
+                )
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -208,7 +240,7 @@ private struct ConversationRow: View {
                             .foregroundStyle(Theme.inkSecondary(for: colorScheme))
                     }
                 }
-                Text(conversation.lastMessage)
+                Text(previewText)
                     .font(.system(size: 14))
                     .foregroundStyle(Theme.inkSecondary(for: colorScheme))
                     .lineLimit(1)

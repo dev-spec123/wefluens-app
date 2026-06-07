@@ -188,6 +188,9 @@ final class AppDataService {
 
     // MARK: - Conversations
 
+    /// Loads the real 1:1 DM threads via the `list_dm_threads` RPC (other person's
+    /// profile + last-message preview + my unread count, one round trip). The old
+    /// per-user `conversations`/`messages` tables are no longer used here.
     @MainActor
     func loadConversations() async {
         guard let uid = userId else {
@@ -198,53 +201,36 @@ final class AppDataService {
         defer { isLoadingConversations = false }
 
         do {
-            let rows: [ConversationDBRow] = try await supabase
-                .from("conversations")
-                .select()
-                .eq("user_id", value: uid.uuidString)
-                .order("updated_at", ascending: false)
+            let rows: [DMThreadListRow] = try await supabase
+                .rpc("list_dm_threads")
                 .execute()
                 .value
 
-            var convos: [Conversation] = []
-            for row in rows {
-                let msgRows: [MessageRow] = (try? await supabase
-                    .from("messages")
-                    .select()
-                    .eq("conversation_id", value: row.id.uuidString)
-                    .order("created_at", ascending: true)
-                    .execute()
-                    .value) ?? []
-
-                let messages = msgRows.map { msg in
-                    ChatMessage(
-                        id: msg.id,
-                        text: msg.text,
-                        sender: msg.senderId == uid ? .me : .them,
-                        time: msg.time ?? ""
-                    )
-                }
-
-                convos.append(Conversation(
-                    id: row.id,
-                    name: row.name,
-                    avatar: row.avatar ?? "person.fill",
-                    avatarColors: parseColors(row.avatarColors),
+            conversations = rows.map { row in
+                let displayName = row.otherName ?? row.otherHandle ?? "User"
+                return Conversation(
+                    id: row.threadId,
+                    name: displayName,
+                    avatar: "person.fill",
+                    avatarColors: Self.avatarPalette(for: row.otherId),
                     lastMessage: row.lastMessage ?? "",
-                    time: row.time ?? "",
-                    unread: row.unread ?? 0,
-                    isPinned: row.isPinned ?? false,
-                    isOfficial: row.isOfficial ?? false,
-                    isOnline: row.isOnline ?? false,
-                    isGroup: row.isGroup ?? false,
-                    participantCount: row.participantCount ?? 0,
-                    messages: messages
-                ))
+                    time: Self.relativeTime(from: row.lastMessageAt),
+                    unread: max(0, row.unreadCount),
+                    isPinned: false,
+                    isOfficial: false,
+                    isOnline: false,
+                    isGroup: false,
+                    participantCount: 0,
+                    messages: [],
+                    otherUserId: row.otherId,
+                    avatarInitials: Self.initials(from: displayName),
+                    lastMessageAt: row.lastMessageAt,
+                    lastFromMe: row.lastSenderId == uid
+                )
             }
-            conversations = convos
         } catch {
-            print("⚠️ Conversations load failed: \(error)")
-            conversations = SampleData.conversations
+            print("⚠️ DM threads load failed: \(error)")
+            conversations = []
         }
     }
 
@@ -441,6 +427,43 @@ final class AppDataService {
 
     /// Deterministic two-color gradient chosen from a fixed palette by user id,
     /// so each friend keeps a consistent look across sessions.
+    /// Two-letter initials for an avatar, derived from a display name.
+    nonisolated static func initials(from name: String) -> String {
+        let parts = name.split(separator: " ")
+        let first = parts.first?.first.map(String.init) ?? ""
+        let last = parts.count > 1 ? parts.last?.first.map(String.init) ?? "" : ""
+        let result = (first + last).uppercased()
+        return result.isEmpty ? "?" : result
+    }
+
+    /// Short clock time (locale-aware, e.g. "9:05 AM" or "21:05") for a message.
+    nonisolated static func clockTime(from date: Date?) -> String {
+        guard let date else { return "" }
+        let f = DateFormatter()
+        f.timeStyle = .short
+        f.dateStyle = .none
+        return f.string(from: date)
+    }
+
+    /// Relative time for the conversation list: clock time today, "Yesterday",
+    /// or a localized short date for older messages.
+    nonisolated static func relativeTime(from date: Date?) -> String {
+        guard let date else { return "" }
+        let cal = Calendar.current
+        if cal.isDateInToday(date) {
+            return clockTime(from: date)
+        }
+        if cal.isDateInYesterday(date) {
+            let rf = RelativeDateTimeFormatter()
+            rf.dateTimeStyle = .named
+            return rf.localizedString(for: cal.startOfDay(for: date), relativeTo: cal.startOfDay(for: Date()))
+        }
+        let f = DateFormatter()
+        let sameYear = cal.isDate(date, equalTo: Date(), toGranularity: .year)
+        f.setLocalizedDateFormatFromTemplate(sameYear ? "MMMd" : "yMMMd")
+        return f.string(from: date)
+    }
+
     nonisolated static func avatarPalette(for id: UUID) -> [UInt] {
         let palettes: [[UInt]] = [
             [0xFF4D6D, 0xFF9A5A],
@@ -455,6 +478,103 @@ final class AppDataService {
         let b = id.uuid
         let sum = UInt(b.0) &+ UInt(b.5) &+ UInt(b.7) &+ UInt(b.15)
         return palettes[Int(sum % UInt(palettes.count))]
+    }
+
+    // MARK: - Direct Messages (1:1 chat)
+
+    /// Total unread across all DM threads — drives the Chats tab badge.
+    var totalUnread: Int {
+        conversations.reduce(0) { $0 + $1.unread }
+    }
+
+    /// Returns the existing (or freshly created) thread id for a 1:1 chat with a
+    /// friend. The server rejects non-friends, so chat stays friends-only.
+    @MainActor
+    func getOrCreateThread(with otherId: UUID) async throws -> UUID {
+        let raw: String = try await supabase
+            .rpc("get_or_create_thread", params: GetOrCreateThreadParams(p_other: otherId.uuidString))
+            .execute()
+            .value
+        guard let threadId = UUID(uuidString: raw) else {
+            throw DataError(message: "Invalid thread id")
+        }
+        return threadId
+    }
+
+    /// Sends a DM via the friend-validated `send_dm` function (pure DB — never any
+    /// email). Refreshes the conversation list so the preview, unread count, and
+    /// tab badge stay correct. Returns the thread id.
+    @MainActor
+    @discardableResult
+    func sendMessage(to otherId: UUID, body: String) async throws -> UUID {
+        let raw: String = try await supabase
+            .rpc("send_dm", params: SendDMParams(p_other: otherId.uuidString, p_body: body))
+            .execute()
+            .value
+        await loadConversations()
+        guard let threadId = UUID(uuidString: raw) else {
+            throw DataError(message: "Invalid thread id")
+        }
+        return threadId
+    }
+
+    /// Loads all messages in a thread (RLS limits this to the two participants),
+    /// mapped to the UI `ChatMessage` model.
+    @MainActor
+    func loadThreadMessages(threadId: UUID) async -> [ChatMessage] {
+        guard let uid = userId else { return [] }
+        do {
+            let rows: [DMMessageRow] = try await supabase
+                .from("dm_messages")
+                .select()
+                .eq("thread_id", value: threadId.uuidString)
+                .order("created_at", ascending: true)
+                .execute()
+                .value
+            return rows.map { row in
+                ChatMessage(
+                    id: row.id,
+                    text: row.body,
+                    sender: row.senderId == uid ? .me : .them,
+                    time: Self.clockTime(from: row.createdAt)
+                )
+            }
+        } catch {
+            print("⚠️ Load thread messages failed: \(error)")
+            return []
+        }
+    }
+
+    /// Marks messages addressed to me in this thread as read (server-side only
+    /// touches rows where recipient_id = me).
+    @MainActor
+    func markThreadRead(threadId: UUID) async {
+        do {
+            _ = try await supabase
+                .rpc("mark_thread_read", params: MarkThreadReadParams(p_thread: threadId.uuidString))
+                .execute()
+        } catch {
+            print("⚠️ mark_thread_read failed: \(error)")
+        }
+    }
+
+    /// Keeps the conversation list + tab badge live. Runs until the calling task
+    /// is cancelled — tie this to a long-lived view's `.task` (RootTabView). RLS
+    /// scopes delivered inserts to threads I'm part of, so any new DM (incoming or
+    /// my own) refreshes the inbox.
+    @MainActor
+    func observeInbox() async {
+        guard let uid = userId else { return }
+        let channel = supabase.channel("dm-inbox-\(uid.uuidString)")
+        let inserts = channel.postgresChange(InsertAction.self, schema: "public", table: "dm_messages")
+        await channel.subscribe()
+        defer {
+            let ch = channel
+            Task { await ch.unsubscribe(); await supabase.removeChannel(ch) }
+        }
+        for await _ in inserts {
+            await loadConversations()
+        }
     }
 
     // MARK: - Discover

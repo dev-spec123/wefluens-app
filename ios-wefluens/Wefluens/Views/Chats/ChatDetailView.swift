@@ -2,24 +2,24 @@
 //  ChatDetailView.swift
 //  Wefluens
 //
-//  Beautiful chat detail with rounded WeChat-style bubbles.
+//  Real 1:1 chat: loads messages from Supabase, sends via send_dm, and updates
+//  live via Realtime. Beautiful rounded WeChat-style bubbles preserved.
 //
 
 import SwiftUI
 
 struct ChatDetailView: View {
     @Environment(LocalizationManager.self) private var l10n
+    @Environment(AppDataService.self) private var data
     @Environment(\.colorScheme) private var colorScheme
-    let conversation: Conversation
-
     @Environment(\.dismiss) private var dismiss
-    @State private var messages: [ChatMessage]
+
+    let route: DMChatRoute
+
+    @State private var vm: ChatThreadViewModel?
     @State private var draft: String = ""
 
-    init(conversation: Conversation) {
-        self.conversation = conversation
-        _messages = State(initialValue: conversation.messages)
-    }
+    private var messages: [ChatMessage] { vm?.messages ?? [] }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,6 +30,26 @@ struct ChatDetailView: View {
         .background(Theme.paper(for: colorScheme).ignoresSafeArea())
         .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
+        .alert(l10n.t(.chatSendError), isPresented: sendErrorBinding) {
+            Button(l10n.t(.authVerificationSentOk), role: .cancel) { }
+        }
+        .task {
+            guard vm == nil else { return }
+            let model = ChatThreadViewModel(route: route, data: data)
+            vm = model
+            await model.start()
+        }
+        .onDisappear {
+            let model = vm
+            Task { await model?.stop() }
+        }
+    }
+
+    private var sendErrorBinding: Binding<Bool> {
+        Binding(
+            get: { vm?.sendFailed ?? false },
+            set: { newValue in vm?.sendFailed = newValue }
+        )
     }
 
     private var navBar: some View {
@@ -44,28 +64,15 @@ struct ChatDetailView: View {
                     .overlay(Circle().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
             }
 
-            Avatar(colors: conversation.avatarColors, symbol: conversation.avatar, size: 40, isOnline: conversation.isOnline)
+            Avatar(colors: route.avatarColors, initials: route.initials, size: 40, isOnline: route.isOnline)
 
             VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 5) {
-                    Text(conversation.name)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Theme.ink(for: colorScheme))
-                    if conversation.isOfficial {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Theme.coral)
-                    }
-                }
-                if conversation.isGroup {
-                    Text("\(conversation.participantCount) \(l10n.t(.chatDetailGroupMembers))")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Theme.inkSecondary(for: colorScheme))
-                } else {
-                    Text(conversation.isOnline ? l10n.t(.chatDetailActiveNow) : l10n.t(.chatDetailOffline))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(conversation.isOnline ? Color(hex: 0x2AD17E) : Theme.inkSecondary(for: colorScheme))
-                }
+                Text(route.title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.ink(for: colorScheme))
+                Text(route.isOnline ? l10n.t(.chatDetailActiveNow) : l10n.t(.chatDetailOffline))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(route.isOnline ? Color(hex: 0x2AD17E) : Theme.inkSecondary(for: colorScheme))
             }
 
             Spacer()
@@ -89,19 +96,18 @@ struct ChatDetailView: View {
     private var messageList: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 8) {
-                    Text(l10n.t(.chatDetailToday))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.inkTertiary(for: colorScheme))
-                        .padding(.vertical, 6)
-
-                    ForEach(messages) { message in
-                        MessageBubble(message: message)
-                            .id(message.id)
+                if messages.isEmpty {
+                    emptyState
+                } else {
+                    LazyVStack(spacing: 8) {
+                        ForEach(messages) { message in
+                            MessageBubble(message: message)
+                                .id(message.id)
+                        }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
             }
             .onChange(of: messages.count) { _, _ in
                 if let last = messages.last {
@@ -116,6 +122,19 @@ struct ChatDetailView: View {
                 }
             }
         }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 38))
+                .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+            Text(l10n.t(.chatThreadEmpty))
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 80)
     }
 
     private var inputBar: some View {
@@ -157,17 +176,17 @@ struct ChatDetailView: View {
     }
 
     private var canSend: Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        vm != nil && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// Sends through send_dm (real DB write). Clears the field immediately for a
+    /// snappy feel; the message list re-reads from the server.
     private func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        let new = ChatMessage(text: text, sender: .me, time: formatter.string(from: Date()))
-        messages.append(new)
+        guard !text.isEmpty, let vm else { return }
         draft = ""
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Task { await vm.send(text) }
     }
 }
 
@@ -304,7 +323,14 @@ private struct BubbleShape: Shape {
 
 #Preview {
     NavigationStack {
-        ChatDetailView(conversation: SampleData.conversations[0])
-            .environment(LocalizationManager())
+        ChatDetailView(route: DMChatRoute(
+            threadId: UUID(),
+            otherUserId: UUID(),
+            title: "Maya Rivera",
+            avatarColors: [0x7B2FF7, 0xF107A3],
+            initials: "MR",
+            isOnline: true
+        ))
+        .environment(LocalizationManager())
     }
 }

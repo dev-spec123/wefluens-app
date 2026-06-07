@@ -228,6 +228,103 @@ export type Database = {
           },
         ]
       }
+      dm_messages: {
+        Row: {
+          body: string
+          created_at: string | null
+          id: string
+          read_at: string | null
+          recipient_id: string
+          sender_id: string
+          thread_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string | null
+          id?: string
+          read_at?: string | null
+          recipient_id: string
+          sender_id: string
+          thread_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string | null
+          id?: string
+          read_at?: string | null
+          recipient_id?: string
+          sender_id?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dm_messages_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dm_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dm_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "dm_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dm_threads: {
+        Row: {
+          created_at: string | null
+          id: string
+          last_message: string | null
+          last_message_at: string | null
+          last_sender_id: string | null
+          user_high: string
+          user_low: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          last_message?: string | null
+          last_message_at?: string | null
+          last_sender_id?: string | null
+          user_high: string
+          user_low: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          last_message?: string | null
+          last_message_at?: string | null
+          last_sender_id?: string | null
+          user_high?: string
+          user_low?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dm_threads_user_high_fkey"
+            columns: ["user_high"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dm_threads_user_low_fkey"
+            columns: ["user_low"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       friend_requests: {
         Row: {
           avatar_colors: string | null
@@ -463,7 +560,25 @@ export type Database = {
         Returns: undefined
       }
       admin_delete_user: { Args: { target_id: string }; Returns: undefined }
+      are_friends: { Args: { a: string; b: string }; Returns: boolean }
+      get_or_create_thread: { Args: { p_other: string }; Returns: string }
       is_admin: { Args: { uid: string }; Returns: boolean }
+      list_dm_threads: {
+        Args: never
+        Returns: {
+          last_message: string
+          last_message_at: string
+          last_sender_id: string
+          other_avatar_url: string
+          other_handle: string
+          other_id: string
+          other_name: string
+          other_role: string
+          thread_id: string
+          unread_count: number
+        }[]
+      }
+      mark_thread_read: { Args: { p_thread: string }; Returns: undefined }
       remove_friend: { Args: { target_id: string }; Returns: string }
       respond_friend_request: {
         Args: { accept: boolean; request_id: string }
@@ -482,6 +597,7 @@ export type Database = {
           role: string
         }[]
       }
+      send_dm: { Args: { p_body: string; p_other: string }; Returns: string }
       send_friend_request: {
         Args: { message?: string; target_id: string }
         Returns: string

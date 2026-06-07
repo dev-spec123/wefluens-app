@@ -45,6 +45,7 @@ enum L10n: String {
     // ChatDetail
     case chatDetailActiveNow, chatDetailOffline, chatDetailToday, chatDetailMessagePlaceholder
     case chatDetailGroupMembers
+    case chatYouPrefix, chatThreadEmpty, chatStartError, chatSendError
 
     // Contacts
     case contactsTitle, contactsSubtitle, contactsSearch, contactsInvite, contactsTopTalent, contactsBrands
@@ -158,6 +159,10 @@ final class LocalizationManager {
             .chatDetailActiveNow: "Active now", .chatDetailOffline: "Offline",
             .chatDetailToday: "Today", .chatDetailMessagePlaceholder: "Message…",
             .chatDetailGroupMembers: "members",
+            .chatYouPrefix: "You: ",
+            .chatThreadEmpty: "Say hello 👋",
+            .chatStartError: "Couldn't open the chat. Please try again.",
+            .chatSendError: "Couldn't send. Please try again.",
             .contactsTitle: "Contacts", .contactsSubtitle: "creators & partners", .contactsSearch: "Search contacts",
             .contactsInvite: "Invite", .contactsTopTalent: "Top Talent", .contactsBrands: "Brands",
             .contactsNewFriends: "New Friends", .contactsFriendRequests: "Friend Request",
@@ -278,6 +283,10 @@ final class LocalizationManager {
             .chatDetailActiveNow: "在线", .chatDetailOffline: "离线",
             .chatDetailToday: "今天", .chatDetailMessagePlaceholder: "输入消息…",
             .chatDetailGroupMembers: "人",
+            .chatYouPrefix: "你：",
+            .chatThreadEmpty: "打个招呼吧 👋",
+            .chatStartError: "无法打开聊天，请重试。",
+            .chatSendError: "发送失败，请重试。",
             .contactsTitle: "通讯录", .contactsSubtitle: "位创作者与合作伙伴", .contactsSearch: "搜索联系人",
             .contactsInvite: "邀请", .contactsTopTalent: "顶尖网红", .contactsBrands: "品牌",
             .contactsNewFriends: "新的朋友", .contactsFriendRequests: "好友申请",
@@ -398,6 +407,10 @@ final class LocalizationManager {
             .chatDetailActiveNow: "Activo ahora", .chatDetailOffline: "Desconectado",
             .chatDetailToday: "Hoy", .chatDetailMessagePlaceholder: "Mensaje…",
             .chatDetailGroupMembers: "miembros",
+            .chatYouPrefix: "Tú: ",
+            .chatThreadEmpty: "Saluda 👋",
+            .chatStartError: "No se pudo abrir el chat. Inténtalo de nuevo.",
+            .chatSendError: "No se pudo enviar. Inténtalo de nuevo.",
             .contactsTitle: "Contactos", .contactsSubtitle: "creadores y socios", .contactsSearch: "Buscar contactos",
             .contactsInvite: "Invitar", .contactsTopTalent: "Top Talento", .contactsBrands: "Marcas",
             .contactsNewFriends: "Nuevos Amigos", .contactsFriendRequests: "Solicitud de Amistad",
