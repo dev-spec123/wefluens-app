@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, error: "EMAIL_NOT_CONFIGURED" });
     }
 
-    const from = Deno.env.get("RESEND_FROM") ?? "Wefluens <onboarding@resend.dev>";
+    const from = Deno.env.get("RESEND_FROM") ?? "Wefluens <invite@wefluens.com>";
     const link = `${Deno.env.get("SUPABASE_URL")}/functions/v1/activate-invite?token=${token}`;
 
     const resp = await fetch("https://api.resend.com/emails", {
