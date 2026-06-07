@@ -98,6 +98,9 @@ enum Theme {
     static let tangerine = Color(hex: 0xFF9A5A)
     static let coralDark = Color(hex: 0xFF6B82)
 
+    /// Destructive actions (delete / remove).
+    static let danger = Color(hex: 0xE5484D)
+
     // Hairline adapts
     static func hairline(for scheme: ColorScheme) -> Color {
         isDark(scheme) ? Color.white.opacity(0.08) : Color.black.opacity(0.06)

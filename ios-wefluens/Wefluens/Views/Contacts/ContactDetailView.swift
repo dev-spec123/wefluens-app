@@ -7,9 +7,13 @@ import SwiftUI
 
 struct ContactDetailView: View {
     @Environment(LocalizationManager.self) private var l10n
+    @Environment(AppDataService.self) private var data
     @Environment(\.colorScheme) private var colorScheme
     let contact: Contact
     @Environment(\.dismiss) private var dismiss
+    @State private var showRemoveConfirm: Bool = false
+    @State private var isRemoving: Bool = false
+    @State private var showRemoveError: Bool = false
 
     var body: some View {
         ScrollView {
@@ -18,6 +22,7 @@ struct ContactDetailView: View {
                 stats
                 actions
                 infoCard
+                removeButton
             }
             .padding(.horizontal, 18)
             .padding(.bottom, 30)
@@ -25,6 +30,17 @@ struct ContactDetailView: View {
         .background(Theme.paper(for: colorScheme).ignoresSafeArea())
         .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
+        .confirmationDialog(
+            l10n.t(.contactDetailRemoveFriendMsg),
+            isPresented: $showRemoveConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(l10n.t(.contactDetailRemoveFriend), role: .destructive) { removeFriend() }
+            Button(l10n.t(.adminCancel), role: .cancel) { }
+        }
+        .alert(l10n.t(.contactDetailRemoveFriendError), isPresented: $showRemoveError) {
+            Button(l10n.t(.authVerificationSentOk), role: .cancel) { }
+        }
         .overlay(alignment: .topLeading) {
             Button { dismiss() } label: {
                 Image(systemName: "chevron.left")
@@ -132,6 +148,50 @@ struct ContactDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
         .cardStyle()
+    }
+
+    private var removeButton: some View {
+        Button {
+            showRemoveConfirm = true
+        } label: {
+            HStack(spacing: 8) {
+                if isRemoving {
+                    ProgressView().tint(Theme.danger)
+                } else {
+                    Image(systemName: "person.fill.xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                Text(l10n.t(.contactDetailRemoveFriend))
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundStyle(Theme.danger)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 15)
+            .background(Theme.danger.opacity(0.1))
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(isRemoving)
+        .padding(.top, 4)
+    }
+
+    /// Calls remove_friend (two-sided, atomic), then pops back. The contact list
+    /// and count refresh automatically because they derive from `friendships`.
+    private func removeFriend() {
+        guard !isRemoving else { return }
+        isRemoving = true
+        Task {
+            do {
+                try await data.removeFriend(friendId: contact.id)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                isRemoving = false
+                dismiss()
+            } catch {
+                isRemoving = false
+                showRemoveError = true
+                print("⚠️ remove_friend failed: \(error)")
+            }
+        }
     }
 
     private func infoRow(icon: String, title: String, value: String) -> some View {

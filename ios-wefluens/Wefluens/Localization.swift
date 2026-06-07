@@ -64,6 +64,7 @@ enum L10n: String {
     case contactDetailFollowers, contactDetailPlatform, contactDetailStatus
     case contactDetailOnline, contactDetailAway, contactDetailMessage
     case contactDetailDetails, contactDetailHandle, contactDetailRole, contactDetailAudience
+    case contactDetailRemoveFriend, contactDetailRemoveFriendMsg, contactDetailRemoveFriendError
 
     // Create Group
     case createGroupTitle, createGroupSelect, createGroupCreate, createGroupSearch
@@ -182,6 +183,9 @@ final class LocalizationManager {
             .contactDetailStatus: "Status", .contactDetailOnline: "Online", .contactDetailAway: "Away",
             .contactDetailMessage: "Message", .contactDetailDetails: "Details",
             .contactDetailHandle: "Handle", .contactDetailRole: "Role", .contactDetailAudience: "Audience",
+            .contactDetailRemoveFriend: "Delete Friend",
+            .contactDetailRemoveFriendMsg: "You'll both be removed from each other's contacts. This can't be undone.",
+            .contactDetailRemoveFriendError: "Couldn't remove this friend. Please try again.",
             .createGroupTitle: "New Group Chat", .createGroupSelect: "Select Members",
             .createGroupCreate: "Create Group", .createGroupSearch: "Search contacts…",
             .createGroupSelected: "selected",
@@ -299,6 +303,9 @@ final class LocalizationManager {
             .contactDetailStatus: "状态", .contactDetailOnline: "在线", .contactDetailAway: "离开",
             .contactDetailMessage: "发消息", .contactDetailDetails: "详细资料",
             .contactDetailHandle: "账号", .contactDetailRole: "身份", .contactDetailAudience: "受众",
+            .contactDetailRemoveFriend: "删除好友",
+            .contactDetailRemoveFriendMsg: "你们将从彼此的通讯录中互相移除，此操作不可撤销。",
+            .contactDetailRemoveFriendError: "删除好友失败，请重试。",
             .createGroupTitle: "发起群聊", .createGroupSelect: "选择成员",
             .createGroupCreate: "创建群聊", .createGroupSearch: "搜索联系人…",
             .createGroupSelected: "已选",
@@ -416,6 +423,9 @@ final class LocalizationManager {
             .contactDetailStatus: "Estado", .contactDetailOnline: "En línea", .contactDetailAway: "Ausente",
             .contactDetailMessage: "Mensaje", .contactDetailDetails: "Detalles",
             .contactDetailHandle: "Usuario", .contactDetailRole: "Rol", .contactDetailAudience: "Audiencia",
+            .contactDetailRemoveFriend: "Eliminar amigo",
+            .contactDetailRemoveFriendMsg: "Ambos se eliminarán de los contactos del otro. No se puede deshacer.",
+            .contactDetailRemoveFriendError: "No se pudo eliminar. Inténtalo de nuevo.",
             .createGroupTitle: "Nuevo Grupo", .createGroupSelect: "Seleccionar Miembros",
             .createGroupCreate: "Crear Grupo", .createGroupSearch: "Buscar contactos…",
             .createGroupSelected: "seleccionados",

@@ -48,12 +48,13 @@
 - **Application-based** — sending creates a `pending` request; the recipient sees it under 「新的朋友」 and can Accept/Decline for real
 - **Mutual friends** — accepting creates a bidirectional `friendships` graph; the contact list and the "X creators & partners" count both derive from it
 - **In-app prompt** — when my sent request is accepted I get an in-app "X accepted your friend request" alert (no email/push)
-- [x] `friendships` table (bidirectional, RLS read/delete own; writes only via SECURITY DEFINER fn). DELETE policy reserved for a future "remove friend" (no UI yet)
+- [x] `friendships` table (bidirectional, RLS read/delete own; writes only via SECURITY DEFINER fn)
 - [x] `friend_requests`: status CHECK (pending/accepted/rejected), partial unique index blocking duplicate pending, `seen_by_sender` flag, sender-side UPDATE policy
 - [x] `search_users`, `send_friend_request`, `respond_friend_request` SECURITY DEFINER functions (grant authenticated)
 - [x] `AddFriendView` search sheet + wired 添加好友 button; `FriendRequestDetailView` Accept/Decline now call `respond_friend_request` for real (was local-only); contacts derive from `friendships`
 - [x] Three-language support (EN / 中文 / ES) for all new strings
 - [x] Live end-to-end verified: A sends → B accepts → friendship a↔b, counts A=1/B=1, request=accepted, RLS isolates each side (no leak), search-by-email returns the user with email hidden
+- [x] **Remove friend** — `remove_friend(target_id)` SECURITY DEFINER fn atomically deletes both friendship rows (A→B and B→A) + any leftover requests so re-adding works; `ContactDetailView` has a destructive "Delete Friend" action behind a confirmation dialog (EN/中文/ES). Both sides' contact lists + counts auto-update (derive from `friendships`). Verified via rollback harness: two-sided delete leaves 0 rows on both sides
 
 ## Design
 

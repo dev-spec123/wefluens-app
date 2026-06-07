@@ -464,6 +464,7 @@ export type Database = {
       }
       admin_delete_user: { Args: { target_id: string }; Returns: undefined }
       is_admin: { Args: { uid: string }; Returns: boolean }
+      remove_friend: { Args: { target_id: string }; Returns: string }
       respond_friend_request: {
         Args: { accept: boolean; request_id: string }
         Returns: string

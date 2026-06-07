@@ -361,6 +361,18 @@ final class AppDataService {
         return status
     }
 
+    /// Removes a friend in both directions atomically via the `remove_friend`
+    /// SECURITY DEFINER function (the friendships DELETE RLS policy alone can only
+    /// remove my own side). Refreshes the contact list + count on success.
+    @MainActor
+    func removeFriend(friendId: UUID) async throws {
+        let _: String = try await supabase
+            .rpc("remove_friend", params: RemoveFriendParams(target_id: friendId.uuidString))
+            .execute()
+            .value
+        await loadContacts()
+    }
+
     /// Loads the names of people who accepted a request I sent (unseen).
     @MainActor
     private func loadAcceptanceNotifications(uid: UUID) async {

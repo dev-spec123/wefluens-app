@@ -261,6 +261,12 @@ nonisolated struct RespondFriendRequestParams: Encodable, Sendable {
     let accept: Bool
 }
 
+/// Removes a friend in both directions atomically (calls the `remove_friend`
+/// SECURITY DEFINER function).
+nonisolated struct RemoveFriendParams: Encodable, Sendable {
+    let target_id: String
+}
+
 /// Marks a sender's accepted request as seen (clears the in-app prompt).
 nonisolated struct SeenBySenderUpdate: Encodable, Sendable {
     let seen_by_sender: Bool
