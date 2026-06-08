@@ -37,11 +37,15 @@ struct ChatMessage: Identifiable, Equatable {
     let fileName: String?
     let fileSize: Int?
     let fileMime: String?
+    /// When the recipient read this message. Only meaningful for messages I sent:
+    /// `nil` = delivered but unread, non-nil = read. Drives the read receipt.
+    let readAt: Date?
 
     init(id: UUID = UUID(), text: String, sender: MessageSender, time: String,
          kind: ChatMessageKind = .text, imagePath: String? = nil,
          imageWidth: Int? = nil, imageHeight: Int? = nil,
-         fileName: String? = nil, fileSize: Int? = nil, fileMime: String? = nil) {
+         fileName: String? = nil, fileSize: Int? = nil, fileMime: String? = nil,
+         readAt: Date? = nil) {
         self.id = id
         self.text = text
         self.sender = sender
@@ -53,6 +57,7 @@ struct ChatMessage: Identifiable, Equatable {
         self.fileName = fileName
         self.fileSize = fileSize
         self.fileMime = fileMime
+        self.readAt = readAt
     }
 }
 

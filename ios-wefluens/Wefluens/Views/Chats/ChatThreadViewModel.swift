@@ -23,6 +23,7 @@ final class ChatThreadViewModel {
 
     private var channel: RealtimeChannelV2?
     private var listenTask: Task<Void, Never>?
+    private var updateTask: Task<Void, Never>?
 
     init(route: DMChatRoute, data: AppDataService) {
         self.route = route
@@ -102,18 +103,28 @@ final class ChatThreadViewModel {
         }
     }
 
-    /// Subscribes to inserts on `dm_messages`. RLS only delivers rows where I'm a
-    /// participant, so on any delivered insert we re-read this thread and mark it
-    /// read (cheap, and avoids any client-side dedup).
+    /// Subscribes to changes on `dm_messages`. RLS only delivers rows where I'm a
+    /// participant. On an INSERT we re-read this thread and mark it read (cheap,
+    /// avoids client-side dedup). On an UPDATE we re-read only — this is how my
+    /// view flips "Delivered" → "Read" the moment the other person opens the
+    /// thread and `mark_thread_read` stamps `read_at` on my sent messages.
+    /// (Re-reading on UPDATE never writes, so there is no feedback loop.)
     private func subscribe() async {
         let ch = supabase.channel("dm-thread-\(route.threadId.uuidString)")
         let inserts = ch.postgresChange(InsertAction.self, schema: "public", table: "dm_messages")
+        let updates = ch.postgresChange(UpdateAction.self, schema: "public", table: "dm_messages")
         listenTask = Task { [weak self] in
             for await _ in inserts {
                 guard let self else { return }
                 await self.reload()
                 await self.data.markThreadRead(threadId: self.route.threadId)
                 await self.data.loadConversations()
+            }
+        }
+        updateTask = Task { [weak self] in
+            for await _ in updates {
+                guard let self else { return }
+                await self.reload()
             }
         }
         await ch.subscribe()
@@ -124,6 +135,8 @@ final class ChatThreadViewModel {
     func stop() async {
         listenTask?.cancel()
         listenTask = nil
+        updateTask?.cancel()
+        updateTask = nil
         if let channel {
             await channel.unsubscribe()
             await supabase.removeChannel(channel)

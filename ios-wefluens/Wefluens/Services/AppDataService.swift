@@ -679,7 +679,8 @@ final class AppDataService {
                     imageHeight: row.imageHeight,
                     fileName: row.fileName,
                     fileSize: row.fileSize,
-                    fileMime: row.fileMime
+                    fileMime: row.fileMime,
+                    readAt: row.readAt
                 )
             }
         } catch {

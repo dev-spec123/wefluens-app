@@ -28,6 +28,12 @@ struct ChatDetailView: View {
 
     private var messages: [ChatMessage] { vm?.messages ?? [] }
 
+    /// The newest message I sent — the only one that shows a read receipt
+    /// (iMessage-style: a single lightweight status line, not one per bubble).
+    private var lastMineId: UUID? {
+        messages.last(where: { $0.sender == .me })?.id
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             navBar
@@ -132,7 +138,7 @@ struct ChatDetailView: View {
                 } else {
                     LazyVStack(spacing: 8) {
                         ForEach(messages) { message in
-                            MessageBubble(message: message)
+                            MessageBubble(message: message, showReadReceipt: message.id == lastMineId)
                                 .id(message.id)
                         }
                     }
@@ -290,7 +296,10 @@ struct ChatDetailView: View {
 
 private struct MessageBubble: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(LocalizationManager.self) private var l10n
     let message: ChatMessage
+    /// True only for my most recent message — gates the read receipt below it.
+    var showReadReceipt: Bool = false
 
     private var isMe: Bool { message.sender == .me }
 
@@ -319,6 +328,10 @@ private struct MessageBubble: View {
                     )
                 } else {
                     textBubble
+                }
+
+                if isMe && showReadReceipt {
+                    readReceipt
                 }
             }
 
@@ -353,6 +366,19 @@ private struct MessageBubble: View {
                         : Color.black.opacity(colorScheme == .dark ? 0.12 : 0.04),
                     radius: isMe ? 6 : 3,
                     y: isMe ? 3 : 1)
+    }
+
+    /// Lightweight iMessage-style status under my last sent message: "Read" once
+    /// the recipient has opened it (live via the realtime UPDATE), otherwise
+    /// "Delivered". Subtle gray, with a soft cross-fade when it flips.
+    private var readReceipt: some View {
+        Text(message.readAt != nil ? l10n.t(.chatRead) : l10n.t(.chatDelivered))
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+            .contentTransition(.opacity)
+            .padding(.trailing, 4)
+            .padding(.top, 1)
+            .animation(.easeInOut(duration: 0.25), value: message.readAt)
     }
 
     private var timestampView: some View {

@@ -100,6 +100,15 @@
 - [x] App: `ChatMessage` gained `.file` kind + name/size/mime; `MessageBubble` gained a `.file` branch only (text + `ChatImageBubble` untouched); new `ChatFileBubble` (icon/name/size chip → QuickLook); `+` menu + `.fileImporter` with a real 25 MB error (never silent); `ChatsListView` `[文件]` preview via `lastMessageType`; three-language strings
 - [x] iOS build green (`runChecks`) + live rollback harness verified: A→B `send_dm_attachment` stores `type=file` + path + name/size/mime, empty body allowed; B sees `unread=1` + `last_type=file` + `[文件]` preview + other=A; `media_present` blocks a pathless file; `video` type already accepted (video-ready); non-friend file blocked — all rolled back, production untouched
 
+## Chat: read receipts (step 1 of 2 — quoted replies next)
+
+- **iMessage-style read receipt** — one lightweight gray line under *my most recent* sent message only (never one per bubble): 「已读 / Read / Leído」 once the other person opens the thread, otherwise 「已送达 / Delivered / Entregado」
+- **Live flip** — when the recipient opens the thread, `mark_thread_read` stamps `read_at` and the sender's view cross-fades Delivered → Read in real time (no manual refresh)
+- [x] Backend (additive, safe): `dm_messages` set to `REPLICA IDENTITY FULL` so Supabase Realtime can evaluate the participant RLS policy on UPDATE events and ship the `read_at` change to the sender; `read_at` + `mark_thread_read` were already in place
+- [x] App: `ChatMessage` gained `readAt` (mapped from `read_at`); `ChatThreadViewModel.subscribe` added an `UpdateAction` listener (reload-only, never writes → no loop) alongside the existing insert listener; `ChatDetailView` renders the receipt under `lastMineId` only — `textBubble` / `ChatImageBubble` / `ChatFileBubble` left untouched; three-language strings
+- [x] iOS build green (`runChecks`) + live rollback harness verified: A→B `send_dm` leaves `read_at = NULL` (Delivered); B `mark_thread_read` sets `read_at` (Read); `dm_messages` confirmed `REPLICA IDENTITY FULL` + in `supabase_realtime` publication with UPDATE emitted — all rolled back, production untouched
+- Next (approved, not started): quoted replies — `reply_to_message_id`, optional `p_reply_to` on the three send fns (DROP+recreate, behavior unchanged when omitted), new `QuotedReplyPreview` above the bubble, long-press → Reply
+
 ## Design
 
 - **Welcome screen**: The Wefluens logo centered on a warm gradient background, with email and password fields and Sign In / Create Account buttons. A subtle loading animation appears while authenticating
