@@ -19,6 +19,8 @@ final class GroupChatViewModel {
     var messages: [GroupChatMessage] = []
     var isLoading = true
     var sendFailed = false
+    var isSendingImage = false
+    var isSendingFile = false
 
     private var channel: RealtimeChannelV2?
     private var listenTask: Task<Void, Never>?
@@ -53,6 +55,51 @@ final class GroupChatViewModel {
         } catch {
             sendFailed = true
             print("⚠️ send_group_message failed: \(error)")
+        }
+    }
+
+    /// Uploads a picked photo to the private `chat-media` bucket and sends it as a
+    /// group image via `send_group_attachment` (member-validated). Re-reads from the
+    /// DB on success; surfaces a real error on failure (never a silent no-op).
+    func sendImage(_ imageData: Data) async {
+        guard !isSendingImage else { return }
+        isSendingImage = true
+        defer { isSendingImage = false }
+        do {
+            let upload = try await data.uploadGroupImage(groupId: route.groupId, imageData: imageData)
+            try await data.sendGroupImageMessage(
+                groupId: route.groupId,
+                imagePath: upload.path,
+                caption: "",
+                width: upload.width,
+                height: upload.height
+            )
+            await reload()
+        } catch {
+            sendFailed = true
+            print("⚠️ send_group_attachment (image) failed: \(error)")
+        }
+    }
+
+    /// Uploads a picked document to the private `chat-media` bucket and sends it as a
+    /// group file via `send_group_attachment` (member-validated). Re-reads from the DB
+    /// on success; surfaces a real error on failure (never a silent no-op).
+    func sendFile(data fileData: Data, fileName: String, mimeType: String) async {
+        guard !isSendingFile else { return }
+        isSendingFile = true
+        defer { isSendingFile = false }
+        do {
+            let upload = try await data.uploadGroupFile(
+                groupId: route.groupId,
+                data: fileData,
+                fileName: fileName,
+                mimeType: mimeType
+            )
+            try await data.sendGroupFileMessage(groupId: route.groupId, upload: upload)
+            await reload()
+        } catch {
+            sendFailed = true
+            print("⚠️ send_group_attachment (file) failed: \(error)")
         }
     }
 

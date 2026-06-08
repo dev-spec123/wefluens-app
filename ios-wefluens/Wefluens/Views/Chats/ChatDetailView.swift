@@ -605,7 +605,8 @@ private struct QuotedReplyPreview: View {
 /// `chat-media` object, reserves space using the stored pixel dimensions to avoid
 /// layout jump, and clips to the same 20pt rounded rectangle as text bubbles.
 /// An optional caption appears beneath in a matching bubble.
-private struct ChatImageBubble: View {
+/// Internal (not private) so the group chat reuses the exact same image bubble.
+struct ChatImageBubble: View {
     @Environment(AppDataService.self) private var data
     @Environment(\.colorScheme) private var colorScheme
     let path: String
@@ -705,7 +706,8 @@ private struct ChatImageBubble: View {
 /// Renders a file attachment as a compact chip (icon + name + size) in the same
 /// 20pt rounded-rectangle style as the other bubbles. Tapping downloads the
 /// private `chat-media` object via a signed URL and opens it in QuickLook.
-private struct ChatFileBubble: View {
+/// Internal (not private) so the group chat reuses the exact same file bubble.
+struct ChatFileBubble: View {
     @Environment(AppDataService.self) private var data
     @Environment(LocalizationManager.self) private var l10n
     @Environment(\.colorScheme) private var colorScheme

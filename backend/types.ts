@@ -867,6 +867,23 @@ export type Database = {
         Args: { message?: string; target_id: string }
         Returns: string
       }
+      send_group_attachment: {
+        Args: {
+          p_caption?: string
+          p_duration_ms?: number
+          p_file_mime?: string
+          p_file_name?: string
+          p_file_size?: number
+          p_group: string
+          p_height?: number
+          p_path: string
+          p_reply_to?: string
+          p_thumb_path?: string
+          p_type: string
+          p_width?: number
+        }
+        Returns: string
+      }
       send_group_message: {
         Args: { p_body: string; p_group: string; p_reply_to?: string }
         Returns: string

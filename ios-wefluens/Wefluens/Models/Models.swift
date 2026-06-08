@@ -148,7 +148,7 @@ struct GroupChatRoute: Hashable, Identifiable {
 
 /// One message in a group thread. Unlike a 1:1 `ChatMessage`, every message
 /// carries its sender's identity so incoming bubbles can show who sent it
-/// (avatar + name). Text-only for now.
+/// (avatar + name). Supports text, image, and file kinds (mirrors `ChatMessage`).
 struct GroupChatMessage: Identifiable, Equatable {
     let id: UUID
     let text: String
@@ -162,6 +162,38 @@ struct GroupChatMessage: Identifiable, Equatable {
     /// The sender's profile photo URL (nil → gradient + initials).
     let senderAvatarUrl: String?
     let time: String
+    /// Message kind — text / image / file (video falls back to its caption for now).
+    let kind: ChatMessageKind
+    /// Storage path in the private `chat-media` bucket (any media message).
+    let imagePath: String?
+    let imageWidth: Int?
+    let imageHeight: Int?
+    /// File-attachment metadata (file messages only).
+    let fileName: String?
+    let fileSize: Int?
+    let fileMime: String?
+
+    init(id: UUID, text: String, sender: MessageSender, senderId: UUID,
+         senderName: String, senderColors: [UInt], senderAvatarUrl: String?,
+         time: String, kind: ChatMessageKind = .text, imagePath: String? = nil,
+         imageWidth: Int? = nil, imageHeight: Int? = nil,
+         fileName: String? = nil, fileSize: Int? = nil, fileMime: String? = nil) {
+        self.id = id
+        self.text = text
+        self.sender = sender
+        self.senderId = senderId
+        self.senderName = senderName
+        self.senderColors = senderColors
+        self.senderAvatarUrl = senderAvatarUrl
+        self.time = time
+        self.kind = kind
+        self.imagePath = imagePath
+        self.imageWidth = imageWidth
+        self.imageHeight = imageHeight
+        self.fileName = fileName
+        self.fileSize = fileSize
+        self.fileMime = fileMime
+    }
 }
 
 // MARK: - Contacts

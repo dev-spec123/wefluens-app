@@ -10,6 +10,8 @@
 //
 
 import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
 
 /// A message paired with whether it begins a new run from its sender, so incoming
 /// bubbles only show the avatar + name on the first message of a run.
@@ -30,6 +32,10 @@ struct GroupChatDetailView: View {
 
     @State private var vm: GroupChatViewModel?
     @State private var draft: String = ""
+    @State private var photoItem: PhotosPickerItem?
+    @State private var showPhotoPicker = false
+    @State private var showFileImporter = false
+    @State private var fileError: String?
     @FocusState private var inputFocused: Bool
 
     private var messages: [GroupChatMessage] { vm?.messages ?? [] }
@@ -60,6 +66,9 @@ struct GroupChatDetailView: View {
         .alert(l10n.t(.chatSendError), isPresented: sendErrorBinding) {
             Button(l10n.t(.authVerificationSentOk), role: .cancel) { }
         }
+        .alert(fileError ?? "", isPresented: fileErrorBinding) {
+            Button(l10n.t(.authVerificationSentOk), role: .cancel) { fileError = nil }
+        }
         .task {
             guard vm == nil else { return }
             let model = GroupChatViewModel(route: route, data: data)
@@ -77,6 +86,26 @@ struct GroupChatDetailView: View {
             get: { vm?.sendFailed ?? false },
             set: { newValue in vm?.sendFailed = newValue }
         )
+    }
+
+    private var fileErrorBinding: Binding<Bool> {
+        Binding(
+            get: { fileError != nil },
+            set: { newValue in if !newValue { fileError = nil } }
+        )
+    }
+
+    /// Common document types the file importer accepts (mirrors the 1:1 chat).
+    private var allowedDocTypes: [UTType] {
+        var types: [UTType] = [.pdf, .plainText, .rtf]
+        let ids = [
+            "public.spreadsheet", "public.presentation", "public.composite-content",
+            "org.openxmlformats.wordprocessingml.document", "com.microsoft.word.doc",
+            "org.openxmlformats.spreadsheetml.sheet", "com.microsoft.excel.xls",
+            "org.openxmlformats.presentationml.presentation", "com.microsoft.powerpoint.ppt"
+        ]
+        types.append(contentsOf: ids.compactMap { UTType($0) })
+        return types
     }
 
     // MARK: - Nav bar
@@ -174,6 +203,8 @@ struct GroupChatDetailView: View {
 
     private var inputBar: some View {
         HStack(spacing: 10) {
+            plusButton
+
             HStack {
                 TextField(l10n.t(.chatDetailMessagePlaceholder), text: $draft, axis: .vertical)
                     .font(.system(size: 16))
@@ -202,6 +233,76 @@ struct GroupChatDetailView: View {
         .padding(.top, 10)
         .padding(.bottom, 6)
         .background(Theme.paper(for: colorScheme))
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
+        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: allowedDocTypes, allowsMultipleSelection: false) { result in
+            handleFileImport(result)
+        }
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            Task {
+                let loaded = try? await item.loadTransferable(type: Data.self)
+                photoItem = nil
+                if let loaded { await vm?.sendImage(loaded) }
+            }
+        }
+    }
+
+    /// The "+" opens a menu to attach a photo or a document (a spinner replaces it
+    /// while uploading). System-keyboard emoji already type straight into the field.
+    @ViewBuilder
+    private var plusButton: some View {
+        if vm?.isSendingImage == true || vm?.isSendingFile == true {
+            ProgressView()
+                .tint(Theme.coral)
+                .frame(width: 30, height: 30)
+        } else {
+            Menu {
+                Button {
+                    showPhotoPicker = true
+                } label: {
+                    Label(l10n.t(.chatAttachPhoto), systemImage: "photo")
+                }
+                Button {
+                    showFileImporter = true
+                } label: {
+                    Label(l10n.t(.chatAttachFile), systemImage: "doc")
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                    .frame(width: 30, height: 30)
+            }
+        }
+    }
+
+    /// Reads the picked document into memory (enforcing the 25 MB cap with a real
+    /// error — never silent), then sends it via the view model.
+    private func handleFileImport(_ result: Result<[URL], Error>) {
+        guard let vm else { return }
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            let didAccess = url.startAccessingSecurityScopedResource()
+            defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let data = try Data(contentsOf: url)
+                let maxBytes = 25 * 1024 * 1024
+                guard data.count <= maxBytes else {
+                    fileError = l10n.t(.chatFileTooLarge)
+                    return
+                }
+                let name = url.lastPathComponent
+                let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                Task { await vm.sendFile(data: data, fileName: name, mimeType: mime) }
+            } catch {
+                fileError = l10n.t(.chatFileError)
+                print("⚠️ file read failed: \(error)")
+            }
+        case .failure(let error):
+            print("⚠️ file import cancelled/failed: \(error)")
+        }
     }
 
     private var canSend: Bool {
@@ -236,7 +337,7 @@ private struct GroupMessageBubble: View {
             if isMe {
                 Spacer(minLength: 50)
                 timestamp
-                bubble
+                content
             } else {
                 avatarColumn
                 VStack(alignment: .leading, spacing: 3) {
@@ -247,7 +348,7 @@ private struct GroupMessageBubble: View {
                             .padding(.leading, 2)
                     }
                     HStack(alignment: .bottom, spacing: 6) {
-                        bubble
+                        content
                         timestamp
                     }
                 }
@@ -272,9 +373,43 @@ private struct GroupMessageBubble: View {
         }
     }
 
+    /// Branches on the message kind, reusing the exact 1:1 image / file bubbles for
+    /// media (caption / name / size handled inside them) and the group text bubble
+    /// for text. Video falls back to its caption text for now.
+    @ViewBuilder
+    private var content: some View {
+        switch message.kind {
+        case .image:
+            if let path = message.imagePath {
+                ChatImageBubble(
+                    path: path,
+                    pixelWidth: message.imageWidth,
+                    pixelHeight: message.imageHeight,
+                    caption: message.text,
+                    isMe: isMe
+                )
+            } else {
+                textBubble
+            }
+        case .file:
+            if let path = message.imagePath {
+                ChatFileBubble(
+                    path: path,
+                    fileName: message.fileName ?? "",
+                    fileSize: message.fileSize,
+                    isMe: isMe
+                )
+            } else {
+                textBubble
+            }
+        case .text, .video:
+            textBubble
+        }
+    }
+
     /// Uniform rounded-rectangle bubble — coral gradient for me, paper card for
     /// others (matches the 1:1 text bubble look exactly).
-    private var bubble: some View {
+    private var textBubble: some View {
         Text(message.text)
             .font(.system(size: 15.5))
             .foregroundStyle(isMe ? .white : Theme.ink(for: colorScheme))

@@ -306,7 +306,7 @@ final class AppDataService {
                     avatarInitials: nil,
                     lastMessageAt: row.lastMessageAt,
                     lastFromMe: row.lastSenderId == uid,
-                    lastMessageIsImage: false,
+                    lastMessageIsImage: (row.lastMessageType ?? "text") == "image",
                     lastMessageType: row.lastMessageType ?? "text",
                     avatarUrl: row.avatarUrl
                 )
@@ -821,13 +821,20 @@ final class AppDataService {
         do {
             let rows: [GroupMessageRow] = try await supabase
                 .from("group_messages")
-                .select("id,group_id,sender_id,body,message_type,created_at,reply_to_message_id,sender:profiles!group_messages_sender_id_fkey(id,name,handle,avatar_url)")
+                .select("id,group_id,sender_id,body,message_type,image_url,image_width,image_height,file_name,file_size,file_mime,created_at,reply_to_message_id,sender:profiles!group_messages_sender_id_fkey(id,name,handle,avatar_url)")
                 .eq("group_id", value: groupId.uuidString)
                 .order("created_at", ascending: true)
                 .execute()
                 .value
             return rows.map { row in
                 let name = row.sender?.name ?? row.sender?.handle ?? "User"
+                let kind: ChatMessageKind
+                switch row.messageType ?? "text" {
+                case "image": kind = .image
+                case "video": kind = .video
+                case "file": kind = .file
+                default: kind = .text
+                }
                 return GroupChatMessage(
                     id: row.id,
                     text: row.body,
@@ -836,7 +843,14 @@ final class AppDataService {
                     senderName: name,
                     senderColors: Self.avatarPalette(for: row.senderId),
                     senderAvatarUrl: row.sender?.avatarUrl,
-                    time: Self.clockTime(from: row.createdAt)
+                    time: Self.clockTime(from: row.createdAt),
+                    kind: kind,
+                    imagePath: row.imageUrl,
+                    imageWidth: row.imageWidth,
+                    imageHeight: row.imageHeight,
+                    fileName: row.fileName,
+                    fileSize: row.fileSize,
+                    fileMime: row.fileMime
                 )
             }
         } catch {
@@ -854,6 +868,82 @@ final class AppDataService {
             .rpc("send_group_message", params: SendGroupMessageParams(
                 p_group: groupId.uuidString,
                 p_body: body,
+                p_reply_to: replyTo?.uuidString
+            ))
+            .execute()
+            .value
+        await loadConversations()
+    }
+
+    /// Compresses + uploads an image into the private `chat-media` bucket under
+    /// `{groupId}/{uuid}.jpg`. The group-member Storage RLS lets any member read/write
+    /// here (mirrors the DM thread-scoped path). Returns the path + pixel dimensions.
+    @MainActor
+    func uploadGroupImage(groupId: UUID, imageData: Data) async throws -> ChatImageUpload {
+        let compressed = Self.compressedJPEG(imageData, maxDimension: 1280, quality: 0.8) ?? imageData
+        let dims = Self.pixelSize(compressed) ?? (width: 1, height: 1)
+        let folder = groupId.uuidString.lowercased()
+        let path = "\(folder)/\(UUID().uuidString.lowercased()).jpg"
+        try await supabase.storage
+            .from("chat-media")
+            .upload(path, data: compressed, options: FileOptions(contentType: "image/jpeg", upsert: false))
+        return ChatImageUpload(path: path, width: dims.width, height: dims.height)
+    }
+
+    /// Uploads an arbitrary document into the private `chat-media` bucket under
+    /// `{groupId}/{uuid}.{ext}` — the same group-scoped Storage RLS as group images.
+    /// No compression (docs stay byte-exact). Returns the path + name/size/mime.
+    @MainActor
+    func uploadGroupFile(groupId: UUID, data: Data, fileName: String, mimeType: String) async throws -> ChatFileUpload {
+        let folder = groupId.uuidString.lowercased()
+        let ext = (fileName as NSString).pathExtension.lowercased()
+        let object = ext.isEmpty
+            ? UUID().uuidString.lowercased()
+            : "\(UUID().uuidString.lowercased()).\(ext)"
+        let path = "\(folder)/\(object)"
+        try await supabase.storage
+            .from("chat-media")
+            .upload(path, data: data, options: FileOptions(contentType: mimeType, upsert: false))
+        return ChatFileUpload(path: path, fileName: fileName, fileSize: data.count, mime: mimeType)
+    }
+
+    /// Sends a group image via the member-validated `send_group_attachment`
+    /// (type=image). Refreshes the inbox so the preview/unread/badge stay correct.
+    @MainActor
+    func sendGroupImageMessage(groupId: UUID, imagePath: String, caption: String, width: Int, height: Int, replyTo: UUID? = nil) async throws {
+        let _: String = try await supabase
+            .rpc("send_group_attachment", params: SendGroupAttachmentParams(
+                p_group: groupId.uuidString,
+                p_type: "image",
+                p_path: imagePath,
+                p_caption: caption,
+                p_file_name: nil,
+                p_file_size: nil,
+                p_file_mime: nil,
+                p_width: width,
+                p_height: height,
+                p_reply_to: replyTo?.uuidString
+            ))
+            .execute()
+            .value
+        await loadConversations()
+    }
+
+    /// Sends a group file via the member-validated `send_group_attachment`
+    /// (type=file). Refreshes the inbox afterwards.
+    @MainActor
+    func sendGroupFileMessage(groupId: UUID, upload: ChatFileUpload, replyTo: UUID? = nil) async throws {
+        let _: String = try await supabase
+            .rpc("send_group_attachment", params: SendGroupAttachmentParams(
+                p_group: groupId.uuidString,
+                p_type: "file",
+                p_path: upload.path,
+                p_caption: "",
+                p_file_name: upload.fileName,
+                p_file_size: upload.fileSize,
+                p_file_mime: upload.mime,
+                p_width: nil,
+                p_height: nil,
                 p_reply_to: replyTo?.uuidString
             ))
             .execute()

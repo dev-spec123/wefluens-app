@@ -429,13 +429,20 @@ nonisolated struct GroupMessageSender: Codable, Sendable {
 }
 
 /// A single group message row from `group_messages`, with its sender's profile
-/// embedded via the `group_messages_sender_id_fkey` foreign key.
+/// embedded via the `group_messages_sender_id_fkey` foreign key. Carries the same
+/// media columns as `dm_messages` (image / file) so group bubbles reuse the 1:1 ones.
 nonisolated struct GroupMessageRow: Codable, Identifiable, Sendable {
     let id: UUID
     let groupId: UUID
     let senderId: UUID
     let body: String
     let messageType: String?
+    let imageUrl: String?
+    let imageWidth: Int?
+    let imageHeight: Int?
+    let fileName: String?
+    let fileSize: Int?
+    let fileMime: String?
     let createdAt: Date?
     let replyToMessageId: UUID?
     let sender: GroupMessageSender?
@@ -445,6 +452,12 @@ nonisolated struct GroupMessageRow: Codable, Identifiable, Sendable {
         case groupId = "group_id"
         case senderId = "sender_id"
         case messageType = "message_type"
+        case imageUrl = "image_url"
+        case imageWidth = "image_width"
+        case imageHeight = "image_height"
+        case fileName = "file_name"
+        case fileSize = "file_size"
+        case fileMime = "file_mime"
         case createdAt = "created_at"
         case replyToMessageId = "reply_to_message_id"
     }
@@ -460,6 +473,23 @@ nonisolated struct CreateGroupParams: Encodable, Sendable {
 nonisolated struct SendGroupMessageParams: Encodable, Sendable {
     let p_group: String
     let p_body: String
+    /// Optional id of the quoted message. Omitted (nil) → server default NULL → unchanged behavior.
+    let p_reply_to: String?
+}
+
+/// Params for the generic `send_group_attachment` RPC (image / video / file),
+/// mirroring `send_dm_attachment` but member-validated. Optional metadata encodes
+/// as JSON null when nil, which equals the server-side NULL defaults.
+nonisolated struct SendGroupAttachmentParams: Encodable, Sendable {
+    let p_group: String
+    let p_type: String
+    let p_path: String
+    let p_caption: String
+    let p_file_name: String?
+    let p_file_size: Int?
+    let p_file_mime: String?
+    let p_width: Int?
+    let p_height: Int?
     /// Optional id of the quoted message. Omitted (nil) → server default NULL → unchanged behavior.
     let p_reply_to: String?
 }
