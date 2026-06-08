@@ -411,7 +411,6 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Wefluens;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				CODE_SIGN_ENTITLEMENTS = Wefluens/Wefluens.entitlements;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Wefluens uses your location to auto-fill your profile location.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Wefluens needs access to your photo library to change your profile picture.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Wefluens uses your camera to scan QR codes for adding friends.";
@@ -450,7 +449,6 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Wefluens;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				CODE_SIGN_ENTITLEMENTS = Wefluens/Wefluens.entitlements;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Wefluens uses your location to auto-fill your profile location.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Wefluens needs access to your photo library to change your profile picture.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Wefluens uses your camera to scan QR codes for adding friends.";
