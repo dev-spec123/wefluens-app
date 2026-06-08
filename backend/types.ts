@@ -458,6 +458,175 @@ export type Database = {
           },
         ]
       }
+      group_members: {
+        Row: {
+          group_id: string
+          joined_at: string
+          last_read_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          group_id: string
+          joined_at?: string
+          last_read_at?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          group_id?: string
+          joined_at?: string
+          last_read_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "group_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_messages: {
+        Row: {
+          body: string
+          created_at: string
+          duration_ms: number | null
+          file_mime: string | null
+          file_name: string | null
+          file_size: number | null
+          group_id: string
+          id: string
+          image_height: number | null
+          image_url: string | null
+          image_width: number | null
+          message_type: string
+          read_at: string | null
+          reply_to_message_id: string | null
+          sender_id: string
+          thumb_url: string | null
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          duration_ms?: number | null
+          file_mime?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          group_id: string
+          id?: string
+          image_height?: number | null
+          image_url?: string | null
+          image_width?: number | null
+          message_type?: string
+          read_at?: string | null
+          reply_to_message_id?: string | null
+          sender_id: string
+          thumb_url?: string | null
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          duration_ms?: number | null
+          file_mime?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          group_id?: string
+          id?: string
+          image_height?: number | null
+          image_url?: string | null
+          image_width?: number | null
+          message_type?: string
+          read_at?: string | null
+          reply_to_message_id?: string | null
+          sender_id?: string
+          thumb_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_messages_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "group_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_messages_reply_to_message_id_fkey"
+            columns: ["reply_to_message_id"]
+            isOneToOne: false
+            referencedRelation: "group_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_threads: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          created_by: string
+          id: string
+          last_message: string | null
+          last_message_at: string | null
+          last_message_type: string
+          last_sender_id: string | null
+          name: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          last_message?: string | null
+          last_message_at?: string | null
+          last_message_type?: string
+          last_sender_id?: string | null
+          name?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          last_message?: string | null
+          last_message_at?: string | null
+          last_message_type?: string
+          last_sender_id?: string | null
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_threads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_threads_last_sender_id_fkey"
+            columns: ["last_sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invites: {
         Row: {
           activated_at: string | null
@@ -601,8 +770,16 @@ export type Database = {
       }
       admin_delete_user: { Args: { target_id: string }; Returns: undefined }
       are_friends: { Args: { a: string; b: string }; Returns: boolean }
+      create_group: {
+        Args: { p_member_ids: string[]; p_name: string }
+        Returns: string
+      }
       get_or_create_thread: { Args: { p_other: string }; Returns: string }
       is_admin: { Args: { uid: string }; Returns: boolean }
+      is_group_member: {
+        Args: { p_group: string; p_uid: string }
+        Returns: boolean
+      }
       list_dm_threads: {
         Args: never
         Returns: {
@@ -619,6 +796,22 @@ export type Database = {
           unread_count: number
         }[]
       }
+      list_group_threads: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          created_by: string
+          group_id: string
+          last_message: string
+          last_message_at: string
+          last_message_type: string
+          last_sender_id: string
+          member_count: number
+          name: string
+          unread_count: number
+        }[]
+      }
+      mark_group_read: { Args: { p_group: string }; Returns: undefined }
       mark_thread_read: { Args: { p_thread: string }; Returns: undefined }
       remove_friend: { Args: { target_id: string }; Returns: string }
       respond_friend_request: {
@@ -672,6 +865,10 @@ export type Database = {
       }
       send_friend_request: {
         Args: { message?: string; target_id: string }
+        Returns: string
+      }
+      send_group_message: {
+        Args: { p_body: string; p_group: string; p_reply_to?: string }
         Returns: string
       }
       user_id: { Args: never; Returns: string }
