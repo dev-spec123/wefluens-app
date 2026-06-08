@@ -428,10 +428,10 @@ private struct InviteUserSheet: View {
 
     @State private var email = ""
     @State private var isSending = false
-    @State private var feedback: Feedback?
+    @State private var toast: ToastState?
     @FocusState private var emailFocused: Bool
 
-    private struct Feedback: Equatable {
+    private struct ToastState: Equatable {
         let isSuccess: Bool
         let message: String
     }
@@ -480,25 +480,16 @@ private struct InviteUserSheet: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .focused($emailFocused)
-                            .onChange(of: email) { _, _ in feedback = nil }
+                            .onChange(of: email) { _, _ in
+                                // Clearing the field after a successful send must NOT wipe
+                                // the success toast — only stale error toasts clear on edit.
+                                if toast?.isSuccess == false { toast = nil }
+                            }
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
                     .cardStyle(cornerRadius: 14)
                     .padding(.horizontal, 20)
-
-                    if let feedback {
-                        HStack(spacing: 8) {
-                            Image(systemName: feedback.isSuccess ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                            Text(feedback.message)
-                                .font(.system(size: 13, weight: .medium))
-                                .multilineTextAlignment(.leading)
-                            Spacer(minLength: 0)
-                        }
-                        .foregroundStyle(feedback.isSuccess ? Color(hex: 0x2AD17E) : Color(hex: 0xFF6B6B))
-                        .padding(.horizontal, 24)
-                        .transition(.opacity)
-                    }
 
                     Button {
                         Task { await send() }
@@ -523,6 +514,12 @@ private struct InviteUserSheet: View {
                     Spacer()
                 }
             }
+            .overlay(alignment: .top) {
+                if let toast {
+                    toastView(toast)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
             .navigationTitle(l10n.t(.adminInvite))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -532,7 +529,7 @@ private struct InviteUserSheet: View {
                 }
             }
             .onAppear { emailFocused = true }
-            .animation(.easeInOut(duration: 0.2), value: feedback)
+            .animation(.easeInOut(duration: 0.25), value: toast)
         }
     }
 
@@ -549,15 +546,46 @@ private struct InviteUserSheet: View {
                 options: .init(body: InviteRequest(email: target))
             )
             if resp.ok == true {
-                feedback = Feedback(isSuccess: true, message: l10n.t(.adminInviteSent))
                 onInvited()
-                email = ""
+                email = ""   // safe now: a success toast survives the email onChange
+                show(ToastState(isSuccess: true, message: l10n.t(.adminInviteSent)))
             } else {
-                feedback = Feedback(isSuccess: false, message: message(for: resp.error))
+                show(ToastState(isSuccess: false, message: message(for: resp.error)))
             }
         } catch {
-            feedback = Feedback(isSuccess: false, message: l10n.t(.adminInviteErrGeneric))
+            show(ToastState(isSuccess: false, message: l10n.t(.adminInviteErrGeneric)))
         }
+    }
+
+    /// Shows a green (success) or red (failure) toast with haptics, then
+    /// auto-dismisses it after a short delay.
+    @MainActor
+    private func show(_ next: ToastState) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { toast = next }
+        UINotificationFeedbackGenerator().notificationOccurred(next.isSuccess ? .success : .error)
+        DispatchQueue.main.asyncAfter(deadline: .now() + (next.isSuccess ? 2.6 : 3.6)) {
+            if toast == next {
+                withAnimation(.easeOut(duration: 0.3)) { toast = nil }
+            }
+        }
+    }
+
+    private func toastView(_ t: ToastState) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: t.isSuccess ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .font(.system(size: 18, weight: .semibold))
+            Text(t.message)
+                .font(.system(size: 15, weight: .semibold))
+                .multilineTextAlignment(.leading)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .background(t.isSuccess ? Color(hex: 0x2AD17E) : Color(hex: 0xFF5A5F))
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
+        .padding(.top, 10)
+        .padding(.horizontal, 20)
     }
 
     private func message(for code: String?) -> String {

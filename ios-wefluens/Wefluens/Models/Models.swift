@@ -69,8 +69,10 @@ struct Conversation: Identifiable {
     let lastFromMe: Bool
     /// True when the last message is an image — shows a localized "[Photo]" preview when there's no caption.
     let lastMessageIsImage: Bool
+    /// The other participant's profile photo URL (nil for sample data / groups).
+    let avatarUrl: String?
 
-    init(id: UUID = UUID(), name: String, avatar: String, avatarColors: [UInt], lastMessage: String, time: String, unread: Int, isPinned: Bool, isOfficial: Bool, isOnline: Bool, isGroup: Bool, participantCount: Int, messages: [ChatMessage], otherUserId: UUID? = nil, avatarInitials: String? = nil, lastMessageAt: Date? = nil, lastFromMe: Bool = false, lastMessageIsImage: Bool = false) {
+    init(id: UUID = UUID(), name: String, avatar: String, avatarColors: [UInt], lastMessage: String, time: String, unread: Int, isPinned: Bool, isOfficial: Bool, isOnline: Bool, isGroup: Bool, participantCount: Int, messages: [ChatMessage], otherUserId: UUID? = nil, avatarInitials: String? = nil, lastMessageAt: Date? = nil, lastFromMe: Bool = false, lastMessageIsImage: Bool = false, avatarUrl: String? = nil) {
         self.id = id
         self.name = name
         self.avatar = avatar
@@ -89,6 +91,7 @@ struct Conversation: Identifiable {
         self.lastMessageAt = lastMessageAt
         self.lastFromMe = lastFromMe
         self.lastMessageIsImage = lastMessageIsImage
+        self.avatarUrl = avatarUrl
     }
 }
 
@@ -101,6 +104,8 @@ struct DMChatRoute: Hashable, Identifiable {
     let avatarColors: [UInt]
     let initials: String
     let isOnline: Bool
+    /// The other participant's profile photo URL (nil when unknown).
+    let avatarURL: String?
 
     var id: UUID { threadId }
 }
@@ -116,8 +121,10 @@ struct Contact: Identifiable {
     let followers: String
     let avatarColors: [UInt]
     let isOnline: Bool
+    /// The friend's profile photo URL (nil when they have no avatar).
+    let avatarUrl: String?
 
-    init(id: UUID = UUID(), name: String, handle: String, role: String, platform: String, followers: String, avatarColors: [UInt], isOnline: Bool) {
+    init(id: UUID = UUID(), name: String, handle: String, role: String, platform: String, followers: String, avatarColors: [UInt], isOnline: Bool, avatarUrl: String? = nil) {
         self.id = id
         self.name = name
         self.handle = handle
@@ -126,6 +133,7 @@ struct Contact: Identifiable {
         self.followers = followers
         self.avatarColors = avatarColors
         self.isOnline = isOnline
+        self.avatarUrl = avatarUrl
     }
 
     var initials: String {

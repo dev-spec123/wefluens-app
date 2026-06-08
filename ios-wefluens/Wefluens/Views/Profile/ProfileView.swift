@@ -145,38 +145,13 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Avatar (cloud-aware)
+    // MARK: - Avatar (cloud-aware, unified through the Avatar component)
 
-    @ViewBuilder
     private var userAvatar: some View {
-        if let urlStr = user.avatarUrl, !urlStr.isEmpty,
-           let url = URL(string: urlStr) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 92, height: 92)
-                        .clipShape(Circle())
-                case .failure:
-                    fallbackAvatar
-                case .empty:
-                    fallbackAvatar
-                @unknown default:
-                    fallbackAvatar
-                }
-            }
-            .frame(width: 92, height: 92)
-        } else {
-            fallbackAvatar
-        }
-    }
-
-    private var fallbackAvatar: some View {
         Avatar(
             colors: [0xFF4D6D, 0xFF9A5A],
             initials: initials,
+            imageURL: user.avatarUrl,
             size: 92,
             isOnline: true
         )

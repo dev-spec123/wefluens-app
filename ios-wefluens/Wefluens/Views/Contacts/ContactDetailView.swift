@@ -66,7 +66,7 @@ struct ContactDetailView: View {
 
     private var hero: some View {
         VStack(spacing: 14) {
-            Avatar(colors: contact.avatarColors, initials: contact.initials, size: 96, isOnline: contact.isOnline)
+            Avatar(colors: contact.avatarColors, initials: contact.initials, imageURL: contact.avatarUrl, size: 96, isOnline: contact.isOnline)
                 .shadow(color: .black.opacity(0.15), radius: 20, y: 10)
             VStack(spacing: 4) {
                 Text(contact.name)
@@ -168,7 +168,8 @@ struct ContactDetailView: View {
                     title: contact.name,
                     avatarColors: contact.avatarColors,
                     initials: contact.initials,
-                    isOnline: contact.isOnline
+                    isOnline: contact.isOnline,
+                    avatarURL: contact.avatarUrl
                 )
             } catch {
                 print("⚠️ get_or_create_thread failed: \(error)")

@@ -81,7 +81,8 @@ struct ChatsListView: View {
             title: convo.name,
             avatarColors: convo.avatarColors,
             initials: convo.avatarInitials ?? "?",
-            isOnline: convo.isOnline
+            isOnline: convo.isOnline,
+            avatarURL: convo.avatarUrl
         )
     }
 
@@ -215,6 +216,7 @@ private struct ConversationRow: View {
                 Avatar(
                     colors: conversation.avatarColors,
                     initials: initials,
+                    imageURL: conversation.avatarUrl,
                     size: 54,
                     isOnline: conversation.isOnline
                 )

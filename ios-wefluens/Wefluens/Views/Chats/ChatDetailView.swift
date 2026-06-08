@@ -66,7 +66,7 @@ struct ChatDetailView: View {
                     .overlay(Circle().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
             }
 
-            Avatar(colors: route.avatarColors, initials: route.initials, size: 40, isOnline: route.isOnline)
+            Avatar(colors: route.avatarColors, initials: route.initials, imageURL: route.avatarURL, size: 40, isOnline: route.isOnline)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(route.title)
@@ -229,26 +229,17 @@ private struct MessageBubble: View {
             }
 
             VStack(alignment: isMe ? .trailing : .leading, spacing: 3) {
-                Text(message.text)
-                    .font(.system(size: 15.5))
-                    .foregroundStyle(isMe ? .white : Theme.ink(for: colorScheme))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Group {
-                        if isMe {
-                            Theme.sunset
-                        } else {
-                            colorScheme == .dark
-                                ? Theme.card(for: .dark)
-                                : Color(hex: 0xF0EBE4)
-                        }
-                    })
-                    .clipShape(BubbleShape(isMe: isMe))
-                    .shadow(color: isMe
-                                ? Theme.coral.opacity(0.25)
-                                : Color.black.opacity(colorScheme == .dark ? 0.12 : 0.04),
-                            radius: isMe ? 6 : 3,
-                            y: isMe ? 3 : 1)
+                if message.kind == .image, let path = message.imagePath {
+                    ChatImageBubble(
+                        path: path,
+                        pixelWidth: message.imageWidth,
+                        pixelHeight: message.imageHeight,
+                        caption: message.text,
+                        isMe: isMe
+                    )
+                } else {
+                    textBubble
+                }
             }
 
             if !isMe {
@@ -256,6 +247,32 @@ private struct MessageBubble: View {
                 Spacer(minLength: 50)
             }
         }
+    }
+
+    /// Uniform pill / rounded-rectangle bubble (no tail), identical shape for both
+    /// sides. Width follows the content, so short messages stay small and long ones
+    /// wrap — it can never self-intersect into a circle the way the old tail shape did.
+    private var textBubble: some View {
+        Text(message.text)
+            .font(.system(size: 15.5))
+            .foregroundStyle(isMe ? .white : Theme.ink(for: colorScheme))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Group {
+                if isMe {
+                    Theme.sunset
+                } else {
+                    colorScheme == .dark
+                        ? Theme.card(for: .dark)
+                        : Color(hex: 0xF0EBE4)
+                }
+            })
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: isMe
+                        ? Theme.coral.opacity(0.25)
+                        : Color.black.opacity(colorScheme == .dark ? 0.12 : 0.04),
+                    radius: isMe ? 6 : 3,
+                    y: isMe ? 3 : 1)
     }
 
     private var timestampView: some View {
@@ -266,81 +283,104 @@ private struct MessageBubble: View {
     }
 }
 
-// MARK: - Bubble Shape
+// MARK: - Image Message Bubble
 
-/// A beautiful, smooth bubble with a subtle tail — inspired by WeChat.
-private struct BubbleShape: Shape {
+/// Renders an image message. Loads a short-lived signed URL for the private
+/// `chat-media` object, reserves space using the stored pixel dimensions to avoid
+/// layout jump, and clips to the same 20pt rounded rectangle as text bubbles.
+/// An optional caption appears beneath in a matching bubble.
+private struct ChatImageBubble: View {
+    @Environment(AppDataService.self) private var data
+    @Environment(\.colorScheme) private var colorScheme
+    let path: String
+    let pixelWidth: Int?
+    let pixelHeight: Int?
+    let caption: String
     let isMe: Bool
 
-    func path(in rect: CGRect) -> Path {
-        let r: CGFloat = 18       // main corner radius
-        let tailW: CGFloat = 6
-        let tailH: CGFloat = 8
-        let tailX: CGFloat = isMe ? rect.maxX - 4 : 4
-        let tailY: CGFloat = rect.maxY - 2
+    @State private var url: URL?
+    @State private var didFail = false
 
-        var path = Path()
+    private let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
 
-        // Start at top-left
-        path.move(to: CGPoint(x: r, y: 0))
-
-        // Top edge
-        path.addLine(to: CGPoint(x: rect.maxX - r, y: 0))
-        // Top-right corner
-        path.addArc(center: CGPoint(x: rect.maxX - r, y: r),
-                    radius: r,
-                    startAngle: .degrees(-90),
-                    endAngle: .degrees(0),
-                    clockwise: false)
-
-        // Right edge (skip tail area)
-        path.addLine(to: CGPoint(x: rect.maxX, y: tailY - tailH))
-
-        // Tail on the right (my message) or left (their message)
-        if isMe {
-            // Tail pointing right
-            path.addLine(to: CGPoint(x: tailX, y: tailY))
-            path.addLine(to: CGPoint(x: rect.maxX - tailW, y: tailY))
-        } else {
-            // No tail on right side for left message
+    /// Display size capped to a chat-friendly box, preserving aspect ratio.
+    private var displaySize: CGSize {
+        let maxW: CGFloat = 232
+        let maxH: CGFloat = 300
+        let w = CGFloat(max(pixelWidth ?? 0, 0))
+        let h = CGFloat(max(pixelHeight ?? 0, 0))
+        guard w > 0, h > 0 else { return CGSize(width: maxW, height: maxW * 0.7) }
+        let ratio = h / w
+        var dw = maxW
+        var dh = dw * ratio
+        if dh > maxH {
+            dh = maxH
+            dw = dh / ratio
         }
+        return CGSize(width: dw, height: dh)
+    }
 
-        // Bottom-right corner
-        path.addArc(center: CGPoint(x: rect.maxX - r, y: rect.maxY - r),
-                    radius: r,
-                    startAngle: .degrees(0),
-                    endAngle: .degrees(90),
-                    clockwise: false)
-
-        // Bottom edge (skip tail area for left messages)
-        if !isMe {
-            path.addLine(to: CGPoint(x: tailX + tailW, y: rect.maxY))
-            // Tail pointing left
-            path.addLine(to: CGPoint(x: tailX, y: tailY))
-            path.addLine(to: CGPoint(x: tailX, y: rect.maxY - tailH))
+    var body: some View {
+        VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
+            imageBox
+            if !caption.isEmpty {
+                Text(caption)
+                    .font(.system(size: 15.5))
+                    .foregroundStyle(isMe ? .white : Theme.ink(for: colorScheme))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(isMe
+                                ? AnyShapeStyle(Theme.sunset)
+                                : AnyShapeStyle(colorScheme == .dark ? Theme.card(for: .dark) : Color(hex: 0xF0EBE4)))
+                    .clipShape(shape)
+            }
         }
+    }
 
-        path.addLine(to: CGPoint(x: r, y: rect.maxY))
+    // Color anchor sets the layout size; the image fills it inside an overlay and
+    // is clipped — the standard pattern that keeps `.fill` from breaking layout.
+    private var imageBox: some View {
+        Theme.cardSubtle(for: colorScheme)
+            .frame(width: displaySize.width, height: displaySize.height)
+            .overlay {
+                if let url {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        case .failure:
+                            placeholderIcon
+                        case .empty:
+                            ProgressView().tint(Theme.coral)
+                        @unknown default:
+                            ProgressView().tint(Theme.coral)
+                        }
+                    }
+                } else if didFail {
+                    placeholderIcon
+                } else {
+                    ProgressView().tint(Theme.coral)
+                }
+            }
+            .clipShape(shape)
+            .overlay(shape.stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
+            .shadow(color: isMe ? Theme.coral.opacity(0.18) : Color.black.opacity(colorScheme == .dark ? 0.12 : 0.05),
+                    radius: 5, y: 2)
+            .task(id: path) {
+                didFail = false
+                do {
+                    url = try await data.signedChatImageURL(path: path)
+                } catch {
+                    didFail = true
+                    print("⚠️ signed chat image url failed: \(error)")
+                }
+            }
+    }
 
-        // Bottom-left corner
-        path.addArc(center: CGPoint(x: r, y: rect.maxY - r),
-                    radius: r,
-                    startAngle: .degrees(90),
-                    endAngle: .degrees(180),
-                    clockwise: false)
-
-        // Left edge
-        path.addLine(to: CGPoint(x: 0, y: r))
-
-        // Top-left corner
-        path.addArc(center: CGPoint(x: r, y: r),
-                    radius: r,
-                    startAngle: .degrees(180),
-                    endAngle: .degrees(270),
-                    clockwise: false)
-
-        path.closeSubpath()
-        return path
+    private var placeholderIcon: some View {
+        Image(systemName: "photo")
+            .font(.system(size: 28))
+            .foregroundStyle(Theme.inkTertiary(for: colorScheme))
     }
 }
 
@@ -352,8 +392,10 @@ private struct BubbleShape: Shape {
             title: "Maya Rivera",
             avatarColors: [0x7B2FF7, 0xF107A3],
             initials: "MR",
-            isOnline: true
+            isOnline: true,
+            avatarURL: nil
         ))
         .environment(LocalizationManager())
+        .environment(AppDataService(userId: nil))
     }
 }

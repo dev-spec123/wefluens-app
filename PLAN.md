@@ -80,6 +80,16 @@
 - [x] `ChatThreadViewModel.sendImage` (upload → `send_dm_media` → reload), `ChatDetailView` image bubbles + `PhotosPicker`, `ChatsListView` `[图片]` preview; three-language strings (EN / 中文 / ES)
 - [x] iOS build green (`runChecks`) + live rollback harness verified: empty-caption image stored as `type=image` w/ dimensions; recipient sees unread=1 + `last_type=image` + `[图片]` preview; captioned image shows its caption; non-friend image blocked; buckets+policies present; realtime enabled — all rolled back, production untouched
 
+### Re-apply pass — the view layer had NOT actually landed; avatar now shown app-wide; invite toast
+
+- [x] `getSchema` confirmed the chat-image backend is genuinely live in production: `dm_messages.message_type/image_url/image_width/image_height` + `dm_threads.last_message_type` all present; `profiles.avatar_url` present with public read
+- [x] **Bubbles (re-applied for real):** deleted `BubbleShape` (the tailed shape whose fixed-radius arcs self-intersected into circles/teardrops for short messages) and switched both sides to `RoundedRectangle(cornerRadius: 20, style: .continuous)` — width follows content, never collapses to a circle
+- [x] **Photo messages (re-applied for real):** `MessageBubble` gained a real image branch (`ChatImageBubble`) — loads the private `chat-media` object via a cached signed URL, reserves space from stored pixel dimensions to avoid jump, clips to the same 20pt shape; optional caption beneath
+- [x] **Avatar shown everywhere:** `Avatar` component now takes `imageURL` (AsyncImage + letter fallback); `avatar_url` propagated through `Conversation`/`Contact`/`DMChatRoute` and rendered on the Me page, chat header, conversation list, and contacts
+- [x] **Storage ensured live (idempotent migration):** `avatars` bucket forced `public = true` (true root cause of "avatar saved but shows letters" — a private bucket's public URL 400s on read, no error alert), `chat-media` forced private, both with explicit RLS (avatars: public read + owner-folder writes; chat-media: thread-participant read/write by path)
+- [x] **Invite toast:** fixed the bug where clearing the email on success wiped the feedback; added a prominent green success / red failure toast with haptics (EN / 中文 / ES strings already present)
+- [x] iOS build green (`runChecks`) after the re-apply pass
+
 ## Design
 
 - **Welcome screen**: The Wefluens logo centered on a warm gradient background, with email and password fields and Sign In / Create Account buttons. A subtle loading animation appears while authenticating

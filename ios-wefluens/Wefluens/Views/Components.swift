@@ -7,12 +7,15 @@
 
 import SwiftUI
 
-/// Gradient avatar with optional SF Symbol, initials, and online dot.
+/// Gradient avatar with optional remote image, SF Symbol, initials, and online dot.
+/// When `imageURL` is a valid non-empty URL the real photo is shown (clipped to a
+/// circle); otherwise it falls back to the gradient + symbol/initials placeholder.
 struct Avatar: View {
     @Environment(\.colorScheme) private var colorScheme
     let colors: [UInt]
     var symbol: String? = nil
     var initials: String? = nil
+    var imageURL: String? = nil
     var size: CGFloat = 52
     var isOnline: Bool = false
 
@@ -24,12 +27,42 @@ struct Avatar: View {
         )
     }
 
+    private var resolvedURL: URL? {
+        guard let imageURL, !imageURL.isEmpty else { return nil }
+        return URL(string: imageURL)
+    }
+
     var body: some View {
         ZStack {
-            Circle()
-                .fill(gradient)
-                .overlay(Circle().stroke(.white.opacity(0.4), lineWidth: 1))
+            if let url = resolvedURL {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    default:
+                        placeholder
+                    }
+                }
+            } else {
+                placeholder
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(.white.opacity(0.4), lineWidth: 1))
+        .overlay(alignment: .bottomTrailing) {
+            if isOnline {
+                Circle()
+                    .fill(Color(hex: 0x2AD17E))
+                    .frame(width: size * 0.26, height: size * 0.26)
+                    .overlay(Circle().stroke(Theme.paper(for: colorScheme), lineWidth: 2.5))
+            }
+        }
+    }
 
+    private var placeholder: some View {
+        ZStack {
+            Rectangle().fill(gradient)
             if let symbol {
                 Image(systemName: symbol)
                     .font(.system(size: size * 0.4, weight: .semibold))
@@ -38,15 +71,6 @@ struct Avatar: View {
                 Text(initials)
                     .font(.system(size: size * 0.36, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
-            }
-        }
-        .frame(width: size, height: size)
-        .overlay(alignment: .bottomTrailing) {
-            if isOnline {
-                Circle()
-                    .fill(Color(hex: 0x2AD17E))
-                    .frame(width: size * 0.26, height: size * 0.26)
-                    .overlay(Circle().stroke(Theme.paper(for: colorScheme), lineWidth: 2.5))
             }
         }
     }

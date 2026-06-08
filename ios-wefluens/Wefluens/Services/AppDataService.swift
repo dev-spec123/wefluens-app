@@ -250,7 +250,8 @@ final class AppDataService {
                     avatarInitials: Self.initials(from: displayName),
                     lastMessageAt: row.lastMessageAt,
                     lastFromMe: row.lastSenderId == uid,
-                    lastMessageIsImage: (row.lastMessageType ?? "text") == "image"
+                    lastMessageIsImage: (row.lastMessageType ?? "text") == "image",
+                    avatarUrl: row.otherAvatarUrl
                 )
             }
         } catch {
@@ -446,7 +447,8 @@ final class AppDataService {
             platform: "",
             followers: p.followers ?? "0",
             avatarColors: Self.avatarPalette(for: p.id),
-            isOnline: false
+            isOnline: false,
+            avatarUrl: p.avatarUrl
         )
     }
 

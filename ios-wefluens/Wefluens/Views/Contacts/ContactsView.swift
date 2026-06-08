@@ -369,7 +369,7 @@ private struct ContactRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            Avatar(colors: contact.avatarColors, initials: contact.initials, size: 50, isOnline: contact.isOnline)
+            Avatar(colors: contact.avatarColors, initials: contact.initials, imageURL: contact.avatarUrl, size: 50, isOnline: contact.isOnline)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(contact.name)
