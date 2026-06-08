@@ -383,8 +383,9 @@ struct ChatDetailView: View {
                     .lineLimit(1)
                 Text(quotedPreviewText(for: message))
                     .font(.system(size: 13))
-                    .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                    .foregroundStyle(Theme.ink(for: colorScheme))
                     .lineLimit(1)
+                    .truncationMode(.tail)
             }
             Spacer(minLength: 8)
             Button {
@@ -545,36 +546,56 @@ private struct MessageBubble: View {
 // MARK: - Quoted Reply Preview
 
 /// A compact quote shown above a message bubble when it replies to another: a
-/// vertical accent bar, the original sender's name, and a single-line preview.
-/// Tinted for my-bubble (on coral) vs theirs, and for light/dark.
+/// brand-gradient accent bar, the original sender's name, and a single-line
+/// preview on a subtle translucent panel. Text is opaque dark/light (never a
+/// faded gray or semi-transparent white) so it stays WCAG-AA legible; my-side
+/// gets a warm tint, theirs a neutral scrim.
 private struct QuotedReplyPreview: View {
     @Environment(\.colorScheme) private var colorScheme
     let senderName: String
     let preview: String
     var isMe: Bool = false
 
+    /// Translucent panel behind the quote so it reads as a distinct layer.
+    /// Warm tint for my messages (ties to the coral bubble), neutral scrim for theirs.
+    private var panelFill: Color {
+        if isMe {
+            return colorScheme == .dark ? Theme.tangerine.opacity(0.24) : Theme.tangerine.opacity(0.16)
+        }
+        return colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.08)
+    }
+
+    /// Quoted content — the most prominent line. Dark gray on light, near-white on dark.
+    private var bodyColor: Color {
+        colorScheme == .dark ? Color(hex: 0xEDEDED) : Color(hex: 0x3A3A3A)
+    }
+
+    /// Sender name — readable and semibold, a touch lighter than the body.
+    private var nameColor: Color {
+        colorScheme == .dark ? Color(hex: 0xC0C0C0) : Color(hex: 0x595959)
+    }
+
     var body: some View {
-        HStack(spacing: 7) {
-            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                .fill(isMe ? Color.white.opacity(0.9) : Theme.coral)
-                .frame(width: 3)
-            VStack(alignment: .leading, spacing: 1) {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(Theme.sunset)
+                .frame(width: 4)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(senderName)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isMe ? Color.white.opacity(0.95) : Theme.coral)
+                    .foregroundStyle(nameColor)
                     .lineLimit(1)
+                    .truncationMode(.tail)
                 Text(preview)
                     .font(.system(size: 13))
-                    .foregroundStyle(isMe ? Color.white.opacity(0.85) : Theme.inkSecondary(for: colorScheme))
+                    .foregroundStyle(bodyColor)
                     .lineLimit(1)
+                    .truncationMode(.tail)
             }
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 6)
-        .background(
-            isMe ? Color.white.opacity(0.18) : Theme.inkSecondary(for: colorScheme).opacity(0.10),
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-        )
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(panelFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
