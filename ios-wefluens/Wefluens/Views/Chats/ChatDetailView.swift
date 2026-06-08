@@ -25,6 +25,9 @@ struct ChatDetailView: View {
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
     @State private var fileError: String?
+    /// Briefly set when the user taps a quote, to flash the original message.
+    @State private var highlightedId: UUID?
+    @FocusState private var inputFocused: Bool
 
     private var messages: [ChatMessage] { vm?.messages ?? [] }
 
@@ -34,12 +37,31 @@ struct ChatDetailView: View {
         messages.last(where: { $0.sender == .me })?.id
     }
 
+    /// Messages paired with their resolved quoted message (if any), so each row can
+    /// render the quote preview without an O(n²) lookup. Built once per body eval.
+    private var renderedMessages: [RenderedMessage] {
+        let byId = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return messages.map { RenderedMessage(message: $0, quoted: $0.replyTo.flatMap { byId[$0] }) }
+    }
+
+    /// A message + its resolved quoted original, identified by the message id.
+    private struct RenderedMessage: Identifiable {
+        let message: ChatMessage
+        let quoted: ChatMessage?
+        var id: UUID { message.id }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             navBar
             messageList
+            if let replying = vm?.replyingTo {
+                replyComposerBar(for: replying)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
             inputBar
         }
+        .animation(.spring(response: 0.32, dampingFraction: 0.85), value: vm?.replyingTo?.id)
         .background(Theme.paper(for: colorScheme).ignoresSafeArea())
         .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
@@ -137,9 +159,18 @@ struct ChatDetailView: View {
                     emptyState
                 } else {
                     LazyVStack(spacing: 8) {
-                        ForEach(messages) { message in
-                            MessageBubble(message: message, showReadReceipt: message.id == lastMineId)
-                                .id(message.id)
+                        ForEach(renderedMessages) { item in
+                            MessageBubble(
+                                message: item.message,
+                                showReadReceipt: item.message.id == lastMineId,
+                                quotedSender: item.quoted.map { quotedSenderName(for: $0) },
+                                quotedPreview: item.quoted.map { quotedPreviewText(for: $0) },
+                                quotedId: item.quoted?.id,
+                                isHighlighted: item.message.id == highlightedId,
+                                onReply: { startReply(to: item.message) },
+                                onTapQuoted: { id in scrollToMessage(id, proxy: proxy) }
+                            )
+                            .id(item.message.id)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -183,6 +214,7 @@ struct ChatDetailView: View {
                     .font(.system(size: 16))
                     .foregroundStyle(Theme.ink(for: colorScheme))
                     .lineLimit(1...4)
+                    .focused($inputFocused)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
@@ -290,6 +322,85 @@ struct ChatDetailView: View {
             print("⚠️ file import cancelled/failed: \(error)")
         }
     }
+
+    // MARK: - Quoted replies
+
+    /// Display name for a quoted message's original sender ("You" for mine).
+    private func quotedSenderName(for message: ChatMessage) -> String {
+        message.sender == .me ? l10n.t(.chatYou) : route.title
+    }
+
+    /// Single-line preview for a quoted message, by kind (mirrors the list preview).
+    private func quotedPreviewText(for message: ChatMessage) -> String {
+        switch message.kind {
+        case .text:
+            return message.text
+        case .image:
+            return l10n.t(.chatImagePreview)
+        case .video:
+            return l10n.t(.chatVideoPreview)
+        case .file:
+            let name = message.fileName ?? ""
+            return name.isEmpty ? l10n.t(.chatFilePreview) : name
+        }
+    }
+
+    /// Begins a quoted reply: shows the composer bar and focuses the input.
+    private func startReply(to message: ChatMessage) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
+            vm?.replyingTo = message
+        }
+        inputFocused = true
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    /// Scrolls to a quoted message and briefly highlights it (tap on a quote block).
+    private func scrollToMessage(_ id: UUID, proxy: ScrollViewProxy) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            proxy.scrollTo(id, anchor: .center)
+        }
+        UISelectionFeedbackGenerator().selectionChanged()
+        highlightedId = id
+        Task {
+            try? await Task.sleep(for: .seconds(1.3))
+            if highlightedId == id {
+                withAnimation(.easeOut(duration: 0.45)) { highlightedId = nil }
+            }
+        }
+    }
+
+    /// The "replying to" context bar shown above the input while composing a quoted
+    /// reply. The × clears it; sending also clears it (in the view model).
+    private func replyComposerBar(for message: ChatMessage) -> some View {
+        HStack(spacing: 10) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(Theme.coral)
+                .frame(width: 3, height: 34)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(quotedSenderName(for: message))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.coral)
+                    .lineLimit(1)
+                Text(quotedPreviewText(for: message))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    vm?.cancelReply()
+                }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 9)
+        .background(Theme.card(for: colorScheme))
+    }
 }
 
 // MARK: - Message Bubble
@@ -300,6 +411,14 @@ private struct MessageBubble: View {
     let message: ChatMessage
     /// True only for my most recent message — gates the read receipt below it.
     var showReadReceipt: Bool = false
+    /// Resolved quoted message's sender label + single-line preview (nil = no quote).
+    var quotedSender: String? = nil
+    var quotedPreview: String? = nil
+    var quotedId: UUID? = nil
+    /// Briefly true when the user taps a quote pointing at this message.
+    var isHighlighted: Bool = false
+    var onReply: (() -> Void)? = nil
+    var onTapQuoted: ((UUID) -> Void)? = nil
 
     private var isMe: Bool { message.sender == .me }
 
@@ -311,24 +430,24 @@ private struct MessageBubble: View {
             }
 
             VStack(alignment: isMe ? .trailing : .leading, spacing: 3) {
-                if message.kind == .image, let path = message.imagePath {
-                    ChatImageBubble(
-                        path: path,
-                        pixelWidth: message.imageWidth,
-                        pixelHeight: message.imageHeight,
-                        caption: message.text,
-                        isMe: isMe
+                bubbleColumn
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(isHighlighted ? Theme.coral.opacity(0.16) : Color.clear)
+                            .padding(-6)
                     )
-                } else if message.kind == .file, let path = message.imagePath {
-                    ChatFileBubble(
-                        path: path,
-                        fileName: message.fileName ?? "",
-                        fileSize: message.fileSize,
-                        isMe: isMe
-                    )
-                } else {
-                    textBubble
-                }
+                    .contextMenu {
+                        Button { onReply?() } label: {
+                            Label(l10n.t(.chatReply), systemImage: "arrowshape.turn.up.left")
+                        }
+                        if message.kind == .text {
+                            Button {
+                                UIPasteboard.general.string = message.text
+                            } label: {
+                                Label(l10n.t(.chatCopy), systemImage: "doc.on.doc")
+                            }
+                        }
+                    }
 
                 if isMe && showReadReceipt {
                     readReceipt
@@ -338,6 +457,40 @@ private struct MessageBubble: View {
             if !isMe {
                 timestampView
                 Spacer(minLength: 50)
+            }
+        }
+        .animation(.easeInOut(duration: 0.35), value: isHighlighted)
+    }
+
+    /// The quoted-reply preview (when present) stacked above the original message
+    /// bubble. The kind branches below are byte-for-byte the originals — the
+    /// `textBubble` / `ChatImageBubble` / `ChatFileBubble` views are never modified.
+    @ViewBuilder
+    private var bubbleColumn: some View {
+        VStack(alignment: isMe ? .trailing : .leading, spacing: 3) {
+            if let quotedSender, let quotedPreview {
+                QuotedReplyPreview(senderName: quotedSender, preview: quotedPreview, isMe: isMe)
+                    .contentShape(Rectangle())
+                    .onTapGesture { if let quotedId { onTapQuoted?(quotedId) } }
+            }
+
+            if message.kind == .image, let path = message.imagePath {
+                ChatImageBubble(
+                    path: path,
+                    pixelWidth: message.imageWidth,
+                    pixelHeight: message.imageHeight,
+                    caption: message.text,
+                    isMe: isMe
+                )
+            } else if message.kind == .file, let path = message.imagePath {
+                ChatFileBubble(
+                    path: path,
+                    fileName: message.fileName ?? "",
+                    fileSize: message.fileSize,
+                    isMe: isMe
+                )
+            } else {
+                textBubble
             }
         }
     }
@@ -386,6 +539,42 @@ private struct MessageBubble: View {
             .font(.system(size: 10, weight: .medium))
             .foregroundStyle(Theme.inkTertiary(for: colorScheme))
             .padding(.bottom, 6)
+    }
+}
+
+// MARK: - Quoted Reply Preview
+
+/// A compact quote shown above a message bubble when it replies to another: a
+/// vertical accent bar, the original sender's name, and a single-line preview.
+/// Tinted for my-bubble (on coral) vs theirs, and for light/dark.
+private struct QuotedReplyPreview: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let senderName: String
+    let preview: String
+    var isMe: Bool = false
+
+    var body: some View {
+        HStack(spacing: 7) {
+            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                .fill(isMe ? Color.white.opacity(0.9) : Theme.coral)
+                .frame(width: 3)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(senderName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isMe ? Color.white.opacity(0.95) : Theme.coral)
+                    .lineLimit(1)
+                Text(preview)
+                    .font(.system(size: 13))
+                    .foregroundStyle(isMe ? Color.white.opacity(0.85) : Theme.inkSecondary(for: colorScheme))
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .background(
+            isMe ? Color.white.opacity(0.18) : Theme.inkSecondary(for: colorScheme).opacity(0.10),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
     }
 }
 

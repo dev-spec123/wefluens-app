@@ -20,6 +20,9 @@ final class ChatThreadViewModel {
     var sendFailed = false
     var isSendingImage = false
     var isSendingFile = false
+    /// The message the user is quoting in their next send (nil = normal message).
+    /// Set by long-press → Reply; cleared by the × or after a successful send.
+    var replyingTo: ChatMessage?
 
     private var channel: RealtimeChannelV2?
     private var listenTask: Task<Void, Never>?
@@ -49,8 +52,10 @@ final class ChatThreadViewModel {
     func send(_ text: String) async {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return }
+        let reply = replyingTo?.id
         do {
-            try await data.sendMessage(to: route.otherUserId, body: clean)
+            try await data.sendMessage(to: route.otherUserId, body: clean, replyTo: reply)
+            replyingTo = nil
             await reload()
         } catch {
             sendFailed = true
@@ -65,6 +70,7 @@ final class ChatThreadViewModel {
         guard !isSendingImage else { return }
         isSendingImage = true
         defer { isSendingImage = false }
+        let reply = replyingTo?.id
         do {
             let upload = try await data.uploadChatImage(threadId: route.threadId, imageData: imageData)
             try await data.sendImageMessage(
@@ -72,8 +78,10 @@ final class ChatThreadViewModel {
                 imagePath: upload.path,
                 caption: "",
                 width: upload.width,
-                height: upload.height
+                height: upload.height,
+                replyTo: reply
             )
+            replyingTo = nil
             await reload()
         } catch {
             sendFailed = true
@@ -88,6 +96,7 @@ final class ChatThreadViewModel {
         guard !isSendingFile else { return }
         isSendingFile = true
         defer { isSendingFile = false }
+        let reply = replyingTo?.id
         do {
             let upload = try await self.data.uploadChatFile(
                 threadId: route.threadId,
@@ -95,12 +104,18 @@ final class ChatThreadViewModel {
                 fileName: fileName,
                 mimeType: mimeType
             )
-            try await self.data.sendFileMessage(to: route.otherUserId, upload: upload)
+            try await self.data.sendFileMessage(to: route.otherUserId, upload: upload, replyTo: reply)
+            replyingTo = nil
             await reload()
         } catch {
             sendFailed = true
             print("⚠️ send_dm_attachment (file) failed: \(error)")
         }
+    }
+
+    /// Clears the active quoted-reply context (the × on the composer bar).
+    func cancelReply() {
+        replyingTo = nil
     }
 
     /// Subscribes to changes on `dm_messages`. RLS only delivers rows where I'm a

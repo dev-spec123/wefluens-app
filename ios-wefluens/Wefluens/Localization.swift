@@ -48,6 +48,7 @@ enum L10n: String {
     case chatYouPrefix, chatThreadEmpty, chatStartError, chatSendError, chatImagePreview
     case chatFilePreview, chatAttachPhoto, chatAttachFile, chatFileTooLarge, chatFileError
     case chatRead, chatDelivered
+    case chatReply, chatCopy, chatYou, chatVideoPreview
 
     // Contacts
     case contactsTitle, contactsSubtitle, contactsSearch, contactsInvite, contactsTopTalent, contactsBrands
@@ -173,6 +174,10 @@ final class LocalizationManager {
             .chatFileError: "Couldn't attach that file. Please try again.",
             .chatRead: "Read",
             .chatDelivered: "Delivered",
+            .chatReply: "Reply",
+            .chatCopy: "Copy",
+            .chatYou: "You",
+            .chatVideoPreview: "[Video]",
             .contactsTitle: "Contacts", .contactsSubtitle: "creators & partners", .contactsSearch: "Search contacts",
             .contactsInvite: "Invite", .contactsTopTalent: "Top Talent", .contactsBrands: "Brands",
             .contactsNewFriends: "New Friends", .contactsFriendRequests: "Friend Request",
@@ -305,6 +310,10 @@ final class LocalizationManager {
             .chatFileError: "无法添加该文件，请重试。",
             .chatRead: "已读",
             .chatDelivered: "已送达",
+            .chatReply: "回复",
+            .chatCopy: "复制",
+            .chatYou: "你",
+            .chatVideoPreview: "[视频]",
             .contactsTitle: "通讯录", .contactsSubtitle: "位创作者与合作伙伴", .contactsSearch: "搜索联系人",
             .contactsInvite: "邀请", .contactsTopTalent: "顶尖网红", .contactsBrands: "品牌",
             .contactsNewFriends: "新的朋友", .contactsFriendRequests: "好友申请",
@@ -437,6 +446,10 @@ final class LocalizationManager {
             .chatFileError: "No se pudo adjuntar el archivo. Inténtalo de nuevo.",
             .chatRead: "Leído",
             .chatDelivered: "Entregado",
+            .chatReply: "Responder",
+            .chatCopy: "Copiar",
+            .chatYou: "Tú",
+            .chatVideoPreview: "[Video]",
             .contactsTitle: "Contactos", .contactsSubtitle: "creadores y socios", .contactsSearch: "Buscar contactos",
             .contactsInvite: "Invitar", .contactsTopTalent: "Top Talento", .contactsBrands: "Marcas",
             .contactsNewFriends: "Nuevos Amigos", .contactsFriendRequests: "Solicitud de Amistad",
