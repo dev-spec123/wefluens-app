@@ -251,6 +251,7 @@ final class AppDataService {
                     lastMessageAt: row.lastMessageAt,
                     lastFromMe: row.lastSenderId == uid,
                     lastMessageIsImage: (row.lastMessageType ?? "text") == "image",
+                    lastMessageType: row.lastMessageType ?? "text",
                     avatarUrl: row.otherAvatarUrl
                 )
             }
@@ -585,6 +586,51 @@ final class AppDataService {
         return threadId
     }
 
+    /// Result of uploading a chat file: the private storage path + original name/size/mime.
+    struct ChatFileUpload: Sendable { let path: String; let fileName: String; let fileSize: Int; let mime: String }
+
+    /// Uploads an arbitrary document into the private `chat-media` bucket under
+    /// `{threadId}/{uuid}.{ext}` — the same thread-scoped Storage RLS as images,
+    /// so only the two participants can read/write. No compression (docs must stay
+    /// byte-exact). Returns the stored path plus name/size/mime for the file bubble.
+    @MainActor
+    func uploadChatFile(threadId: UUID, data: Data, fileName: String, mimeType: String) async throws -> ChatFileUpload {
+        let folder = threadId.uuidString.lowercased()
+        let ext = (fileName as NSString).pathExtension.lowercased()
+        let object = ext.isEmpty
+            ? UUID().uuidString.lowercased()
+            : "\(UUID().uuidString.lowercased()).\(ext)"
+        let path = "\(folder)/\(object)"
+        try await supabase.storage
+            .from("chat-media")
+            .upload(path, data: data, options: FileOptions(contentType: mimeType, upsert: false))
+        return ChatFileUpload(path: path, fileName: fileName, fileSize: data.count, mime: mimeType)
+    }
+
+    /// Sends a file message via the generic friend-validated `send_dm_attachment`
+    /// function (leaves send_dm / send_dm_media untouched). Refreshes the inbox.
+    @MainActor
+    @discardableResult
+    func sendFileMessage(to otherId: UUID, upload: ChatFileUpload) async throws -> UUID {
+        let raw: String = try await supabase
+            .rpc("send_dm_attachment", params: SendDMAttachmentParams(
+                p_other: otherId.uuidString,
+                p_type: "file",
+                p_path: upload.path,
+                p_caption: "",
+                p_file_name: upload.fileName,
+                p_file_size: upload.fileSize,
+                p_file_mime: upload.mime
+            ))
+            .execute()
+            .value
+        await loadConversations()
+        guard let threadId = UUID(uuidString: raw) else {
+            throw DataError(message: "Invalid thread id")
+        }
+        return threadId
+    }
+
     /// Short-lived signed URLs for private chat images, cached by path so the
     /// realtime-driven reloads don't re-sign the same image on every insert.
     private var signedURLCache: [String: (url: URL, expires: Date)] = [:]
@@ -615,16 +661,25 @@ final class AppDataService {
                 .execute()
                 .value
             return rows.map { row in
-                let isImage = (row.messageType ?? "text") == "image"
+                let kind: ChatMessageKind
+                switch row.messageType ?? "text" {
+                case "image": kind = .image
+                case "video": kind = .video
+                case "file": kind = .file
+                default: kind = .text
+                }
                 return ChatMessage(
                     id: row.id,
                     text: row.body,
                     sender: row.senderId == uid ? .me : .them,
                     time: Self.clockTime(from: row.createdAt),
-                    kind: isImage ? .image : .text,
+                    kind: kind,
                     imagePath: row.imageUrl,
                     imageWidth: row.imageWidth,
-                    imageHeight: row.imageHeight
+                    imageHeight: row.imageHeight,
+                    fileName: row.fileName,
+                    fileSize: row.fileSize,
+                    fileMime: row.fileMime
                 )
             }
         } catch {

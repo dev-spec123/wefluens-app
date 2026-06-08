@@ -19,6 +19,7 @@ final class ChatThreadViewModel {
     var isLoading = true
     var sendFailed = false
     var isSendingImage = false
+    var isSendingFile = false
 
     private var channel: RealtimeChannelV2?
     private var listenTask: Task<Void, Never>?
@@ -76,6 +77,28 @@ final class ChatThreadViewModel {
         } catch {
             sendFailed = true
             print("⚠️ send_dm_media failed: \(error)")
+        }
+    }
+
+    /// Uploads a picked document to the private `chat-media` bucket and sends it as a
+    /// file message via the generic `send_dm_attachment` (friends-only). Re-reads
+    /// from the DB on success; surfaces a real error on failure (never a silent no-op).
+    func sendFile(data: Data, fileName: String, mimeType: String) async {
+        guard !isSendingFile else { return }
+        isSendingFile = true
+        defer { isSendingFile = false }
+        do {
+            let upload = try await self.data.uploadChatFile(
+                threadId: route.threadId,
+                data: data,
+                fileName: fileName,
+                mimeType: mimeType
+            )
+            try await self.data.sendFileMessage(to: route.otherUserId, upload: upload)
+            await reload()
+        } catch {
+            sendFailed = true
+            print("⚠️ send_dm_attachment (file) failed: \(error)")
         }
     }
 

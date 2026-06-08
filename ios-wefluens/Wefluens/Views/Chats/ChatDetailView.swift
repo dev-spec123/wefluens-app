@@ -8,6 +8,8 @@
 
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
+import QuickLook
 
 struct ChatDetailView: View {
     @Environment(LocalizationManager.self) private var l10n
@@ -20,6 +22,9 @@ struct ChatDetailView: View {
     @State private var vm: ChatThreadViewModel?
     @State private var draft: String = ""
     @State private var photoItem: PhotosPickerItem?
+    @State private var showPhotoPicker = false
+    @State private var showFileImporter = false
+    @State private var fileError: String?
 
     private var messages: [ChatMessage] { vm?.messages ?? [] }
 
@@ -34,6 +39,9 @@ struct ChatDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         .alert(l10n.t(.chatSendError), isPresented: sendErrorBinding) {
             Button(l10n.t(.authVerificationSentOk), role: .cancel) { }
+        }
+        .alert(fileError ?? "", isPresented: fileErrorBinding) {
+            Button(l10n.t(.authVerificationSentOk), role: .cancel) { fileError = nil }
         }
         .task {
             guard vm == nil else { return }
@@ -52,6 +60,27 @@ struct ChatDetailView: View {
             get: { vm?.sendFailed ?? false },
             set: { newValue in vm?.sendFailed = newValue }
         )
+    }
+
+    private var fileErrorBinding: Binding<Bool> {
+        Binding(
+            get: { fileError != nil },
+            set: { newValue in if !newValue { fileError = nil } }
+        )
+    }
+
+    /// Common document types the file importer accepts (PDF / Word / Excel /
+    /// PowerPoint / text). Photos and videos use their own pickers.
+    private var allowedDocTypes: [UTType] {
+        var types: [UTType] = [.pdf, .plainText, .rtf]
+        let ids = [
+            "public.spreadsheet", "public.presentation", "public.composite-content",
+            "org.openxmlformats.wordprocessingml.document", "com.microsoft.word.doc",
+            "org.openxmlformats.spreadsheetml.sheet", "com.microsoft.excel.xls",
+            "org.openxmlformats.presentationml.presentation", "com.microsoft.powerpoint.ppt"
+        ]
+        types.append(contentsOf: ids.compactMap { UTType($0) })
+        return types
     }
 
     private var navBar: some View {
@@ -170,6 +199,10 @@ struct ChatDetailView: View {
         .padding(.top, 10)
         .padding(.bottom, 6)
         .background(Theme.paper(for: colorScheme))
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
+        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: allowedDocTypes, allowsMultipleSelection: false) { result in
+            handleFileImport(result)
+        }
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
             Task {
@@ -180,16 +213,27 @@ struct ChatDetailView: View {
         }
     }
 
-    /// The "+" opens the photo library (a spinner replaces it while sending).
-    /// System-keyboard emoji already type straight into the text field.
+    /// The "+" opens a menu to attach a photo or a document (a spinner replaces it
+    /// while uploading). System-keyboard emoji already type straight into the field.
     @ViewBuilder
     private var plusButton: some View {
-        if vm?.isSendingImage == true {
+        if vm?.isSendingImage == true || vm?.isSendingFile == true {
             ProgressView()
                 .tint(Theme.coral)
                 .frame(width: 30, height: 30)
         } else {
-            PhotosPicker(selection: $photoItem, matching: .images) {
+            Menu {
+                Button {
+                    showPhotoPicker = true
+                } label: {
+                    Label(l10n.t(.chatAttachPhoto), systemImage: "photo")
+                }
+                Button {
+                    showFileImporter = true
+                } label: {
+                    Label(l10n.t(.chatAttachFile), systemImage: "doc")
+                }
+            } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(Theme.inkSecondary(for: colorScheme))
@@ -210,6 +254,35 @@ struct ChatDetailView: View {
         draft = ""
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         Task { await vm.send(text) }
+    }
+
+    /// Reads the picked document into memory (enforcing the 25 MB cap with a real
+    /// error — never silent), then sends it via the view model.
+    private func handleFileImport(_ result: Result<[URL], Error>) {
+        guard let vm else { return }
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            let didAccess = url.startAccessingSecurityScopedResource()
+            defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let data = try Data(contentsOf: url)
+                let maxBytes = 25 * 1024 * 1024
+                guard data.count <= maxBytes else {
+                    fileError = l10n.t(.chatFileTooLarge)
+                    return
+                }
+                let name = url.lastPathComponent
+                let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                Task { await vm.sendFile(data: data, fileName: name, mimeType: mime) }
+            } catch {
+                fileError = l10n.t(.chatFileError)
+                print("⚠️ file read failed: \(error)")
+            }
+        case .failure(let error):
+            print("⚠️ file import cancelled/failed: \(error)")
+        }
     }
 }
 
@@ -235,6 +308,13 @@ private struct MessageBubble: View {
                         pixelWidth: message.imageWidth,
                         pixelHeight: message.imageHeight,
                         caption: message.text,
+                        isMe: isMe
+                    )
+                } else if message.kind == .file, let path = message.imagePath {
+                    ChatFileBubble(
+                        path: path,
+                        fileName: message.fileName ?? "",
+                        fileSize: message.fileSize,
                         isMe: isMe
                     )
                 } else {
@@ -381,6 +461,135 @@ private struct ChatImageBubble: View {
         Image(systemName: "photo")
             .font(.system(size: 28))
             .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+    }
+}
+
+// MARK: - File Message Bubble
+
+/// Renders a file attachment as a compact chip (icon + name + size) in the same
+/// 20pt rounded-rectangle style as the other bubbles. Tapping downloads the
+/// private `chat-media` object via a signed URL and opens it in QuickLook.
+private struct ChatFileBubble: View {
+    @Environment(AppDataService.self) private var data
+    @Environment(LocalizationManager.self) private var l10n
+    @Environment(\.colorScheme) private var colorScheme
+    let path: String
+    let fileName: String
+    let fileSize: Int?
+    let isMe: Bool
+
+    @State private var previewURL: URL?
+    @State private var preparedURL: URL?
+    @State private var isLoading = false
+
+    private let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+
+    private var displayName: String {
+        fileName.isEmpty ? l10n.t(.chatAttachFile) : fileName
+    }
+
+    private var sizeText: String {
+        guard let fileSize, fileSize > 0 else { return "" }
+        return ByteCountFormatter.string(fromByteCount: Int64(fileSize), countStyle: .file)
+    }
+
+    private var fileExtension: String {
+        (fileName as NSString).pathExtension.lowercased()
+    }
+
+    private var iconName: String {
+        switch fileExtension {
+        case "pdf": return "doc.richtext.fill"
+        case "doc", "docx", "pages": return "doc.text.fill"
+        case "xls", "xlsx", "csv", "numbers": return "tablecells.fill"
+        case "ppt", "pptx", "key": return "rectangle.on.rectangle.fill"
+        case "zip", "rar", "7z": return "doc.zipper"
+        case "txt", "rtf": return "doc.plaintext.fill"
+        default: return "doc.fill"
+        }
+    }
+
+    private var iconColor: Color {
+        switch fileExtension {
+        case "pdf": return Color(hex: 0xFF5A5F)
+        case "doc", "docx", "pages": return Color(hex: 0x2B7CD3)
+        case "xls", "xlsx", "csv", "numbers": return Color(hex: 0x1FA463)
+        case "ppt", "pptx", "key": return Color(hex: 0xE8703A)
+        case "zip", "rar", "7z": return Color(hex: 0x9B7BD4)
+        default: return Color(hex: 0x8A8A8E)
+        }
+    }
+
+    var body: some View {
+        Button(action: open) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(.white)
+                    if isLoading {
+                        ProgressView().tint(iconColor)
+                    } else {
+                        Image(systemName: iconName)
+                            .font(.system(size: 22))
+                            .foregroundStyle(iconColor)
+                    }
+                }
+                .frame(width: 44, height: 44)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(displayName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(isMe ? .white : Theme.ink(for: colorScheme))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    if !sizeText.isEmpty {
+                        Text(sizeText)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(isMe ? .white.opacity(0.85) : Theme.inkSecondary(for: colorScheme))
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(width: 244, alignment: .leading)
+            .background(isMe
+                        ? AnyShapeStyle(Theme.sunset)
+                        : AnyShapeStyle(colorScheme == .dark ? Theme.card(for: .dark) : Color(hex: 0xF0EBE4)))
+            .clipShape(shape)
+            .shadow(color: isMe ? Theme.coral.opacity(0.25) : Color.black.opacity(colorScheme == .dark ? 0.12 : 0.04),
+                    radius: isMe ? 6 : 3, y: isMe ? 3 : 1)
+        }
+        .buttonStyle(.plain)
+        .quickLookPreview($previewURL)
+    }
+
+    /// Downloads the file once (cached as `preparedURL`) and presents QuickLook.
+    private func open() {
+        if let preparedURL {
+            previewURL = preparedURL
+            return
+        }
+        guard !isLoading else { return }
+        Task {
+            isLoading = true
+            defer { isLoading = false }
+            do {
+                let signed = try await data.signedChatImageURL(path: path)
+                let (tmp, _) = try await URLSession.shared.download(from: signed)
+                let dir = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString, isDirectory: true)
+                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                let dest = dir.appendingPathComponent(displayName)
+                try? FileManager.default.removeItem(at: dest)
+                try FileManager.default.moveItem(at: tmp, to: dest)
+                preparedURL = dest
+                previewURL = dest
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            } catch {
+                print("⚠️ file preview download failed: \(error)")
+            }
+        }
     }
 }
 

@@ -232,6 +232,10 @@ export type Database = {
         Row: {
           body: string
           created_at: string | null
+          duration_ms: number | null
+          file_mime: string | null
+          file_name: string | null
+          file_size: number | null
           id: string
           image_height: number | null
           image_url: string | null
@@ -241,10 +245,15 @@ export type Database = {
           recipient_id: string
           sender_id: string
           thread_id: string
+          thumb_url: string | null
         }
         Insert: {
           body: string
           created_at?: string | null
+          duration_ms?: number | null
+          file_mime?: string | null
+          file_name?: string | null
+          file_size?: number | null
           id?: string
           image_height?: number | null
           image_url?: string | null
@@ -254,10 +263,15 @@ export type Database = {
           recipient_id: string
           sender_id: string
           thread_id: string
+          thumb_url?: string | null
         }
         Update: {
           body?: string
           created_at?: string | null
+          duration_ms?: number | null
+          file_mime?: string | null
+          file_name?: string | null
+          file_size?: number | null
           id?: string
           image_height?: number | null
           image_url?: string | null
@@ -267,6 +281,7 @@ export type Database = {
           recipient_id?: string
           sender_id?: string
           thread_id?: string
+          thumb_url?: string | null
         }
         Relationships: [
           {
@@ -614,6 +629,22 @@ export type Database = {
         }[]
       }
       send_dm: { Args: { p_body: string; p_other: string }; Returns: string }
+      send_dm_attachment: {
+        Args: {
+          p_caption?: string
+          p_duration_ms?: number
+          p_file_mime?: string
+          p_file_name?: string
+          p_file_size?: number
+          p_height?: number
+          p_other: string
+          p_path: string
+          p_thumb_path?: string
+          p_type: string
+          p_width?: number
+        }
+        Returns: string
+      }
       send_dm_media: {
         Args: {
           p_caption?: string

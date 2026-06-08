@@ -317,6 +317,9 @@ nonisolated struct DMMessageRow: Codable, Identifiable, Sendable {
     let imageUrl: String?
     let imageWidth: Int?
     let imageHeight: Int?
+    let fileName: String?
+    let fileSize: Int?
+    let fileMime: String?
     let readAt: Date?
     let createdAt: Date?
 
@@ -329,6 +332,9 @@ nonisolated struct DMMessageRow: Codable, Identifiable, Sendable {
         case imageUrl = "image_url"
         case imageWidth = "image_width"
         case imageHeight = "image_height"
+        case fileName = "file_name"
+        case fileSize = "file_size"
+        case fileMime = "file_mime"
         case readAt = "read_at"
         case createdAt = "created_at"
     }
@@ -349,6 +355,18 @@ nonisolated struct SendDMMediaParams: Encodable, Sendable {
     let p_caption: String
     let p_width: Int
     let p_height: Int
+}
+
+/// Params for the generic `send_dm_attachment` RPC (file / video). Optional
+/// metadata is omitted when nil so the server defaults apply.
+nonisolated struct SendDMAttachmentParams: Encodable, Sendable {
+    let p_other: String
+    let p_type: String
+    let p_path: String
+    let p_caption: String
+    let p_file_name: String?
+    let p_file_size: Int?
+    let p_file_mime: String?
 }
 
 nonisolated struct MarkThreadReadParams: Encodable, Sendable {

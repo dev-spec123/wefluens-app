@@ -90,6 +90,16 @@
 - [x] **Invite toast:** fixed the bug where clearing the email on success wiped the feedback; added a prominent green success / red failure toast with haptics (EN / 中文 / ES strings already present)
 - [x] iOS build green (`runChecks`) after the re-apply pass
 
+## Chat attachments: files (video next)
+
+- **Send a file** — the chat `+` is now a menu (Photo / File); File opens the document picker (PDF / Word / Excel / PowerPoint / text). The file uploads to the private `chat-media` bucket and appears as a chip (type icon + name + size). Tapping it downloads via a signed URL and opens QuickLook. Conversation list shows a localized `[文件]`/`[File]`/`[Archivo]` preview
+- **Two-step rollout** — files shipped first; video reuses the same backend (columns + function already live) and is the next step
+- [x] Backend migration (one pass, additive + safe): `dm_messages` gained `file_name`/`file_size`/`file_mime`/`thumb_url`/`duration_ms`; `image_url` reused as the generic media path and `image_width/height` as poster dims; `dm_messages_type_check` extended to `text/image/video/file`; `dm_messages_image_present` renamed/generalized to `dm_messages_media_present` (any non-text needs a path); `dm_messages_body_len` left unchanged (already allows empty non-text body)
+- [x] New generic `send_dm_attachment` SECURITY DEFINER fn (friends-only, mirrors `send_dm_media`, stamps `last_message_type`) — `send_dm` / `send_dm_media` left untouched; `list_dm_threads` unchanged (already returns `last_message_type`)
+- [x] Private `chat-media` reused: same thread-id path-based Storage RLS (extension-agnostic, no new policy); bucket `file_size_limit` raised to 50 MB (covers 25 MB files now + 50 MB video later)
+- [x] App: `ChatMessage` gained `.file` kind + name/size/mime; `MessageBubble` gained a `.file` branch only (text + `ChatImageBubble` untouched); new `ChatFileBubble` (icon/name/size chip → QuickLook); `+` menu + `.fileImporter` with a real 25 MB error (never silent); `ChatsListView` `[文件]` preview via `lastMessageType`; three-language strings
+- [x] iOS build green (`runChecks`) + live rollback harness verified: A→B `send_dm_attachment` stores `type=file` + path + name/size/mime, empty body allowed; B sees `unread=1` + `last_type=file` + `[文件]` preview + other=A; `media_present` blocks a pathless file; `video` type already accepted (video-ready); non-friend file blocked — all rolled back, production untouched
+
 ## Design
 
 - **Welcome screen**: The Wefluens logo centered on a warm gradient background, with email and password fields and Sign In / Create Account buttons. A subtle loading animation appears while authenticating

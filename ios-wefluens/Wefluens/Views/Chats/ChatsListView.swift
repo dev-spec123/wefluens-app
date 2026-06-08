@@ -199,11 +199,18 @@ private struct ConversationRow: View {
     let conversation: Conversation
 
     /// Prepends a localized "You: " when I sent the last message (WeChat-style).
-    /// A caption-less image shows a localized "[Photo]" placeholder.
+    /// Media messages show a localized placeholder: files always "[File]", images
+    /// "[Photo]" only when caption-less (otherwise the caption shows).
     private var previewText: String {
-        let base = (conversation.lastMessageIsImage && conversation.lastMessage.isEmpty)
-            ? l10n.t(.chatImagePreview)
-            : conversation.lastMessage
+        let base: String
+        switch conversation.lastMessageType {
+        case "file":
+            base = l10n.t(.chatFilePreview)
+        case "image" where conversation.lastMessage.isEmpty:
+            base = l10n.t(.chatImagePreview)
+        default:
+            base = conversation.lastMessage
+        }
         guard !base.isEmpty else { return "" }
         return conversation.lastFromMe
             ? l10n.t(.chatYouPrefix) + base

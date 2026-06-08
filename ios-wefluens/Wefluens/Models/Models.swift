@@ -14,10 +14,13 @@ enum MessageSender: Equatable {
     case them
 }
 
-/// A direct message is either plain text or an image (with an optional caption).
+/// A direct message is plain text, an image, a video, or a file attachment
+/// (media kinds may carry an optional caption).
 enum ChatMessageKind: Equatable {
     case text
     case image
+    case video
+    case file
 }
 
 struct ChatMessage: Identifiable, Equatable {
@@ -26,14 +29,19 @@ struct ChatMessage: Identifiable, Equatable {
     let sender: MessageSender
     let time: String
     let kind: ChatMessageKind
-    /// Storage path in the private `chat-media` bucket (image messages only).
+    /// Storage path in the private `chat-media` bucket (any media message).
     let imagePath: String?
     let imageWidth: Int?
     let imageHeight: Int?
+    /// File-attachment metadata (file messages only).
+    let fileName: String?
+    let fileSize: Int?
+    let fileMime: String?
 
     init(id: UUID = UUID(), text: String, sender: MessageSender, time: String,
          kind: ChatMessageKind = .text, imagePath: String? = nil,
-         imageWidth: Int? = nil, imageHeight: Int? = nil) {
+         imageWidth: Int? = nil, imageHeight: Int? = nil,
+         fileName: String? = nil, fileSize: Int? = nil, fileMime: String? = nil) {
         self.id = id
         self.text = text
         self.sender = sender
@@ -42,6 +50,9 @@ struct ChatMessage: Identifiable, Equatable {
         self.imagePath = imagePath
         self.imageWidth = imageWidth
         self.imageHeight = imageHeight
+        self.fileName = fileName
+        self.fileSize = fileSize
+        self.fileMime = fileMime
     }
 }
 
@@ -69,10 +80,12 @@ struct Conversation: Identifiable {
     let lastFromMe: Bool
     /// True when the last message is an image — shows a localized "[Photo]" preview when there's no caption.
     let lastMessageIsImage: Bool
+    /// Kind of the last message ("text"/"image"/"video"/"file") — drives the localized media preview.
+    let lastMessageType: String
     /// The other participant's profile photo URL (nil for sample data / groups).
     let avatarUrl: String?
 
-    init(id: UUID = UUID(), name: String, avatar: String, avatarColors: [UInt], lastMessage: String, time: String, unread: Int, isPinned: Bool, isOfficial: Bool, isOnline: Bool, isGroup: Bool, participantCount: Int, messages: [ChatMessage], otherUserId: UUID? = nil, avatarInitials: String? = nil, lastMessageAt: Date? = nil, lastFromMe: Bool = false, lastMessageIsImage: Bool = false, avatarUrl: String? = nil) {
+    init(id: UUID = UUID(), name: String, avatar: String, avatarColors: [UInt], lastMessage: String, time: String, unread: Int, isPinned: Bool, isOfficial: Bool, isOnline: Bool, isGroup: Bool, participantCount: Int, messages: [ChatMessage], otherUserId: UUID? = nil, avatarInitials: String? = nil, lastMessageAt: Date? = nil, lastFromMe: Bool = false, lastMessageIsImage: Bool = false, lastMessageType: String = "text", avatarUrl: String? = nil) {
         self.id = id
         self.name = name
         self.avatar = avatar
@@ -91,6 +104,7 @@ struct Conversation: Identifiable {
         self.lastMessageAt = lastMessageAt
         self.lastFromMe = lastFromMe
         self.lastMessageIsImage = lastMessageIsImage
+        self.lastMessageType = lastMessageType
         self.avatarUrl = avatarUrl
     }
 }
