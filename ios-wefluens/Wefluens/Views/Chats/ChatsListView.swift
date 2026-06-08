@@ -12,6 +12,7 @@ struct ChatsListView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var searchText: String = ""
     @State private var showCreateGroup: Bool = false
+    @State private var path = NavigationPath()
 
     private var conversations: [Conversation] { data.conversations }
 
@@ -36,7 +37,7 @@ struct ChatsListView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(spacing: 18) {
                     header
@@ -62,9 +63,15 @@ struct ChatsListView: View {
             .navigationDestination(for: DMChatRoute.self) { route in
                 ChatDetailView(route: route)
             }
+            .navigationDestination(for: GroupChatRoute.self) { route in
+                GroupChatDetailView(route: route)
+            }
             .fullScreenCover(isPresented: $showCreateGroup) {
                 NavigationStack {
-                    CreateGroupView()
+                    CreateGroupView(onCreated: { newRoute in
+                        showCreateGroup = false
+                        path.append(newRoute)
+                    })
                 }
             }
             .onAppear {
@@ -82,6 +89,17 @@ struct ChatsListView: View {
             avatarColors: convo.avatarColors,
             initials: convo.avatarInitials ?? "?",
             isOnline: convo.isOnline,
+            avatarURL: convo.avatarUrl
+        )
+    }
+
+    /// Builds the navigation route for a group thread.
+    private func groupRoute(for convo: Conversation) -> GroupChatRoute {
+        GroupChatRoute(
+            groupId: convo.id,
+            title: convo.name,
+            avatarColors: convo.avatarColors,
+            memberCount: convo.participantCount,
             avatarURL: convo.avatarUrl
         )
     }
@@ -166,10 +184,17 @@ struct ChatsListView: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, convo in
-                    NavigationLink(value: route(for: convo)) {
-                        ConversationRow(conversation: convo)
+                    if convo.isGroup {
+                        NavigationLink(value: groupRoute(for: convo)) {
+                            ConversationRow(conversation: convo)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        NavigationLink(value: route(for: convo)) {
+                            ConversationRow(conversation: convo)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                     if index < items.count - 1 {
                         Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 78)
                     }

@@ -133,6 +133,37 @@ struct DMChatRoute: Hashable, Identifiable {
     var id: UUID { threadId }
 }
 
+/// Hashable navigation route to open a group chat (the chat list or right after
+/// creating a new group).
+struct GroupChatRoute: Hashable, Identifiable {
+    let groupId: UUID
+    let title: String
+    let avatarColors: [UInt]
+    let memberCount: Int
+    /// The group's avatar photo URL (nil — groups use a symbol avatar for now).
+    let avatarURL: String?
+
+    var id: UUID { groupId }
+}
+
+/// One message in a group thread. Unlike a 1:1 `ChatMessage`, every message
+/// carries its sender's identity so incoming bubbles can show who sent it
+/// (avatar + name). Text-only for now.
+struct GroupChatMessage: Identifiable, Equatable {
+    let id: UUID
+    let text: String
+    let sender: MessageSender
+    /// The sender's profile id (used to group consecutive messages from one person).
+    let senderId: UUID
+    /// Display name shown above incoming bubbles.
+    let senderName: String
+    /// Deterministic gradient for the sender's avatar fallback.
+    let senderColors: [UInt]
+    /// The sender's profile photo URL (nil → gradient + initials).
+    let senderAvatarUrl: String?
+    let time: String
+}
+
 // MARK: - Contacts
 
 struct Contact: Identifiable {

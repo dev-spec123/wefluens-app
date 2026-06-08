@@ -72,7 +72,8 @@ enum L10n: String {
 
     // Create Group
     case createGroupTitle, createGroupSelect, createGroupCreate, createGroupSearch
-    case createGroupSelected
+    case createGroupSelected, createGroupNamePlaceholder, createGroupNoFriends
+    case createGroupNoFriendsHint, createGroupError
 
     // Discover
     case discoverTitle, discoverSubtitle, discoverFeatured, discoverViewBrief, discoverTopBrands, discoverOpenCampaigns, discoverActive
@@ -209,6 +210,10 @@ final class LocalizationManager {
             .createGroupTitle: "New Group Chat", .createGroupSelect: "Select Members",
             .createGroupCreate: "Create Group", .createGroupSearch: "Search contacts…",
             .createGroupSelected: "selected",
+            .createGroupNamePlaceholder: "Group name (optional)",
+            .createGroupNoFriends: "No friends yet",
+            .createGroupNoFriendsHint: "Add some friends first, then start a group",
+            .createGroupError: "Couldn't create the group. Please try again.",
             .discoverTitle: "Discover", .discoverSubtitle: "Brands & campaigns for your roster",
             .discoverFeatured: "FEATURED", .discoverViewBrief: "View brief", .discoverTopBrands: "Top Brands",
             .discoverOpenCampaigns: "Open Campaigns", .discoverActive: "active",
@@ -345,6 +350,10 @@ final class LocalizationManager {
             .createGroupTitle: "发起群聊", .createGroupSelect: "选择成员",
             .createGroupCreate: "创建群聊", .createGroupSearch: "搜索联系人…",
             .createGroupSelected: "已选",
+            .createGroupNamePlaceholder: "群聊名称（选填）",
+            .createGroupNoFriends: "还没有好友",
+            .createGroupNoFriendsHint: "先去添加好友，再发起群聊",
+            .createGroupError: "创建群聊失败，请重试。",
             .discoverTitle: "发现", .discoverSubtitle: "为你的网红阵容精选品牌与活动",
             .discoverFeatured: "精选", .discoverViewBrief: "查看简介", .discoverTopBrands: "热门品牌",
             .discoverOpenCampaigns: "开放活动", .discoverActive: "个进行中",
@@ -481,6 +490,10 @@ final class LocalizationManager {
             .createGroupTitle: "Nuevo Grupo", .createGroupSelect: "Seleccionar Miembros",
             .createGroupCreate: "Crear Grupo", .createGroupSearch: "Buscar contactos…",
             .createGroupSelected: "seleccionados",
+            .createGroupNamePlaceholder: "Nombre del grupo (opcional)",
+            .createGroupNoFriends: "Aún no tienes amigos",
+            .createGroupNoFriendsHint: "Agrega amigos primero para crear un grupo",
+            .createGroupError: "No se pudo crear el grupo. Inténtalo de nuevo.",
             .discoverTitle: "Descubrir", .discoverSubtitle: "Marcas y campañas para tu roster",
             .discoverFeatured: "DESTACADO", .discoverViewBrief: "Ver brief", .discoverTopBrands: "Marcas Top",
             .discoverOpenCampaigns: "Campañas Abiertas", .discoverActive: "activas",

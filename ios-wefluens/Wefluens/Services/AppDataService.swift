@@ -212,9 +212,10 @@ final class AppDataService {
 
     // MARK: - Conversations
 
-    /// Loads the real 1:1 DM threads via the `list_dm_threads` RPC (other person's
-    /// profile + last-message preview + my unread count, one round trip). The old
-    /// per-user `conversations`/`messages` tables are no longer used here.
+    /// Loads the conversation inbox: real 1:1 DM threads (`list_dm_threads`) and
+    /// group threads (`list_group_threads`) in parallel, merged and sorted by the
+    /// last-message time so DMs and groups interleave like one inbox. Each loader
+    /// isolates its own errors so one failing can't blank the other.
     @MainActor
     func loadConversations() async {
         guard let uid = userId else {
@@ -224,13 +225,26 @@ final class AppDataService {
         isLoadingConversations = true
         defer { isLoadingConversations = false }
 
+        async let dmsTask = loadDMThreads(uid: uid)
+        async let groupsTask = loadGroupThreads(uid: uid)
+        let dms = await dmsTask
+        let groups = await groupsTask
+        conversations = (dms + groups).sorted {
+            ($0.lastMessageAt ?? .distantPast) > ($1.lastMessageAt ?? .distantPast)
+        }
+    }
+
+    /// Loads my 1:1 DM threads via `list_dm_threads`. Returns [] on error so a
+    /// group-load failure can't blank the DMs (and vice-versa).
+    @MainActor
+    private func loadDMThreads(uid: UUID) async -> [Conversation] {
         do {
             let rows: [DMThreadListRow] = try await supabase
                 .rpc("list_dm_threads")
                 .execute()
                 .value
 
-            conversations = rows.map { row in
+            return rows.map { row in
                 let displayName = row.otherName ?? row.otherHandle ?? "User"
                 return Conversation(
                     id: row.threadId,
@@ -257,7 +271,49 @@ final class AppDataService {
             }
         } catch {
             print("⚠️ DM threads load failed: \(error)")
-            conversations = []
+            return []
+        }
+    }
+
+    /// Loads my group threads via `list_group_threads` (member count + last-message
+    /// preview + my unread count). Returns [] on error. Groups render with a
+    /// `person.3.fill` symbol avatar (no per-group photo yet).
+    @MainActor
+    private func loadGroupThreads(uid: UUID) async -> [Conversation] {
+        do {
+            let rows: [GroupThreadListRow] = try await supabase
+                .rpc("list_group_threads")
+                .execute()
+                .value
+
+            return rows.map { row in
+                let displayName = (row.name.flatMap { $0.isEmpty ? nil : $0 }) ?? "Group"
+                return Conversation(
+                    id: row.groupId,
+                    name: displayName,
+                    avatar: "person.3.fill",
+                    avatarColors: Self.avatarPalette(for: row.groupId),
+                    lastMessage: row.lastMessage ?? "",
+                    time: Self.relativeTime(from: row.lastMessageAt),
+                    unread: max(0, row.unreadCount),
+                    isPinned: false,
+                    isOfficial: false,
+                    isOnline: false,
+                    isGroup: true,
+                    participantCount: row.memberCount,
+                    messages: [],
+                    otherUserId: nil,
+                    avatarInitials: nil,
+                    lastMessageAt: row.lastMessageAt,
+                    lastFromMe: row.lastSenderId == uid,
+                    lastMessageIsImage: false,
+                    lastMessageType: row.lastMessageType ?? "text",
+                    avatarUrl: row.avatarUrl
+                )
+            }
+        } catch {
+            print("⚠️ Group threads load failed: \(error)")
+            return []
         }
     }
 
@@ -711,20 +767,109 @@ final class AppDataService {
 
     /// Keeps the conversation list + tab badge live. Runs until the calling task
     /// is cancelled — tie this to a long-lived view's `.task` (RootTabView). RLS
-    /// scopes delivered inserts to threads I'm part of, so any new DM (incoming or
-    /// my own) refreshes the inbox.
+    /// scopes delivered inserts to threads/groups I'm part of, so any new message
+    /// (DM or group, incoming or my own) refreshes the inbox.
     @MainActor
     func observeInbox() async {
         guard let uid = userId else { return }
-        let channel = supabase.channel("dm-inbox-\(uid.uuidString)")
-        let inserts = channel.postgresChange(InsertAction.self, schema: "public", table: "dm_messages")
+        let channel = supabase.channel("inbox-\(uid.uuidString)")
+        let dmInserts = channel.postgresChange(InsertAction.self, schema: "public", table: "dm_messages")
+        let groupInserts = channel.postgresChange(InsertAction.self, schema: "public", table: "group_messages")
         await channel.subscribe()
         defer {
             let ch = channel
             Task { await ch.unsubscribe(); await supabase.removeChannel(ch) }
         }
-        for await _ in inserts {
-            await loadConversations()
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { [weak self] in
+                for await _ in dmInserts { await self?.loadConversations() }
+            }
+            group.addTask { [weak self] in
+                for await _ in groupInserts { await self?.loadConversations() }
+            }
+        }
+    }
+
+    // MARK: - Group Chat
+
+    /// Creates a group atomically via the friend-validated `create_group` function:
+    /// the server adds me as admin + each selected friend as a member, validates
+    /// every member with `are_friends`, and rolls back entirely on failure (never a
+    /// half-empty group). Refreshes the inbox and returns the new group id.
+    @MainActor
+    func createGroup(name: String, memberIds: [UUID]) async throws -> UUID {
+        let raw: String = try await supabase
+            .rpc("create_group", params: CreateGroupParams(
+                p_name: name,
+                p_member_ids: memberIds.map { $0.uuidString }
+            ))
+            .execute()
+            .value
+        await loadConversations()
+        guard let groupId = UUID(uuidString: raw) else {
+            throw DataError(message: "Invalid group id")
+        }
+        return groupId
+    }
+
+    /// Loads all messages in a group (RLS limits this to members), each with its
+    /// sender's profile embedded so incoming bubbles can show the sender's avatar +
+    /// name. Mapped to the `GroupChatMessage` UI model.
+    @MainActor
+    func loadGroupMessages(groupId: UUID) async -> [GroupChatMessage] {
+        guard let uid = userId else { return [] }
+        do {
+            let rows: [GroupMessageRow] = try await supabase
+                .from("group_messages")
+                .select("id,group_id,sender_id,body,message_type,created_at,reply_to_message_id,sender:profiles!group_messages_sender_id_fkey(id,name,handle,avatar_url)")
+                .eq("group_id", value: groupId.uuidString)
+                .order("created_at", ascending: true)
+                .execute()
+                .value
+            return rows.map { row in
+                let name = row.sender?.name ?? row.sender?.handle ?? "User"
+                return GroupChatMessage(
+                    id: row.id,
+                    text: row.body,
+                    sender: row.senderId == uid ? .me : .them,
+                    senderId: row.senderId,
+                    senderName: name,
+                    senderColors: Self.avatarPalette(for: row.senderId),
+                    senderAvatarUrl: row.sender?.avatarUrl,
+                    time: Self.clockTime(from: row.createdAt)
+                )
+            }
+        } catch {
+            print("⚠️ Load group messages failed: \(error)")
+            return []
+        }
+    }
+
+    /// Sends a group message via the member-validated `send_group_message` function
+    /// (text only for now). Refreshes the inbox so the preview/unread/badge stay
+    /// correct. The list re-reads from the DB — never a fake local append.
+    @MainActor
+    func sendGroupMessage(groupId: UUID, body: String, replyTo: UUID? = nil) async throws {
+        let _: String = try await supabase
+            .rpc("send_group_message", params: SendGroupMessageParams(
+                p_group: groupId.uuidString,
+                p_body: body,
+                p_reply_to: replyTo?.uuidString
+            ))
+            .execute()
+            .value
+        await loadConversations()
+    }
+
+    /// Marks the group read up to now (clears my unread count) via `mark_group_read`.
+    @MainActor
+    func markGroupRead(groupId: UUID) async {
+        do {
+            _ = try await supabase
+                .rpc("mark_group_read", params: MarkGroupReadParams(p_group: groupId.uuidString))
+                .execute()
+        } catch {
+            print("⚠️ mark_group_read failed: \(error)")
         }
     }
 

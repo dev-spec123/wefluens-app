@@ -382,6 +382,92 @@ nonisolated struct MarkThreadReadParams: Encodable, Sendable {
     let p_thread: String
 }
 
+// MARK: - Group Chat
+
+/// One row from the `list_group_threads` RPC — a group plus its member count,
+/// last-message preview, and my unread count.
+nonisolated struct GroupThreadListRow: Codable, Identifiable, Sendable {
+    let groupId: UUID
+    let name: String?
+    let avatarUrl: String?
+    let createdBy: UUID?
+    let lastMessage: String?
+    let lastMessageAt: Date?
+    let lastSenderId: UUID?
+    let lastMessageType: String?
+    let memberCount: Int
+    let unreadCount: Int
+
+    var id: UUID { groupId }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case groupId = "group_id"
+        case avatarUrl = "avatar_url"
+        case createdBy = "created_by"
+        case lastMessage = "last_message"
+        case lastMessageAt = "last_message_at"
+        case lastSenderId = "last_sender_id"
+        case lastMessageType = "last_message_type"
+        case memberCount = "member_count"
+        case unreadCount = "unread_count"
+    }
+}
+
+/// The sender profile embedded in a group message read (`profiles` is world-readable,
+/// so this resolves even for co-members who aren't my friends).
+nonisolated struct GroupMessageSender: Codable, Sendable {
+    let id: UUID
+    let name: String?
+    let handle: String?
+    let avatarUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, handle
+        case avatarUrl = "avatar_url"
+    }
+}
+
+/// A single group message row from `group_messages`, with its sender's profile
+/// embedded via the `group_messages_sender_id_fkey` foreign key.
+nonisolated struct GroupMessageRow: Codable, Identifiable, Sendable {
+    let id: UUID
+    let groupId: UUID
+    let senderId: UUID
+    let body: String
+    let messageType: String?
+    let createdAt: Date?
+    let replyToMessageId: UUID?
+    let sender: GroupMessageSender?
+
+    enum CodingKeys: String, CodingKey {
+        case id, body, sender
+        case groupId = "group_id"
+        case senderId = "sender_id"
+        case messageType = "message_type"
+        case createdAt = "created_at"
+        case replyToMessageId = "reply_to_message_id"
+    }
+}
+
+/// Params for the `create_group` RPC. Member ids are the selected friends'
+/// profile ids (the server adds me as admin and validates each via `are_friends`).
+nonisolated struct CreateGroupParams: Encodable, Sendable {
+    let p_name: String
+    let p_member_ids: [String]
+}
+
+nonisolated struct SendGroupMessageParams: Encodable, Sendable {
+    let p_group: String
+    let p_body: String
+    /// Optional id of the quoted message. Omitted (nil) → server default NULL → unchanged behavior.
+    let p_reply_to: String?
+}
+
+nonisolated struct MarkGroupReadParams: Encodable, Sendable {
+    let p_group: String
+}
+
 // MARK: - Campaign
 
 nonisolated struct CampaignRow: Codable, Identifiable, Sendable {
