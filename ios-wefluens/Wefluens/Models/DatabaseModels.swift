@@ -322,6 +322,8 @@ nonisolated struct DMMessageRow: Codable, Identifiable, Sendable {
     let fileMime: String?
     let readAt: Date?
     let createdAt: Date?
+    /// Id of the message this one is replying to (nil for a normal message).
+    let replyToMessageId: UUID?
 
     enum CodingKeys: String, CodingKey {
         case id, body
@@ -337,6 +339,7 @@ nonisolated struct DMMessageRow: Codable, Identifiable, Sendable {
         case fileMime = "file_mime"
         case readAt = "read_at"
         case createdAt = "created_at"
+        case replyToMessageId = "reply_to_message_id"
     }
 }
 
@@ -347,6 +350,8 @@ nonisolated struct GetOrCreateThreadParams: Encodable, Sendable {
 nonisolated struct SendDMParams: Encodable, Sendable {
     let p_other: String
     let p_body: String
+    /// Optional id of the quoted message. Omitted (nil) → server default NULL → unchanged behavior.
+    let p_reply_to: String?
 }
 
 nonisolated struct SendDMMediaParams: Encodable, Sendable {
@@ -355,6 +360,8 @@ nonisolated struct SendDMMediaParams: Encodable, Sendable {
     let p_caption: String
     let p_width: Int
     let p_height: Int
+    /// Optional id of the quoted message. Omitted (nil) → server default NULL → unchanged behavior.
+    let p_reply_to: String?
 }
 
 /// Params for the generic `send_dm_attachment` RPC (file / video). Optional
@@ -367,6 +374,8 @@ nonisolated struct SendDMAttachmentParams: Encodable, Sendable {
     let p_file_name: String?
     let p_file_size: Int?
     let p_file_mime: String?
+    /// Optional id of the quoted message. Omitted (nil) → server default NULL → unchanged behavior.
+    let p_reply_to: String?
 }
 
 nonisolated struct MarkThreadReadParams: Encodable, Sendable {

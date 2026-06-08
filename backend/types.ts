@@ -243,6 +243,7 @@ export type Database = {
           message_type: string
           read_at: string | null
           recipient_id: string
+          reply_to_message_id: string | null
           sender_id: string
           thread_id: string
           thumb_url: string | null
@@ -261,6 +262,7 @@ export type Database = {
           message_type?: string
           read_at?: string | null
           recipient_id: string
+          reply_to_message_id?: string | null
           sender_id: string
           thread_id: string
           thumb_url?: string | null
@@ -279,6 +281,7 @@ export type Database = {
           message_type?: string
           read_at?: string | null
           recipient_id?: string
+          reply_to_message_id?: string | null
           sender_id?: string
           thread_id?: string
           thumb_url?: string | null
@@ -289,6 +292,13 @@ export type Database = {
             columns: ["recipient_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dm_messages_reply_to_message_id_fkey"
+            columns: ["reply_to_message_id"]
+            isOneToOne: false
+            referencedRelation: "dm_messages"
             referencedColumns: ["id"]
           },
           {
@@ -628,7 +638,10 @@ export type Database = {
           role: string
         }[]
       }
-      send_dm: { Args: { p_body: string; p_other: string }; Returns: string }
+      send_dm: {
+        Args: { p_body: string; p_other: string; p_reply_to?: string }
+        Returns: string
+      }
       send_dm_attachment: {
         Args: {
           p_caption?: string
@@ -639,6 +652,7 @@ export type Database = {
           p_height?: number
           p_other: string
           p_path: string
+          p_reply_to?: string
           p_thumb_path?: string
           p_type: string
           p_width?: number
@@ -651,6 +665,7 @@ export type Database = {
           p_height?: number
           p_image_url: string
           p_other: string
+          p_reply_to?: string
           p_width?: number
         }
         Returns: string

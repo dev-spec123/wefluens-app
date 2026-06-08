@@ -40,12 +40,15 @@ struct ChatMessage: Identifiable, Equatable {
     /// When the recipient read this message. Only meaningful for messages I sent:
     /// `nil` = delivered but unread, non-nil = read. Drives the read receipt.
     let readAt: Date?
+    /// Id of the message this one quotes (nil for a normal message). Resolved
+    /// against the loaded thread to render the quoted preview above the bubble.
+    let replyTo: UUID?
 
     init(id: UUID = UUID(), text: String, sender: MessageSender, time: String,
          kind: ChatMessageKind = .text, imagePath: String? = nil,
          imageWidth: Int? = nil, imageHeight: Int? = nil,
          fileName: String? = nil, fileSize: Int? = nil, fileMime: String? = nil,
-         readAt: Date? = nil) {
+         readAt: Date? = nil, replyTo: UUID? = nil) {
         self.id = id
         self.text = text
         self.sender = sender
@@ -58,6 +61,7 @@ struct ChatMessage: Identifiable, Equatable {
         self.fileSize = fileSize
         self.fileMime = fileMime
         self.readAt = readAt
+        self.replyTo = replyTo
     }
 }
 

@@ -534,9 +534,13 @@ final class AppDataService {
     /// tab badge stay correct. Returns the thread id.
     @MainActor
     @discardableResult
-    func sendMessage(to otherId: UUID, body: String) async throws -> UUID {
+    func sendMessage(to otherId: UUID, body: String, replyTo: UUID? = nil) async throws -> UUID {
         let raw: String = try await supabase
-            .rpc("send_dm", params: SendDMParams(p_other: otherId.uuidString, p_body: body))
+            .rpc("send_dm", params: SendDMParams(
+                p_other: otherId.uuidString,
+                p_body: body,
+                p_reply_to: replyTo?.uuidString
+            ))
             .execute()
             .value
         await loadConversations()
@@ -568,14 +572,15 @@ final class AppDataService {
     /// Pure DB — never any email. Refreshes the conversation list afterwards.
     @MainActor
     @discardableResult
-    func sendImageMessage(to otherId: UUID, imagePath: String, caption: String, width: Int, height: Int) async throws -> UUID {
+    func sendImageMessage(to otherId: UUID, imagePath: String, caption: String, width: Int, height: Int, replyTo: UUID? = nil) async throws -> UUID {
         let raw: String = try await supabase
             .rpc("send_dm_media", params: SendDMMediaParams(
                 p_other: otherId.uuidString,
                 p_image_url: imagePath,
                 p_caption: caption,
                 p_width: width,
-                p_height: height
+                p_height: height,
+                p_reply_to: replyTo?.uuidString
             ))
             .execute()
             .value
@@ -611,7 +616,7 @@ final class AppDataService {
     /// function (leaves send_dm / send_dm_media untouched). Refreshes the inbox.
     @MainActor
     @discardableResult
-    func sendFileMessage(to otherId: UUID, upload: ChatFileUpload) async throws -> UUID {
+    func sendFileMessage(to otherId: UUID, upload: ChatFileUpload, replyTo: UUID? = nil) async throws -> UUID {
         let raw: String = try await supabase
             .rpc("send_dm_attachment", params: SendDMAttachmentParams(
                 p_other: otherId.uuidString,
@@ -620,7 +625,8 @@ final class AppDataService {
                 p_caption: "",
                 p_file_name: upload.fileName,
                 p_file_size: upload.fileSize,
-                p_file_mime: upload.mime
+                p_file_mime: upload.mime,
+                p_reply_to: replyTo?.uuidString
             ))
             .execute()
             .value
@@ -680,7 +686,8 @@ final class AppDataService {
                     fileName: row.fileName,
                     fileSize: row.fileSize,
                     fileMime: row.fileMime,
-                    readAt: row.readAt
+                    readAt: row.readAt,
+                    replyTo: row.replyToMessageId
                 )
             }
         } catch {
