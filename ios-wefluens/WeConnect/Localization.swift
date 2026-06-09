@@ -49,7 +49,7 @@ enum L10n: String {
     case chatFilePreview, chatAttachPhoto, chatAttachFile, chatFileTooLarge, chatFileError
     case chatRead, chatDelivered
     case chatReply, chatCopy, chatYou, chatVideoPreview
-    case chatForward, chatDelete, chatRecall, chatRecallFailed, chatClearHistory, chatClearHistoryConfirm, chatMessageRecalled, chatDeleteConversation
+    case chatForward, chatDelete, chatRecall, chatRecallFailed, chatRecallExpired, chatRecallAlreadyRecalled, chatRecallForbidden, chatRecallError, chatClearHistory, chatClearHistoryConfirm, chatMessageRecalled, chatDeleteConversation
 
     // Forward message
     case forwardTitle, forwardSend, forwardFriends, forwardGroups
@@ -195,6 +195,10 @@ final class LocalizationManager {
             .chatDelete: "Delete",
             .chatRecall: "Recall",
             .chatRecallFailed: "Couldn't recall. Either you're not the sender or the 2-minute window has expired.",
+            .chatRecallExpired: "The 2-minute recall window has expired.",
+            .chatRecallAlreadyRecalled: "This message has already been recalled.",
+            .chatRecallForbidden: "You can only recall your own messages.",
+            .chatRecallError: "Couldn't recall. Please try again.",
             .chatClearHistory: "Clear Chat History",
             .chatDeleteConversation: "Delete this conversation? It will only be removed for you.",
             .chatClearHistoryConfirm: "Clear all chat history? This only affects you — everyone else keeps their messages.",
@@ -363,6 +367,10 @@ final class LocalizationManager {
             .chatDelete: "删除",
             .chatRecall: "撤回",
             .chatRecallFailed: "撤回失败。你可能不是发送者，或已超过2分钟时限。",
+            .chatRecallExpired: "已超过2分钟，无法撤回。",
+            .chatRecallAlreadyRecalled: "这条消息已被撤回。",
+            .chatRecallForbidden: "你只能撤回自己发送的消息。",
+            .chatRecallError: "撤回失败，请重试。",
             .chatClearHistory: "清空聊天记录",
             .chatDeleteConversation: "删除此会话？仅对你移除。",
             .chatClearHistoryConfirm: "确定清空全部聊天记录？此操作仅对你生效，其他人不受影响。",
@@ -531,6 +539,10 @@ final class LocalizationManager {
             .chatDelete: "Eliminar",
             .chatRecall: "Retirar",
             .chatRecallFailed: "No se pudo retirar. Es posible que no seas el remitente o que hayan pasado más de 2 minutos.",
+            .chatRecallExpired: "La ventana de 2 minutos para retirar ha expirado.",
+            .chatRecallAlreadyRecalled: "Este mensaje ya ha sido retirado.",
+            .chatRecallForbidden: "Solo puedes retirar tus propios mensajes.",
+            .chatRecallError: "No se pudo retirar. Inténtalo de nuevo.",
             .chatClearHistory: "Vaciar historial",
             .chatDeleteConversation: "¿Eliminar esta conversación? Solo se quitará para ti.",
             .chatClearHistoryConfirm: "¿Vaciar todo el historial del chat? Solo te afecta a ti; los demás conservan sus mensajes.",

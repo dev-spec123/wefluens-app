@@ -47,13 +47,17 @@ struct ChatMessage: Identifiable, Equatable {
     let isRecalled: Bool
     /// The sender's user id (used to gate recall: only the sender can recall).
     let senderId: UUID?
+    /// When this message was created (server timestamptz). Used by the client-side
+    /// 2-minute recall window gate so the button isn't shown for expired messages.
+    let createdAt: Date?
 
     init(id: UUID = UUID(), text: String, sender: MessageSender, time: String,
          kind: ChatMessageKind = .text, imagePath: String? = nil,
          imageWidth: Int? = nil, imageHeight: Int? = nil,
          fileName: String? = nil, fileSize: Int? = nil, fileMime: String? = nil,
          readAt: Date? = nil, replyTo: UUID? = nil,
-         isRecalled: Bool = false, senderId: UUID? = nil) {
+         isRecalled: Bool = false, senderId: UUID? = nil,
+         createdAt: Date? = nil) {
         self.id = id
         self.text = text
         self.sender = sender
@@ -69,6 +73,7 @@ struct ChatMessage: Identifiable, Equatable {
         self.replyTo = replyTo
         self.isRecalled = isRecalled
         self.senderId = senderId
+        self.createdAt = createdAt
     }
 }
 
@@ -184,13 +189,17 @@ struct GroupChatMessage: Identifiable, Equatable {
     let fileMime: String?
     /// True when the sender recalled this message (shows "Message recalled" placeholder).
     let isRecalled: Bool
+    /// When this message was created (server timestamptz). Used by the client-side
+    /// 2-minute recall window gate so the button isn't shown for expired messages.
+    let createdAt: Date?
 
     init(id: UUID, text: String, sender: MessageSender, senderId: UUID,
          senderName: String, senderColors: [UInt], senderAvatarUrl: String?,
          time: String, kind: ChatMessageKind = .text, imagePath: String? = nil,
          imageWidth: Int? = nil, imageHeight: Int? = nil,
          fileName: String? = nil, fileSize: Int? = nil, fileMime: String? = nil,
-         isRecalled: Bool = false) {
+         isRecalled: Bool = false,
+         createdAt: Date? = nil) {
         self.id = id
         self.text = text
         self.sender = sender
@@ -207,6 +216,7 @@ struct GroupChatMessage: Identifiable, Equatable {
         self.fileSize = fileSize
         self.fileMime = fileMime
         self.isRecalled = isRecalled
+        self.createdAt = createdAt
     }
 }
 

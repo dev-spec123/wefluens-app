@@ -802,7 +802,8 @@ final class AppDataService {
                     readAt: row.readAt,
                     replyTo: row.replyToMessageId,
                     isRecalled: isRecalled,
-                    senderId: row.senderId
+                    senderId: row.senderId,
+                    createdAt: row.createdAt
                 )
             }
         } catch {
@@ -950,7 +951,8 @@ final class AppDataService {
                     fileName: isRecalled ? nil : row.fileName,
                     fileSize: isRecalled ? nil : row.fileSize,
                     fileMime: isRecalled ? nil : row.fileMime,
-                    isRecalled: isRecalled
+                    isRecalled: isRecalled,
+                    createdAt: row.createdAt
                 )
             }
         } catch {

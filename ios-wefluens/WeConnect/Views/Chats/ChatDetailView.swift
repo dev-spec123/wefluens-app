@@ -93,7 +93,9 @@ struct ChatDetailView: View {
             Button(l10n.t(.adminCancel), role: .cancel) { }
         }
         .alert(l10n.t(.chatRecallFailed), isPresented: recallErrorBinding) {
-            Button(l10n.t(.authVerificationSentOk), role: .cancel) { vm?.recallFailed = false }
+            Button(l10n.t(.authVerificationSentOk), role: .cancel) { vm?.recallError = nil }
+        } message: {
+            if let key = vm?.recallError { Text(l10n.t(key)) }
         }
         .task {
             guard vm == nil else { return }
@@ -112,8 +114,8 @@ struct ChatDetailView: View {
 
     private var recallErrorBinding: Binding<Bool> {
         Binding(
-            get: { vm?.recallFailed ?? false },
-            set: { newValue in vm?.recallFailed = newValue }
+            get: { vm?.recallError != nil },
+            set: { newValue in if !newValue { vm?.recallError = nil } }
         )
     }
 
@@ -469,11 +471,14 @@ private struct MessageBubble: View {
     private var isMe: Bool { message.sender == .me }
 
     /// The recall window is 2 minutes from when the message was created.
-    /// Since `ChatMessage` doesn't hold a raw date, we gate conservatively:
-    /// if the message is mine and has not been recalled yet, allow recall.
-    /// The server enforces the hard 2-minute limit — client just shows the option.
+    /// Client-side gate so the button is hidden for expired messages (server also
+    /// enforces the hard 2-minute limit). Messages without a createdAt date
+    /// (legacy / import) fall back to the old conservative behaviour: show
+    /// the option and let the server decide.
     private var isWithinRecallWindow: Bool {
-        isMe && !message.isRecalled
+        guard isMe, !message.isRecalled else { return false }
+        guard let createdAt = message.createdAt else { return true }
+        return Date().timeIntervalSince(createdAt) <= 120
     }
 
     var body: some View {

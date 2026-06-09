@@ -18,7 +18,10 @@ final class ChatThreadViewModel {
     var messages: [ChatMessage] = []
     var isLoading = true
     var sendFailed = false
-    var recallFailed = false
+    /// When non-nil, a recall error alert is shown with this specific localized
+    /// message (resolved in the view via `l10n.t(recallError!)`).
+    /// Set to nil to dismiss. Replaces the old generic `recallFailed` bool.
+    var recallError: L10n?
     var isSendingImage = false
     var isSendingFile = false
     /// The message the user is quoting in their next send (nil = normal message).
@@ -125,7 +128,8 @@ final class ChatThreadViewModel {
     }
 
     /// Recalls a message for everyone (B). Only my own messages within 2 minutes.
-    /// Sets recallFailed when the RPC is rejected so the UI can show a user-facing alert.
+    /// Parses the server error to show a specific user-facing message instead of
+    /// the old catch-all 「撤回失败」 alert.
     func recallMessage(_ messageId: UUID) async {
         do {
             try await data.recallMessage(messageId: messageId, kind: "dm")
@@ -138,15 +142,26 @@ final class ChatThreadViewModel {
                     kind: old.kind, imagePath: nil, imageWidth: nil, imageHeight: nil,
                     fileName: nil, fileSize: nil, fileMime: nil,
                     readAt: old.readAt, replyTo: old.replyTo,
-                    isRecalled: true, senderId: old.senderId
+                    isRecalled: true, senderId: old.senderId,
+                    createdAt: old.createdAt
                 )
             }
             await reload()
         } catch {
             let msg = "\(error)"
             print("⚠️ recall_message (dm) failed: \(msg)")
-            recallFailed = true
+            recallError = recallErrorMessage(from: msg)
         }
+    }
+
+    /// Maps a server `raise exception` message to a localization key.
+    /// Unknown / network errors fall back to the generic 「撤回失败，请重试」.
+    private func recallErrorMessage(from raw: String) -> L10n {
+        let uppercased = raw.uppercased()
+        if uppercased.contains("EXPIRED") { return .chatRecallExpired }
+        if uppercased.contains("ALREADY_RECALLED") { return .chatRecallAlreadyRecalled }
+        if uppercased.contains("FORBIDDEN") { return .chatRecallForbidden }
+        return .chatRecallError
     }
 
     /// Clears the entire DM thread for me only (C).
