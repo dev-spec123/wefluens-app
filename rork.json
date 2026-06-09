@@ -4,7 +4,10 @@
     {
       "name": "Wefluens",
       "path": "ios-wefluens",
-      "framework": "swift"
+      "framework": "swift",
+      "settings": {
+        "displayName": "WeConnect"
+      }
     },
     {
       "name": "Backend",

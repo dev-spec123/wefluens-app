@@ -166,6 +166,35 @@ export type Database = {
           },
         ]
       }
+      conversation_hides: {
+        Row: {
+          conversation_id: string
+          conversation_type: string
+          hidden_at: string
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          conversation_type: string
+          hidden_at?: string
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          conversation_type?: string
+          hidden_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_hides_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           avatar: string | null
@@ -228,6 +257,45 @@ export type Database = {
           },
         ]
       }
+      dm_clears: {
+        Row: {
+          cleared_before: string
+          created_at: string | null
+          id: string
+          thread_id: string
+          user_id: string
+        }
+        Insert: {
+          cleared_before?: string
+          created_at?: string | null
+          id?: string
+          thread_id: string
+          user_id: string
+        }
+        Update: {
+          cleared_before?: string
+          created_at?: string | null
+          id?: string
+          thread_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dm_clears_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "dm_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dm_clears_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dm_messages: {
         Row: {
           body: string
@@ -242,6 +310,8 @@ export type Database = {
           image_width: number | null
           message_type: string
           read_at: string | null
+          recalled_at: string | null
+          recalled_by: string | null
           recipient_id: string
           reply_to_message_id: string | null
           sender_id: string
@@ -261,6 +331,8 @@ export type Database = {
           image_width?: number | null
           message_type?: string
           read_at?: string | null
+          recalled_at?: string | null
+          recalled_by?: string | null
           recipient_id: string
           reply_to_message_id?: string | null
           sender_id: string
@@ -280,6 +352,8 @@ export type Database = {
           image_width?: number | null
           message_type?: string
           read_at?: string | null
+          recalled_at?: string | null
+          recalled_by?: string | null
           recipient_id?: string
           reply_to_message_id?: string | null
           sender_id?: string
@@ -287,6 +361,13 @@ export type Database = {
           thumb_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "dm_messages_recalled_by_fkey"
+            columns: ["recalled_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "dm_messages_recipient_id_fkey"
             columns: ["recipient_id"]
@@ -458,6 +539,45 @@ export type Database = {
           },
         ]
       }
+      group_clears: {
+        Row: {
+          cleared_before: string
+          created_at: string | null
+          group_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          cleared_before?: string
+          created_at?: string | null
+          group_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          cleared_before?: string
+          created_at?: string | null
+          group_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_clears_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "group_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_clears_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       group_members: {
         Row: {
           group_id: string
@@ -512,6 +632,8 @@ export type Database = {
           image_width: number | null
           message_type: string
           read_at: string | null
+          recalled_at: string | null
+          recalled_by: string | null
           reply_to_message_id: string | null
           sender_id: string
           thumb_url: string | null
@@ -530,6 +652,8 @@ export type Database = {
           image_width?: number | null
           message_type?: string
           read_at?: string | null
+          recalled_at?: string | null
+          recalled_by?: string | null
           reply_to_message_id?: string | null
           sender_id: string
           thumb_url?: string | null
@@ -548,6 +672,8 @@ export type Database = {
           image_width?: number | null
           message_type?: string
           read_at?: string | null
+          recalled_at?: string | null
+          recalled_by?: string | null
           reply_to_message_id?: string | null
           sender_id?: string
           thumb_url?: string | null
@@ -558,6 +684,13 @@ export type Database = {
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "group_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_messages_recalled_by_fkey"
+            columns: ["recalled_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -659,6 +792,38 @@ export type Database = {
           token?: string
         }
         Relationships: []
+      }
+      message_deletions: {
+        Row: {
+          created_at: string | null
+          id: string
+          kind: string
+          message_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          kind?: string
+          message_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          kind?: string
+          message_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_deletions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {
@@ -770,9 +935,15 @@ export type Database = {
       }
       admin_delete_user: { Args: { target_id: string }; Returns: undefined }
       are_friends: { Args: { a: string; b: string }; Returns: boolean }
+      clear_dm_history: { Args: { p_thread_id: string }; Returns: undefined }
+      clear_group_history: { Args: { p_group_id: string }; Returns: undefined }
       create_group: {
         Args: { p_member_ids: string[]; p_name: string }
         Returns: string
+      }
+      delete_message_for_me: {
+        Args: { p_kind: string; p_message_id: string }
+        Returns: undefined
       }
       get_or_create_thread: { Args: { p_other: string }; Returns: string }
       group_add_member: {
@@ -787,6 +958,10 @@ export type Database = {
         Args: { p_group: string; p_name: string }
         Returns: undefined
       }
+      hide_conversation: {
+        Args: { p_conversation_id: string; p_conversation_type: string }
+        Returns: undefined
+      }
       is_admin: { Args: { uid: string }; Returns: boolean }
       is_group_member: {
         Args: { p_group: string; p_uid: string }
@@ -797,6 +972,7 @@ export type Database = {
         Returns: {
           last_message: string
           last_message_at: string
+          last_message_recalled: boolean
           last_message_type: string
           last_sender_id: string
           other_avatar_url: string
@@ -827,6 +1003,7 @@ export type Database = {
           group_id: string
           last_message: string
           last_message_at: string
+          last_message_recalled: boolean
           last_message_type: string
           last_sender_id: string
           member_count: number
@@ -836,6 +1013,10 @@ export type Database = {
       }
       mark_group_read: { Args: { p_group: string }; Returns: undefined }
       mark_thread_read: { Args: { p_thread: string }; Returns: undefined }
+      recall_message: {
+        Args: { p_kind: string; p_message_id: string }
+        Returns: undefined
+      }
       remove_friend: { Args: { target_id: string }; Returns: string }
       respond_friend_request: {
         Args: { accept: boolean; request_id: string }
