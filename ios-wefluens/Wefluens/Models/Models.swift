@@ -196,6 +196,33 @@ struct GroupChatMessage: Identifiable, Equatable {
     }
 }
 
+/// What is being forwarded: identifies the source message + which store it lives
+/// in. Used by the long-press → Forward flow to drive the target picker sheet.
+enum ForwardKind: String, Sendable {
+    case dm
+    case group
+}
+
+struct ForwardSource: Identifiable, Equatable {
+    let kind: ForwardKind
+    let messageId: UUID
+    var id: UUID { messageId }
+}
+
+/// A group member shown in the group settings roster (profile + role + owner flag).
+struct GroupMember: Identifiable, Equatable {
+    /// The member's profile / user id.
+    let id: UUID
+    let name: String
+    let handle: String
+    let avatarUrl: String?
+    let role: String
+    let isOwner: Bool
+
+    var avatarColors: [UInt] { AppDataService.avatarPalette(for: id) }
+    var initials: String { AppDataService.initials(from: name) }
+}
+
 // MARK: - Contacts
 
 struct Contact: Identifiable {

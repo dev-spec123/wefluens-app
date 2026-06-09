@@ -498,6 +498,68 @@ nonisolated struct MarkGroupReadParams: Encodable, Sendable {
     let p_group: String
 }
 
+// MARK: - Group Settings
+
+/// One member returned by `list_group_members` — profile fields + role + owner flag.
+nonisolated struct GroupMemberRow: Codable, Identifiable, Sendable {
+    let userId: UUID
+    let name: String?
+    let handle: String?
+    let avatarUrl: String?
+    let role: String
+    let isOwner: Bool
+
+    var id: UUID { userId }
+
+    enum CodingKeys: String, CodingKey {
+        case name, handle, role
+        case userId = "user_id"
+        case avatarUrl = "avatar_url"
+        case isOwner = "is_owner"
+    }
+}
+
+nonisolated struct GroupIdParam: Encodable, Sendable {
+    let p_group: String
+}
+
+nonisolated struct GroupRenameParams: Encodable, Sendable {
+    let p_group: String
+    let p_name: String
+}
+
+nonisolated struct GroupMemberParams: Encodable, Sendable {
+    let p_group: String
+    let p_user: String
+}
+
+// MARK: - Forward Message (edge function payload)
+
+/// Identifies the message being forwarded (its kind + id) for the
+/// `forward-message` edge function.
+nonisolated struct ForwardSourceParam: Encodable, Sendable {
+    let kind: String          // "dm" | "group"
+    let messageId: String
+}
+
+/// One forward destination: a friend (1:1) or a group I'm a member of.
+nonisolated struct ForwardTargetParam: Encodable, Sendable {
+    let kind: String          // "friend" | "group"
+    let id: String
+}
+
+nonisolated struct ForwardRequest: Encodable, Sendable {
+    let source: ForwardSourceParam
+    let targets: [ForwardTargetParam]
+}
+
+/// Result summary from `forward-message` (per-target detail is logged server-side).
+nonisolated struct ForwardResponse: Codable, Sendable {
+    let ok: Bool
+    let forwarded: Int?
+    let failed: Int?
+}
+
 // MARK: - Campaign
 
 nonisolated struct CampaignRow: Codable, Identifiable, Sendable {

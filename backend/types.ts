@@ -775,6 +775,18 @@ export type Database = {
         Returns: string
       }
       get_or_create_thread: { Args: { p_other: string }; Returns: string }
+      group_add_member: {
+        Args: { p_group: string; p_user: string }
+        Returns: undefined
+      }
+      group_remove_member: {
+        Args: { p_group: string; p_user: string }
+        Returns: undefined
+      }
+      group_rename: {
+        Args: { p_group: string; p_name: string }
+        Returns: undefined
+      }
       is_admin: { Args: { uid: string }; Returns: boolean }
       is_group_member: {
         Args: { p_group: string; p_uid: string }
@@ -794,6 +806,17 @@ export type Database = {
           other_role: string
           thread_id: string
           unread_count: number
+        }[]
+      }
+      list_group_members: {
+        Args: { p_group: string }
+        Returns: {
+          avatar_url: string
+          handle: string
+          is_owner: boolean
+          name: string
+          role: string
+          user_id: string
         }[]
       }
       list_group_threads: {

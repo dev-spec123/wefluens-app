@@ -963,6 +963,84 @@ final class AppDataService {
         }
     }
 
+    // MARK: - Group Settings
+
+    /// Loads the group's member roster (member-only) via `list_group_members`:
+    /// each member's profile + role + an owner flag, owner sorted first.
+    @MainActor
+    func listGroupMembers(groupId: UUID) async throws -> [GroupMember] {
+        let rows: [GroupMemberRow] = try await supabase
+            .rpc("list_group_members", params: GroupIdParam(p_group: groupId.uuidString))
+            .execute()
+            .value
+        return rows.map { row in
+            GroupMember(
+                id: row.userId,
+                name: row.name ?? row.handle ?? "User",
+                handle: row.handle ?? "",
+                avatarUrl: row.avatarUrl,
+                role: row.role,
+                isOwner: row.isOwner
+            )
+        }
+    }
+
+    /// Renames the group via the owner-only `group_rename` function. Refreshes the
+    /// inbox so the new name shows in the conversation list. Throws on failure
+    /// (e.g. not the owner) so the caller can surface a real error.
+    @MainActor
+    func renameGroup(groupId: UUID, name: String) async throws {
+        _ = try await supabase
+            .rpc("group_rename", params: GroupRenameParams(p_group: groupId.uuidString, p_name: name))
+            .execute()
+        await loadConversations()
+    }
+
+    /// Invites a friend into the group via `group_add_member` (any member may
+    /// invite, but only their own friend). Throws on failure (not a member /
+    /// not friends) so the caller can surface a real error.
+    @MainActor
+    func addGroupMember(groupId: UUID, userId: UUID) async throws {
+        _ = try await supabase
+            .rpc("group_add_member", params: GroupMemberParams(p_group: groupId.uuidString, p_user: userId.uuidString))
+            .execute()
+    }
+
+    /// Removes a member via the owner-only `group_remove_member` (the owner can
+    /// never be removed). Throws on failure so the caller can surface an error.
+    @MainActor
+    func removeGroupMember(groupId: UUID, userId: UUID) async throws {
+        _ = try await supabase
+            .rpc("group_remove_member", params: GroupMemberParams(p_group: groupId.uuidString, p_user: userId.uuidString))
+            .execute()
+    }
+
+    // MARK: - Forward Message
+
+    /// Forwards a message to one or more conversations via the `forward-message`
+    /// edge function, which does the server-side `storage.copy` (media is reused,
+    /// never re-uploaded) + dual permission checks (source read + target write),
+    /// then sends through the existing send functions. Refreshes the inbox.
+    /// Throws if nothing was forwarded so the caller can show an error.
+    @MainActor
+    func forwardMessage(source: ForwardSource, friendIds: [UUID], groupIds: [UUID]) async throws {
+        let targets = friendIds.map { ForwardTargetParam(kind: "friend", id: $0.uuidString) }
+            + groupIds.map { ForwardTargetParam(kind: "group", id: $0.uuidString) }
+        guard !targets.isEmpty else { return }
+        let request = ForwardRequest(
+            source: ForwardSourceParam(kind: source.kind.rawValue, messageId: source.messageId.uuidString),
+            targets: targets
+        )
+        let response: ForwardResponse = try await supabase.functions.invoke(
+            "forward-message",
+            options: .init(body: request)
+        )
+        guard response.ok else {
+            throw DataError(message: "Forward failed")
+        }
+        await loadConversations()
+    }
+
     // MARK: - Discover
 
     @MainActor
