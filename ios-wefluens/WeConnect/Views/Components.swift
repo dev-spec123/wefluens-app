@@ -20,11 +20,23 @@ struct Avatar: View {
     var isOnline: Bool = false
 
     private var gradient: LinearGradient {
-        LinearGradient(
+        Avatar.gradient(for: colors)
+    }
+
+    /// Avatar gradients are fully determined by their color stops, so build each
+    /// unique gradient once and reuse it instead of allocating a new `LinearGradient`
+    /// on every render (avatars live in long, frequently-recomposed lists).
+    private static var gradientCache: [[UInt]: LinearGradient] = [:]
+
+    private static func gradient(for colors: [UInt]) -> LinearGradient {
+        if let cached = gradientCache[colors] { return cached }
+        let built = LinearGradient(
             colors: colors.map { Color(hex: $0) },
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
+        gradientCache[colors] = built
+        return built
     }
 
     private var resolvedURL: URL? {

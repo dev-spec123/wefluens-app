@@ -25,6 +25,7 @@ final class GroupChatViewModel {
 
     private var channel: RealtimeChannelV2?
     private var listenTask: Task<Void, Never>?
+    private var updateTask: Task<Void, Never>?
 
     init(route: GroupChatRoute, data: AppDataService) {
         self.route = route
@@ -165,7 +166,7 @@ final class GroupChatViewModel {
                 await self.data.loadConversations()
             }
         }
-        let updateT = Task { [weak self] in
+        updateTask = Task { [weak self] in
             for await _ in updates {
                 guard let self else { return }
                 await self.reload()
@@ -173,14 +174,14 @@ final class GroupChatViewModel {
         }
         await ch.subscribe()
         channel = ch
-        // Keep updateT alive for the lifetime of the subscription.
-        _ = updateT
     }
 
     /// Tears down the realtime subscription. Call from the view's `onDisappear`.
     func stop() async {
         listenTask?.cancel()
         listenTask = nil
+        updateTask?.cancel()
+        updateTask = nil
         if let channel {
             await channel.unsubscribe()
             await supabase.removeChannel(channel)

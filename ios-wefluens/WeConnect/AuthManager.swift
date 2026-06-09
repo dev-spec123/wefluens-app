@@ -35,6 +35,11 @@ final class AuthManager {
 
     private var session: Auth.Session?
 
+    /// Long-lived listener for Supabase auth-state changes. Stored so we can cancel
+    /// it on sign-out and re-arm it on sign-in — never leaving multiple listeners
+    /// stacked up across a long session.
+    private var authStateTask: Task<Void, Never>?
+
     init() {
         Task { await checkAuth() }
     }
@@ -53,20 +58,26 @@ final class AuthManager {
             isAuthenticated = false
         }
 
-        // Listen for future auth changes
-        Task {
+        // Listen for future auth changes (cancels any prior listener first).
+        startAuthStateListener()
+    }
+
+    /// Starts (or restarts) the single auth-state listener, cancelling any existing
+    /// one first so repeated calls can never accumulate multiple subscriptions.
+    private func startAuthStateListener() {
+        authStateTask?.cancel()
+        authStateTask = Task { [weak self] in
             for await state in supabase.auth.authStateChanges {
-                await MainActor.run {
-                    switch state.event {
-                    case .signedIn:
-                        session = state.session
-                        isAuthenticated = true
-                    case .signedOut:
-                        session = nil
-                        isAuthenticated = false
-                    default:
-                        break
-                    }
+                guard let self else { return }
+                switch state.event {
+                case .signedIn:
+                    self.session = state.session
+                    self.isAuthenticated = true
+                case .signedOut:
+                    self.session = nil
+                    self.isAuthenticated = false
+                default:
+                    break
                 }
             }
         }
@@ -86,6 +97,8 @@ final class AuthManager {
                 password: password
             )
             isAuthenticated = true
+            // Re-arm the listener for this fresh session (idempotent — cancels first).
+            startAuthStateListener()
         } catch {
             setError(error.localizedDescription)
         }
@@ -95,6 +108,10 @@ final class AuthManager {
 
     @MainActor
     func signOut() async {
+        // Stop observing auth changes before tearing down the session so the listener
+        // can't linger; signIn() re-arms it on the next login.
+        authStateTask?.cancel()
+        authStateTask = nil
         do {
             try await supabase.auth.signOut()
         } catch {

@@ -522,13 +522,39 @@ final class AppDataService {
         return result.isEmpty ? "?" : result
     }
 
-    /// Short clock time (locale-aware, e.g. "9:05 AM" or "21:05") for a message.
-    nonisolated static func clockTime(from date: Date?) -> String {
-        guard let date else { return "" }
+    // Formatters are expensive to build, so cache one configured instance each
+    // instead of allocating a fresh DateFormatter on every (very frequent) call.
+    // `nonisolated(unsafe)` is safe here: each is configured once and only ever
+    // read (DateFormatter is documented thread-safe for concurrent formatting).
+    nonisolated(unsafe) private static let clockFormatter: DateFormatter = {
         let f = DateFormatter()
         f.timeStyle = .short
         f.dateStyle = .none
-        return f.string(from: date)
+        return f
+    }()
+
+    nonisolated(unsafe) private static let monthDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("MMMd")
+        return f
+    }()
+
+    nonisolated(unsafe) private static let yearMonthDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("yMMMd")
+        return f
+    }()
+
+    nonisolated(unsafe) private static let yesterdayFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.dateTimeStyle = .named
+        return f
+    }()
+
+    /// Short clock time (locale-aware, e.g. "9:05 AM" or "21:05") for a message.
+    nonisolated static func clockTime(from date: Date?) -> String {
+        guard let date else { return "" }
+        return clockFormatter.string(from: date)
     }
 
     /// Relative time for the conversation list: clock time today, "Yesterday",
@@ -540,14 +566,10 @@ final class AppDataService {
             return clockTime(from: date)
         }
         if cal.isDateInYesterday(date) {
-            let rf = RelativeDateTimeFormatter()
-            rf.dateTimeStyle = .named
-            return rf.localizedString(for: cal.startOfDay(for: date), relativeTo: cal.startOfDay(for: Date()))
+            return yesterdayFormatter.localizedString(for: cal.startOfDay(for: date), relativeTo: cal.startOfDay(for: Date()))
         }
-        let f = DateFormatter()
         let sameYear = cal.isDate(date, equalTo: Date(), toGranularity: .year)
-        f.setLocalizedDateFormatFromTemplate(sameYear ? "MMMd" : "yMMMd")
-        return f.string(from: date)
+        return (sameYear ? monthDayFormatter : yearMonthDayFormatter).string(from: date)
     }
 
     nonisolated static func avatarPalette(for id: UUID) -> [UInt] {

@@ -42,8 +42,14 @@ struct ChatDetailView: View {
     }
 
     /// Messages paired with their resolved quoted message (if any), so each row can
-    /// render the quote preview without an O(n²) lookup. Built once per body eval.
-    private var renderedMessages: [RenderedMessage] {
+    /// render the quote preview without an O(n²) lookup. Cached in @State and rebuilt
+    /// only when `messages` actually changes (see `.onChange` below) instead of on
+    /// every body evaluation — the old computed property rebuilt the whole dictionary
+    /// each frame, which stutters once a thread has many messages.
+    @State private var renderedMessages: [RenderedMessage] = []
+
+    /// Pure, static rebuild of the quote-resolved rows (never captures `self`).
+    private static func buildRenderedMessages(from messages: [ChatMessage]) -> [RenderedMessage] {
         let byId = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return messages.map { RenderedMessage(message: $0, quoted: $0.replyTo.flatMap { byId[$0] }) }
     }
@@ -94,6 +100,9 @@ struct ChatDetailView: View {
             let model = ChatThreadViewModel(route: route, data: data)
             vm = model
             await model.start()
+        }
+        .onChange(of: messages, initial: true) { _, newMessages in
+            renderedMessages = Self.buildRenderedMessages(from: newMessages)
         }
         .onDisappear {
             let model = vm

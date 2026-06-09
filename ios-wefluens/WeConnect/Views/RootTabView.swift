@@ -37,7 +37,7 @@ struct RootTabView: View {
     @State private var selection: AppTab = .chats
 
     init() {
-        configureTabBarAppearance()
+        Self.configureTabBarAppearance()
     }
 
     var body: some View {
@@ -64,14 +64,19 @@ struct RootTabView: View {
     }
 
     /// Configures a clean, opaque WeChat-style bottom tab bar with a top hairline.
-    private func configureTabBarAppearance() {
+    /// The background / hairline / unselected-item colors are **dynamic** UIColors
+    /// that resolve per trait, so the bar follows light↔dark automatically. The app
+    /// drives the window's interface style via `.preferredColorScheme`, and UIKit
+    /// re-resolves these colors on every trait change — the old version baked in
+    /// `.light` colors, leaving the bar stuck bright in dark mode.
+    private static func configureTabBarAppearance() {
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor(Theme.card(for: .light))
-        appearance.shadowColor = UIColor(Theme.ink(for: .light)).withAlphaComponent(0.08)
+        appearance.backgroundColor = dynamicColor { Theme.card(for: $0) }
+        appearance.shadowColor = dynamicColor { Theme.ink(for: $0).opacity(0.08) }
 
         let selected = UIColor(Theme.coral)
-        let normal = UIColor(Theme.inkSecondary(for: .light))
+        let normal = dynamicColor { Theme.inkSecondary(for: $0) }
 
         let item = appearance.stackedLayoutAppearance
         item.selected.iconColor = selected
@@ -81,6 +86,18 @@ struct RootTabView: View {
 
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
+    }
+
+    /// Builds a trait-aware UIColor from a scheme-keyed SwiftUI `Color` provider.
+    /// Both resolutions are computed up front (on the main actor, at configure time)
+    /// so the dynamic closure only branches between two ready UIColors — it never
+    /// touches main-actor state on whatever thread UIKit resolves the color from.
+    private static func dynamicColor(_ provider: (ColorScheme) -> Color) -> UIColor {
+        let light = UIColor(provider(.light))
+        let dark = UIColor(provider(.dark))
+        return UIColor { traits in
+            traits.userInterfaceStyle == .dark ? dark : light
+        }
     }
 }
 
