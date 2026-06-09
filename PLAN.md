@@ -120,6 +120,16 @@
 - [x] iOS build green (`runChecks`) + live 3-user rollback harness verified: `create_group` → 3 members + creator admin + correct name; non-friend add blocked + 0 orphan groups (atomic); `send_group_message` stores `type=text` + stamps thread `last_message`/`last_sender`/`last_type`; member read path resolves the sender's name under RLS; recipient `unread=1` → `mark_group_read` → 0; RLS no cross-group leak (A sees only its group, B sees both); non-member post blocked; all three `group_*` tables in `supabase_realtime` — all rolled back, production untouched
 - Next (this feature, step 2): group image/file messages — needs the `chat-media` Storage RLS extended to group members (separate incremental SQL), then reuse the existing media bubbles
 
+## Chat: delete / recall / clear
+
+- **Recall (unsend)** — long-press your own message within 2 minutes → Recall; it's cleared for everyone and both sides show a 「消息已撤回 / Message recalled / Mensaje retirado」 placeholder
+- **Delete for me** — long-press → Delete hides a single message for you only; **Clear history** (chat ⋯ menu) hides the whole thread for you only; **swipe-to-delete** a conversation hides it from your Chats list (it returns if a new message arrives)
+- [x] Backend: `recalled_at`/`recalled_by` on `dm_messages` + `group_messages`; `message_deletions` / `dm_clears` / `group_clears` / `conversation_hides` tables; `recall_message` / `delete_message_for_me` / `clear_dm_history` / `clear_group_history` / `hide_conversation` SECURITY DEFINER fns; `list_*_threads` filter recalled/deleted/cleared/hidden
+- [x] App: `ChatMessage`/`GroupChatMessage` gained `createdAt` + `isRecalled`; the Recall button is gated to my own messages inside the 2-minute window; differentiated recall errors (expired / already-recalled / failed); recalled bubble shows a placeholder — text/image/file bubbles untouched
+- [x] **Recall fix (root cause)** — recall failed for EVERY message: the live `recall_message` set `body = NULL` (violating the NOT NULL column), and the `dm_messages_body_len` / `*_media_present` CHECKs rejected a cleared row (a text body needs ≥1 char; a non-text row needs a media path). Fixed by exempting recalled rows from those CHECKs (`recalled_at IS NOT NULL`, see `migration-recall-constraints.sql`) and clearing with `body = ''`
+- [x] **Group inbox fix** — `list_group_threads()` failed on every call with `column reference "group_id" is ambiguous` (unqualified `group_id` in the member-count subquery collided with the function's output column), so group threads/previews never refreshed; qualified it as `group_members.group_id`
+- [x] Verified live (rollback harness, production untouched): recalling a DM text, a DM file, and a group image each ends with `recalled_at` set + `body=''` + media nulled and no constraint error; confirmed via Postgres + edge logs that the prior `null value in column "body"` and `group_id is ambiguous` failures are gone
+
 ## Design
 
 - **Welcome screen**: The Wefluens logo centered on a warm gradient background, with email and password fields and Sign In / Create Account buttons. A subtle loading animation appears while authenticating

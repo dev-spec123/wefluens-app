@@ -385,7 +385,7 @@ begin
     lv.sender_id                  as last_sender_id,
     coalesce(lv.message_type, 'text') as last_message_type,
     (lv.recalled_at is not null)  as last_message_recalled,
-    (select count(*)::bigint from public.group_members where group_id = gt.id) as member_count,
+    (select count(*)::bigint from public.group_members gm2 where gm2.group_id = gt.id) as member_count,
     coalesce(u.cnt, 0)            as unread_count
   from public.group_threads gt
   join my_groups mg on mg.gid = gt.id
