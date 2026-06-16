@@ -49,11 +49,6 @@ struct AuthView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: auth.signUpNeedsConfirmation)
-        .alert("Error", isPresented: $auth.showError) {
-            Button("OK") {}
-        } message: {
-            Text(auth.errorMessage)
-        }
         .alert(l10n.t(.authResetSentTitle), isPresented: $showResetSent) {
             Button(l10n.t(.authVerificationSentOk)) {}
         } message: {
@@ -91,7 +86,7 @@ struct AuthView: View {
             }
             .shadow(color: Theme.coral.opacity(0.4), radius: 24, y: 8)
 
-            Text("WeConnect")
+            Text("Wefluens Connect")
                 .font(.system(size: 30, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
                 .padding(.top, 20)
@@ -124,7 +119,7 @@ struct AuthView: View {
                             .keyboardType(.emailAddress)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                            .onChange(of: email) { _, _ in emailError = nil }
+                            .onChange(of: email) { _, _ in emailError = nil; auth.showError = false }
                     }
                 }
 
@@ -144,9 +139,27 @@ struct AuthView: View {
                             .font(.system(size: 16))
                             .foregroundStyle(.white)
                             .textContentType(isSignUp ? .newPassword : .password)
-                            .onChange(of: password) { _, _ in passwordError = nil }
+                            .onChange(of: password) { _, _ in passwordError = nil; auth.showError = false }
                             .onSubmit { submit() }
                     }
+                }
+
+                // Inline auth error (rate limit / generic) — keeps the form usable
+                if auth.showError {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 13))
+                        Text(authErrorText)
+                            .font(.system(size: 13, weight: .medium))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(Theme.coral.opacity(0.9))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
                 // Confirm password (sign-up only)
@@ -290,6 +303,17 @@ struct AuthView: View {
         guard parts.count == 2, !parts[0].isEmpty else { return false }
         let domain = parts[1]
         return domain.contains(".") && !domain.hasPrefix(".") && !domain.hasSuffix(".")
+    }
+
+    /// Localized inline text for the current auth failure. A rate limit (429) gets a
+    /// clear "wait and retry" message; anything else falls back to the server message.
+    private var authErrorText: String {
+        switch auth.lastErrorKind {
+        case .rateLimit:
+            return l10n.t(.authErrRateLimit)
+        case .generic:
+            return auth.errorMessage.isEmpty ? l10n.t(.authErrGeneric) : auth.errorMessage
+        }
     }
 
     private var canSubmit: Bool {

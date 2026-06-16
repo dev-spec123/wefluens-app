@@ -132,6 +132,7 @@ enum L10n: String {
     case authInviteOnly
     case authForgotPassword, authResetSentTitle, authResetSentMessage
     case authErrInvalidEmail, authErrPasswordShort, authErrPasswordRequired
+    case authErrRateLimit, authErrGeneric
     case authCheckEmailTitle, authCheckEmailMessage, authBackToSignIn, setPwSuccess
 
     // Forced password change
@@ -316,6 +317,8 @@ final class LocalizationManager {
             .authErrInvalidEmail: "Enter a valid email address",
             .authErrPasswordShort: "Password must be at least 8 characters",
             .authErrPasswordRequired: "Enter your password",
+            .authErrRateLimit: "Too many attempts. Please wait about a minute and try again.",
+            .authErrGeneric: "Something went wrong. Please try again.",
             .authCheckEmailTitle: "Check your email",
             .authCheckEmailMessage: "We sent a confirmation link to",
             .authBackToSignIn: "Back to sign in",
@@ -492,6 +495,8 @@ final class LocalizationManager {
             .authChangeEmail: "更换邮箱",
             .authCodeResent: "新验证码已发送",
             .authInviteOnly: "仅限受邀用户 · 如需账号请联系管理员",
+            .authErrRateLimit: "尝试次数过多，请等待约一分钟后再试。",
+            .authErrGeneric: "出错了，请重试。",
             .authForgotPassword: "忘记密码？",
             .authResetSentTitle: "重置链接已发送",
             .authResetSentMessage: "如果该邮箱存在账号，我们已发送密码重置链接，请查收邮件。",
@@ -674,6 +679,8 @@ final class LocalizationManager {
             .authChangeEmail: "Cambiar correo",
             .authCodeResent: "Se ha enviado un nuevo código",
             .authInviteOnly: "Solo por invitación — pide acceso a tu administrador",
+            .authErrRateLimit: "Demasiados intentos. Espera alrededor de un minuto e inténtalo de nuevo.",
+            .authErrGeneric: "Algo salió mal. Inténtalo de nuevo.",
             .authForgotPassword: "¿Olvidaste tu contraseña?",
             .authResetSentTitle: "Enlace de restablecimiento enviado",
             .authResetSentMessage: "Si existe una cuenta con ese correo, hemos enviado un enlace para restablecer la contraseña. Revisa tu bandeja de entrada.",

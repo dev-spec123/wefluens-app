@@ -21,9 +21,13 @@
 - [x] `admin_delete_user` database function for secure user deletion
 - [x] Admin-only UI section in ProfileView
 
-## Invite-Only Registration (current)
+## Open Public Access (current)
 
-- **Invite only** — public sign-up removed; the login screen is email + password only
+- **Fully open & free** — no paywall, premium/client-only tier, invite code, approval step, locked section, or org requirement anywhere; any registered user can use ALL core features immediately
+- **Open public sign-up** — anyone can sign up with email + password and land straight in the main chat; auth errors (incl. 429 rate limit) show inline and keep the form usable; if Supabase "Confirm email" is on, a check-your-email screen shows, otherwise the user goes straight in
+- **Branding** — iOS home-screen display name and the login/sign-up heading are "Wefluens Connect" (Bundle Identifier unchanged)
+- _Superseded — the invite-only flow below is retained for admin tooling only and no longer gates access:_
+- **Invite only (legacy/admin tool)** — admin can still email activation links from Backend Management; not required to use the app
 - **Admin invites by email** — admin enters an email in Backend Management; we email an activation link
 - **Activation link** — opens a Wefluens-branded web page that creates the account with initial password `11111111`
 - **Forced password change** — on first login the user must set a new password before entering the app

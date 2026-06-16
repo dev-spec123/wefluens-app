@@ -10,6 +10,14 @@
 import SwiftUI
 import Supabase
 
+/// High-level classification of an auth failure so the UI can show a clear,
+/// localized inline message (rather than a raw server string) and decide whether
+/// the form should stay usable.
+enum AuthErrorKind {
+    case rateLimit
+    case generic
+}
+
 @Observable
 final class AuthManager {
     var isAuthenticated = false
@@ -17,6 +25,8 @@ final class AuthManager {
     var isSigningIn = false
     var showError = false
     var errorMessage = ""
+    /// Classification of the most recent failure, used for inline messaging.
+    var lastErrorKind: AuthErrorKind = .generic
     var isAdmin = false
 
     /// Deep-link redirect targets. The `wefluens` URL scheme is registered in
@@ -121,7 +131,7 @@ final class AuthManager {
             // Re-arm the listener for this fresh session (idempotent — cancels first).
             startAuthStateListener()
         } catch {
-            setError(error.localizedDescription)
+            setError(error)
         }
     }
 
@@ -150,7 +160,7 @@ final class AuthManager {
                 signUpNeedsConfirmation = true
             }
         } catch {
-            setError(error.localizedDescription)
+            setError(error)
         }
     }
 
@@ -188,7 +198,7 @@ final class AuthManager {
                 passwordRecoveryActive = true
             }
         } catch {
-            setError(error.localizedDescription)
+            setError(error)
         }
     }
 
@@ -273,8 +283,25 @@ final class AuthManager {
 
     // MARK: - Helpers
 
+    private func setError(_ error: Error) {
+        lastErrorKind = Self.classify(error)
+        errorMessage = error.localizedDescription
+        showError = true
+    }
+
     private func setError(_ message: String) {
+        lastErrorKind = .generic
         errorMessage = message
         showError = true
+    }
+
+    /// Maps a raw auth error to a coarse kind. Supabase surfaces a 429 email/auth
+    /// rate-limit either via the HTTP status or a message mentioning "rate limit".
+    nonisolated static func classify(_ error: Error) -> AuthErrorKind {
+        let text = error.localizedDescription.lowercased()
+        if text.contains("rate limit") || text.contains("too many") || text.contains("429") {
+            return .rateLimit
+        }
+        return .generic
     }
 }
