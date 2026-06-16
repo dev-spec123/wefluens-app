@@ -14,7 +14,9 @@ struct ContentView: View {
     @State private var dataService: AppDataService?
 
     var body: some View {
-        Group {
+        @Bindable var auth = auth
+
+        return Group {
             if auth.isLoading {
                 launchScreen
             } else if auth.isAuthenticated, let uid = auth.userId {
@@ -60,6 +62,12 @@ struct ContentView: View {
             if !authenticated {
                 dataService = nil
             }
+        }
+        .onOpenURL { url in
+            Task { await auth.handleDeepLink(url) }
+        }
+        .fullScreenCover(isPresented: $auth.passwordRecoveryActive) {
+            SetNewPasswordView()
         }
     }
 

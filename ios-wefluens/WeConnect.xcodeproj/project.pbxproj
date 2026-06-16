@@ -36,6 +36,9 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		105FC57C2E9EAD3100EA8BCF /* WeConnect */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				105FC5B02E9EAD3100EA8BCF /* Exceptions for "WeConnect" folder in "WeConnect" target */,
+			);
 			path = WeConnect;
 			sourceTree = "<group>";
 		};
@@ -50,6 +53,16 @@
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		105FC5B02E9EAD3100EA8BCF /* Exceptions for "WeConnect" folder in "WeConnect" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 105FC5792E9EAD3100EA8BCF /* WeConnect */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		105FC5772E9EAD3100EA8BCF /* Frameworks */ = {
@@ -410,8 +423,9 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Wefluens;
-				INFOPLIST_KEY_CFBundleName = Wefluens;
+				INFOPLIST_FILE = WeConnect/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Wefluens Connect";
+				INFOPLIST_KEY_CFBundleName = "Wefluens Connect";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Wefluens uses your camera to scan QR codes for adding friends.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Wefluens uses your location to auto-fill your profile location.";
@@ -448,8 +462,9 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Wefluens;
-				INFOPLIST_KEY_CFBundleName = Wefluens;
+				INFOPLIST_FILE = WeConnect/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Wefluens Connect";
+				INFOPLIST_KEY_CFBundleName = "Wefluens Connect";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Wefluens uses your camera to scan QR codes for adding friends.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Wefluens uses your location to auto-fill your profile location.";

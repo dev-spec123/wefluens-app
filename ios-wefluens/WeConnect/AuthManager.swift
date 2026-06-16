@@ -19,6 +19,22 @@ final class AuthManager {
     var errorMessage = ""
     var isAdmin = false
 
+    /// Deep-link redirect targets. The `wefluens` URL scheme is registered in
+    /// Info.plist; these hosts must also be added to the Supabase project's
+    /// "Additional Redirect URLs" allow-list.
+    static let resetRedirectURL = URL(string: "wefluens://reset-password")!
+    static let signUpRedirectURL = URL(string: "wefluens://auth-callback")!
+
+    /// Set after a successful sign-up when email confirmation is required
+    /// (no session returned). Drives the "check your email" screen.
+    var signUpNeedsConfirmation = false
+    /// The address a confirmation link was sent to (shown on that screen).
+    var pendingConfirmationEmail = ""
+
+    /// True while the app is in a password-recovery session opened from a reset
+    /// deep link. Drives the full-screen "set new password" cover.
+    var passwordRecoveryActive = false
+
     /// True when the signed-in user must change their initial password before
     /// they can use the app. Set from the `must_change_password` profile flag.
     var mustChangePassword = false
@@ -70,6 +86,11 @@ final class AuthManager {
             for await state in supabase.auth.authStateChanges {
                 guard let self else { return }
                 switch state.event {
+                case .passwordRecovery:
+                    // A reset link was opened — keep the user out of the app and
+                    // present the set-new-password screen instead.
+                    self.session = state.session
+                    self.passwordRecoveryActive = true
                 case .signedIn:
                     self.session = state.session
                     self.isAuthenticated = true
@@ -115,7 +136,8 @@ final class AuthManager {
         do {
             let response = try await supabase.auth.signUp(
                 email: email,
-                password: password
+                password: password,
+                redirectTo: Self.signUpRedirectURL
             )
             // If email confirmation is disabled, a session is returned and the user
             // is signed in immediately; otherwise they'll confirm via email.
@@ -123,10 +145,20 @@ final class AuthManager {
                 session = newSession
                 isAuthenticated = true
                 startAuthStateListener()
+            } else {
+                pendingConfirmationEmail = email
+                signUpNeedsConfirmation = true
             }
         } catch {
             setError(error.localizedDescription)
         }
+    }
+
+    /// Resets the sign-up confirmation screen back to the sign-in form.
+    @MainActor
+    func cancelSignUpConfirmation() {
+        signUpNeedsConfirmation = false
+        pendingConfirmationEmail = ""
     }
 
     // MARK: - Password Reset
@@ -135,7 +167,40 @@ final class AuthManager {
     /// address exists; surfaces only genuine transport errors.
     @MainActor
     func sendPasswordReset(email: String) async throws {
-        try await supabase.auth.resetPasswordForEmail(email)
+        try await supabase.auth.resetPasswordForEmail(
+            email,
+            redirectTo: Self.resetRedirectURL
+        )
+    }
+
+    // MARK: - Deep Links
+
+    /// Handles an incoming deep link (sign-up confirmation or password reset).
+    /// Exchanges the link for a session; the auth-state listener then either
+    /// signs the user in or flips `passwordRecoveryActive` for recovery links.
+    @MainActor
+    func handleDeepLink(_ url: URL) async {
+        do {
+            try await supabase.auth.session(from: url)
+            // Recovery links sometimes surface as a plain sign-in; if the host
+            // says reset, force the recovery screen regardless of event order.
+            if url.host == "reset-password" {
+                passwordRecoveryActive = true
+            }
+        } catch {
+            setError(error.localizedDescription)
+        }
+    }
+
+    /// Updates the password for the active recovery session, then signs out so
+    /// the user logs in fresh with the new credentials.
+    @MainActor
+    func updateRecoveredPassword(to newPassword: String) async throws {
+        try await supabase.auth.update(user: UserAttributes(password: newPassword))
+        passwordRecoveryActive = false
+        try? await supabase.auth.signOut()
+        session = nil
+        isAuthenticated = false
     }
 
     // MARK: - Sign Out

@@ -131,6 +131,8 @@ enum L10n: String {
     case authResendCode, authResendIn, authChangeEmail, authCodeResent
     case authInviteOnly
     case authForgotPassword, authResetSentTitle, authResetSentMessage
+    case authErrInvalidEmail, authErrPasswordShort, authErrPasswordRequired
+    case authCheckEmailTitle, authCheckEmailMessage, authBackToSignIn, setPwSuccess
 
     // Forced password change
     case forcePwTitle, forcePwSubtitle, forcePwSubtitleOptional, forcePwNew, forcePwConfirm
@@ -311,6 +313,13 @@ final class LocalizationManager {
             .authForgotPassword: "Forgot password?",
             .authResetSentTitle: "Reset Link Sent",
             .authResetSentMessage: "If an account exists for that email, we've sent a password reset link. Please check your inbox.",
+            .authErrInvalidEmail: "Enter a valid email address",
+            .authErrPasswordShort: "Password must be at least 8 characters",
+            .authErrPasswordRequired: "Enter your password",
+            .authCheckEmailTitle: "Check your email",
+            .authCheckEmailMessage: "We sent a confirmation link to",
+            .authBackToSignIn: "Back to sign in",
+            .setPwSuccess: "Your password has been updated. Please sign in with your new password.",
             .forcePwTitle: "Set a new password",
             .forcePwSubtitle: "For your security, please replace the initial password before continuing.",
             .forcePwSubtitleOptional: "Choose a new password for your account.",
@@ -486,6 +495,13 @@ final class LocalizationManager {
             .authForgotPassword: "忘记密码？",
             .authResetSentTitle: "重置链接已发送",
             .authResetSentMessage: "如果该邮箱存在账号，我们已发送密码重置链接，请查收邮件。",
+            .authErrInvalidEmail: "请输入有效的邮箱地址",
+            .authErrPasswordShort: "密码至少需要 8 位",
+            .authErrPasswordRequired: "请输入密码",
+            .authCheckEmailTitle: "查看你的邮箱",
+            .authCheckEmailMessage: "我们已发送确认链接至",
+            .authBackToSignIn: "返回登录",
+            .setPwSuccess: "密码已更新，请使用新密码登录。",
             .forcePwTitle: "设置新密码",
             .forcePwSubtitle: "为了账号安全，请先修改初始密码再继续使用。",
             .forcePwSubtitleOptional: "为你的账号设置一个新密码。",
@@ -661,6 +677,13 @@ final class LocalizationManager {
             .authForgotPassword: "¿Olvidaste tu contraseña?",
             .authResetSentTitle: "Enlace de restablecimiento enviado",
             .authResetSentMessage: "Si existe una cuenta con ese correo, hemos enviado un enlace para restablecer la contraseña. Revisa tu bandeja de entrada.",
+            .authErrInvalidEmail: "Introduce un correo válido",
+            .authErrPasswordShort: "La contraseña debe tener al menos 8 caracteres",
+            .authErrPasswordRequired: "Introduce tu contraseña",
+            .authCheckEmailTitle: "Revisa tu correo",
+            .authCheckEmailMessage: "Enviamos un enlace de confirmación a",
+            .authBackToSignIn: "Volver a iniciar sesión",
+            .setPwSuccess: "Tu contraseña se ha actualizado. Inicia sesión con tu nueva contraseña.",
             .forcePwTitle: "Establece una nueva contraseña",
             .forcePwSubtitle: "Por tu seguridad, cambia la contraseña inicial antes de continuar.",
             .forcePwSubtitleOptional: "Elige una nueva contraseña para tu cuenta.",
