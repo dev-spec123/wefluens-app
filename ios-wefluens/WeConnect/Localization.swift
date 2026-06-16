@@ -130,6 +130,7 @@ enum L10n: String {
     case authVerifyTitle, authVerifySubtitle, authVerifyButton
     case authResendCode, authResendIn, authChangeEmail, authCodeResent
     case authInviteOnly
+    case authForgotPassword, authResetSentTitle, authResetSentMessage
 
     // Forced password change
     case forcePwTitle, forcePwSubtitle, forcePwSubtitleOptional, forcePwNew, forcePwConfirm
@@ -307,6 +308,9 @@ final class LocalizationManager {
             .authChangeEmail: "Change email",
             .authCodeResent: "A new code has been sent",
             .authInviteOnly: "Invite only — ask your admin for access",
+            .authForgotPassword: "Forgot password?",
+            .authResetSentTitle: "Reset Link Sent",
+            .authResetSentMessage: "If an account exists for that email, we've sent a password reset link. Please check your inbox.",
             .forcePwTitle: "Set a new password",
             .forcePwSubtitle: "For your security, please replace the initial password before continuing.",
             .forcePwSubtitleOptional: "Choose a new password for your account.",
@@ -479,6 +483,9 @@ final class LocalizationManager {
             .authChangeEmail: "更换邮箱",
             .authCodeResent: "新验证码已发送",
             .authInviteOnly: "仅限受邀用户 · 如需账号请联系管理员",
+            .authForgotPassword: "忘记密码？",
+            .authResetSentTitle: "重置链接已发送",
+            .authResetSentMessage: "如果该邮箱存在账号，我们已发送密码重置链接，请查收邮件。",
             .forcePwTitle: "设置新密码",
             .forcePwSubtitle: "为了账号安全，请先修改初始密码再继续使用。",
             .forcePwSubtitleOptional: "为你的账号设置一个新密码。",
@@ -651,6 +658,9 @@ final class LocalizationManager {
             .authChangeEmail: "Cambiar correo",
             .authCodeResent: "Se ha enviado un nuevo código",
             .authInviteOnly: "Solo por invitación — pide acceso a tu administrador",
+            .authForgotPassword: "¿Olvidaste tu contraseña?",
+            .authResetSentTitle: "Enlace de restablecimiento enviado",
+            .authResetSentMessage: "Si existe una cuenta con ese correo, hemos enviado un enlace para restablecer la contraseña. Revisa tu bandeja de entrada.",
             .forcePwTitle: "Establece una nueva contraseña",
             .forcePwSubtitle: "Por tu seguridad, cambia la contraseña inicial antes de continuar.",
             .forcePwSubtitleOptional: "Elige una nueva contraseña para tu cuenta.",

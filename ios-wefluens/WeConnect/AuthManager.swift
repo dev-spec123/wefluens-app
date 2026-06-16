@@ -104,6 +104,40 @@ final class AuthManager {
         }
     }
 
+    // MARK: - Sign Up
+
+    @MainActor
+    func signUp(email: String, password: String) async {
+        guard !isSigningIn else { return }
+        isSigningIn = true
+        defer { isSigningIn = false }
+
+        do {
+            let response = try await supabase.auth.signUp(
+                email: email,
+                password: password
+            )
+            // If email confirmation is disabled, a session is returned and the user
+            // is signed in immediately; otherwise they'll confirm via email.
+            if let newSession = response.session {
+                session = newSession
+                isAuthenticated = true
+                startAuthStateListener()
+            }
+        } catch {
+            setError(error.localizedDescription)
+        }
+    }
+
+    // MARK: - Password Reset
+
+    /// Sends a password-reset email. Always resolves without revealing whether the
+    /// address exists; surfaces only genuine transport errors.
+    @MainActor
+    func sendPasswordReset(email: String) async throws {
+        try await supabase.auth.resetPasswordForEmail(email)
+    }
+
     // MARK: - Sign Out
 
     @MainActor

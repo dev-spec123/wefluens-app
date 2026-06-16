@@ -15,7 +15,10 @@ struct AuthView: View {
 
     @State private var email = ""
     @State private var password = ""
+    @State private var confirmPassword = ""
+    @State private var isSignUp = false
     @State private var keyboardHeight: CGFloat = 0
+    @State private var showResetSent = false
 
     var body: some View {
         @Bindable var auth = auth
@@ -37,6 +40,11 @@ struct AuthView: View {
             Button("OK") {}
         } message: {
             Text(auth.errorMessage)
+        }
+        .alert(l10n.t(.authResetSentTitle), isPresented: $showResetSent) {
+            Button(l10n.t(.authVerificationSentOk)) {}
+        } message: {
+            Text(l10n.t(.authResetSentMessage))
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notif in
             if let frame = notif.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
@@ -126,7 +134,7 @@ struct AuthView: View {
                         }
                         .font(.system(size: 16))
                         .foregroundStyle(.white)
-                        .textContentType(.password)
+                        .textContentType(isSignUp ? .newPassword : .password)
                         .onSubmit { submit() }
                 }
                 .padding(.horizontal, 16)
@@ -138,7 +146,36 @@ struct AuthView: View {
                         .stroke(.white.opacity(0.18), lineWidth: 1)
                 )
 
-                // Sign in button
+                // Confirm password (sign-up only)
+                if isSignUp {
+                    HStack(spacing: 10) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .frame(width: 20)
+
+                        SecureField("", text: $confirmPassword)
+                            .placeholder(when: confirmPassword.isEmpty) {
+                                Text(l10n.t(.authConfirmPasswordPlaceholder))
+                                    .foregroundStyle(.white.opacity(0.4))
+                            }
+                            .font(.system(size: 16))
+                            .foregroundStyle(.white)
+                            .textContentType(.newPassword)
+                            .onSubmit { submit() }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .background(.white.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(.white.opacity(0.18), lineWidth: 1)
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
+                // Sign in / Create account button
                 Button {
                     submit()
                 } label: {
@@ -147,7 +184,7 @@ struct AuthView: View {
                             ProgressView()
                                 .tint(.white)
                         } else {
-                            Text(l10n.t(.authSignInButton))
+                            Text(l10n.t(isSignUp ? .authSignUpButton : .authSignInButton))
                                 .font(.system(size: 17, weight: .semibold))
                         }
                     }
@@ -159,17 +196,30 @@ struct AuthView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .disabled(auth.isSigningIn || !canSubmit)
 
-                // Invite-only hint
-                HStack(spacing: 6) {
-                    Image(systemName: "envelope.badge.shield.half.filled")
-                        .font(.system(size: 12))
-                    Text(l10n.t(.authInviteOnly))
-                        .font(.system(size: 13))
-                        .multilineTextAlignment(.center)
+                // Forgot password (sign-in only)
+                if !isSignUp {
+                    Button {
+                        sendReset()
+                    } label: {
+                        Text(l10n.t(.authForgotPassword))
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                    .padding(.top, 4)
                 }
-                .foregroundStyle(.white.opacity(0.6))
-                .padding(.top, 10)
-                .padding(.horizontal, 8)
+
+                // Toggle sign in / sign up
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isSignUp.toggle()
+                        confirmPassword = ""
+                    }
+                } label: {
+                    Text(l10n.t(isSignUp ? .authHaveAccount : .authNoAccount))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                .padding(.top, 14)
             }
             .padding(.horizontal, 32)
             .padding(.bottom, 50)
@@ -178,17 +228,45 @@ struct AuthView: View {
 
     private func submit() {
         guard canSubmit else { return }
+        let trimmedEmail = email.trimmingCharacters(in: .whitespaces)
         Task {
-            await auth.signIn(
-                email: email.trimmingCharacters(in: .whitespaces),
-                password: password
-            )
+            if isSignUp {
+                guard password == confirmPassword else {
+                    auth.errorMessage = l10n.t(.authPasswordMismatch)
+                    auth.showError = true
+                    return
+                }
+                await auth.signUp(email: trimmedEmail, password: password)
+            } else {
+                await auth.signIn(email: trimmedEmail, password: password)
+            }
+        }
+    }
+
+    private func sendReset() {
+        let trimmed = email.trimmingCharacters(in: .whitespaces)
+        guard trimmed.contains("@") && trimmed.contains(".") else {
+            auth.errorMessage = l10n.t(.authEmailPlaceholder)
+            auth.showError = true
+            return
+        }
+        Task {
+            do {
+                try await auth.sendPasswordReset(email: trimmed)
+                showResetSent = true
+            } catch {
+                auth.errorMessage = error.localizedDescription
+                auth.showError = true
+            }
         }
     }
 
     private var canSubmit: Bool {
         let trimmed = email.trimmingCharacters(in: .whitespaces)
         let hasValidEmail = trimmed.contains("@") && trimmed.contains(".")
+        if isSignUp {
+            return hasValidEmail && password.count >= 6 && confirmPassword.count >= 6
+        }
         return hasValidEmail && password.count >= 6
     }
 }
