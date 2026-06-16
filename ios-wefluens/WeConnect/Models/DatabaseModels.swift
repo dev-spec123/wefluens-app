@@ -23,6 +23,9 @@ nonisolated struct ProfileRow: Codable, Identifiable, Sendable {
     let engagement: String?
     let deals: String?
     let isAdmin: Bool?
+    /// Server-controlled access flag — true unlocks all features beyond the free
+    /// 1:1 chat + add-friends tier. The client only ever READS this.
+    let isFullAccess: Bool?
     let createdAt: Date?
     let updatedAt: Date?
 
@@ -30,9 +33,55 @@ nonisolated struct ProfileRow: Codable, Identifiable, Sendable {
         case id, email, name, handle, role, bio, location, followers, engagement, deals
         case avatarUrl = "avatar_url"
         case isAdmin = "is_admin"
+        case isFullAccess = "is_full_access"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
+}
+
+// MARK: - Blocks & Reports
+
+/// One row from `blocks` — a user I've blocked.
+nonisolated struct BlockRow: Codable, Sendable {
+    let blockedId: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case blockedId = "blocked_id"
+    }
+}
+
+nonisolated struct BlockInsert: Encodable, Sendable {
+    let blockerId: UUID
+    let blockedId: UUID
+
+    enum CodingKeys: String, CodingKey {
+        case blockerId = "blocker_id"
+        case blockedId = "blocked_id"
+    }
+}
+
+/// Insert payload for a content/user report.
+nonisolated struct ReportInsert: Encodable, Sendable {
+    let reporterId: UUID
+    let reportedUserId: UUID?
+    let messageId: UUID?
+    let messageKind: String?
+    let contentExcerpt: String?
+    let reason: String?
+
+    enum CodingKeys: String, CodingKey {
+        case reporterId = "reporter_id"
+        case reportedUserId = "reported_user_id"
+        case messageId = "message_id"
+        case messageKind = "message_kind"
+        case contentExcerpt = "content_excerpt"
+        case reason
+    }
+}
+
+/// Update payload to stamp terms acceptance on the caller's profile.
+nonisolated struct TermsAcceptedUpdate: Encodable, Sendable {
+    let terms_accepted_at: String
 }
 
 nonisolated struct ProfileUpsert: Encodable, Sendable {

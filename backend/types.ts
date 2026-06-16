@@ -36,6 +36,39 @@ export type Database = {
         }
         Relationships: []
       }
+      blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocks_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brands: {
         Row: {
           active_campaigns: number | null
@@ -869,6 +902,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          approval_status: string
           avatar_url: string | null
           bio: string | null
           created_at: string | null
@@ -880,13 +914,16 @@ export type Database = {
           id: string
           is_admin: boolean | null
           is_banned: boolean | null
+          is_full_access: boolean
           location: string | null
           must_change_password: boolean | null
           name: string | null
           role: string | null
+          terms_accepted_at: string | null
           updated_at: string | null
         }
         Insert: {
+          approval_status?: string
           avatar_url?: string | null
           bio?: string | null
           created_at?: string | null
@@ -898,13 +935,16 @@ export type Database = {
           id: string
           is_admin?: boolean | null
           is_banned?: boolean | null
+          is_full_access?: boolean
           location?: string | null
           must_change_password?: boolean | null
           name?: string | null
           role?: string | null
+          terms_accepted_at?: string | null
           updated_at?: string | null
         }
         Update: {
+          approval_status?: string
           avatar_url?: string | null
           bio?: string | null
           created_at?: string | null
@@ -916,24 +956,79 @@ export type Database = {
           id?: string
           is_admin?: boolean | null
           is_banned?: boolean | null
+          is_full_access?: boolean
           location?: string | null
           must_change_password?: boolean | null
           name?: string | null
           role?: string | null
+          terms_accepted_at?: string | null
           updated_at?: string | null
         }
         Relationships: []
+      }
+      reports: {
+        Row: {
+          content_excerpt: string | null
+          created_at: string
+          id: string
+          message_id: string | null
+          message_kind: string | null
+          reason: string | null
+          reported_user_id: string | null
+          reporter_id: string
+          status: string
+        }
+        Insert: {
+          content_excerpt?: string | null
+          created_at?: string
+          id?: string
+          message_id?: string | null
+          message_kind?: string | null
+          reason?: string | null
+          reported_user_id?: string | null
+          reporter_id: string
+          status?: string
+        }
+        Update: {
+          content_excerpt?: string | null
+          created_at?: string
+          id?: string
+          message_id?: string | null
+          message_kind?: string | null
+          reason?: string | null
+          reported_user_id?: string | null
+          reporter_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reports_reported_user_id_fkey"
+            columns: ["reported_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      admin_approve_user: { Args: { target_id: string }; Returns: undefined }
       admin_ban_user: {
         Args: { ban: boolean; target_id: string }
         Returns: undefined
       }
       admin_delete_user: { Args: { target_id: string }; Returns: undefined }
+      admin_reject_user: { Args: { target_id: string }; Returns: undefined }
       are_friends: { Args: { a: string; b: string }; Returns: boolean }
       clear_dm_history: { Args: { p_thread_id: string }; Returns: undefined }
       clear_group_history: { Args: { p_group_id: string }; Returns: undefined }
