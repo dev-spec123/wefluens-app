@@ -352,7 +352,7 @@ export type Database = {
           thumb_url: string | null
         }
         Insert: {
-          body: string
+          body?: string
           created_at?: string | null
           duration_ms?: number | null
           file_mime?: string | null
@@ -463,6 +463,13 @@ export type Database = {
           user_low?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "dm_threads_last_sender_id_fkey"
+            columns: ["last_sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "dm_threads_user_high_fkey"
             columns: ["user_high"]
@@ -824,7 +831,15 @@ export type Database = {
           status?: string
           token?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "invites_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       message_deletions: {
         Row: {
@@ -1153,12 +1168,12 @@ export type Database = {
       }
       send_dm_media: {
         Args: {
-          p_caption?: string
-          p_height?: number
+          p_caption: string
+          p_height: number
           p_image_url: string
           p_other: string
           p_reply_to?: string
-          p_width?: number
+          p_width: number
         }
         Returns: string
       }
