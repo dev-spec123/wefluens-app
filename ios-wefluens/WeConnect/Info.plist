@@ -6,6 +6,10 @@
 	<string>Wefluens Connect uses the microphone so you can send voice messages.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Wefluens Connect saves photos and videos you choose to your photo library.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Wefluens Connect uses the camera to scan QR codes so you can add friends.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Wefluens Connect uses your location to fill in your profile location.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
