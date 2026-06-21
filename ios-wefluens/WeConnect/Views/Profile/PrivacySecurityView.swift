@@ -27,17 +27,16 @@ struct PrivacySecurityView: View {
                         showChangePassword = true
                     }
                     Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 64)
-                    privacyRow(
-                        icon: "person.crop.circle.badge.xmark",
-                        title: l10n.t(.privacyBlockedAccounts),
-                        subtitle: l10n.t(.privacyBlockedAccountsSub)
-                    )
-                    Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 64)
-                    privacyRow(
-                        icon: "eye.fill",
-                        title: l10n.t(.privacyVisibility),
-                        subtitle: l10n.t(.privacyVisibilitySub)
-                    )
+                    NavigationLink {
+                        BlockedAccountsView()
+                    } label: {
+                        rowContent(
+                            icon: "person.crop.circle.badge.xmark",
+                            title: l10n.t(.privacyBlockedAccounts),
+                            subtitle: l10n.t(.privacyBlockedAccountsSub)
+                        )
+                    }
+                    .buttonStyle(.plain)
                     Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 64)
                     toggleRow(
                         icon: "bolt.fill",
@@ -52,6 +51,34 @@ struct PrivacySecurityView: View {
                         subtitle: l10n.t(.privacyDataSharingSub),
                         isOn: $dataSharing
                     )
+                }
+                .padding(.vertical, 4)
+                .cardStyle()
+
+                groupTitle(l10n.t(.legalSafety))
+
+                VStack(spacing: 0) {
+                    NavigationLink {
+                        LegalDocView(kind: .terms)
+                    } label: {
+                        rowContent(
+                            icon: "doc.text",
+                            title: l10n.t(.legalTerms),
+                            subtitle: ""
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 64)
+                    NavigationLink {
+                        LegalDocView(kind: .guidelines)
+                    } label: {
+                        rowContent(
+                            icon: "checkmark.shield",
+                            title: l10n.t(.legalGuidelines),
+                            subtitle: ""
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding(.vertical, 4)
                 .cardStyle()
@@ -91,38 +118,37 @@ struct PrivacySecurityView: View {
         .buttonStyle(.plain)
     }
 
+    /// Shared row body (icon + title + optional subtitle + chevron) used by the
+    /// NavigationLink rows. Subtitle is hidden when empty.
+    private func rowContent(icon: String, title: String, subtitle: String) -> some View {
+        HStack(spacing: 14) {
+            iconBadge(icon)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Theme.ink(for: colorScheme))
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                }
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+
     private func groupTitle(_ text: String) -> some View {
         Text(text.uppercased())
             .font(.system(size: 12, weight: .bold))
             .foregroundStyle(Theme.inkTertiary(for: colorScheme))
             .tracking(1)
             .padding(.leading, 4)
-    }
-
-    private func privacyRow(icon: String, title: String, subtitle: String) -> some View {
-        NavigationLink {
-            EmptyView()
-        } label: {
-            HStack(spacing: 14) {
-                iconBadge(icon)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(Theme.ink(for: colorScheme))
-                    Text(subtitle)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.inkSecondary(for: colorScheme))
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.inkTertiary(for: colorScheme))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     private func toggleRow(icon: String, title: String, subtitle: String, isOn: Binding<Bool>) -> some View {

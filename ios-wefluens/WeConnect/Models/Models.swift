@@ -9,21 +9,22 @@ import SwiftUI
 
 // MARK: - Chat
 
-enum MessageSender: Equatable {
+enum MessageSender: String, Codable, Equatable {
     case me
     case them
 }
 
-/// A direct message is plain text, an image, a video, or a file attachment
-/// (media kinds may carry an optional caption).
-enum ChatMessageKind: Equatable {
+/// A direct message is plain text, an image, a video, a file attachment, or a
+/// voice/audio recording (media kinds may carry an optional caption).
+enum ChatMessageKind: String, Codable, Equatable {
     case text
     case image
     case video
     case file
+    case audio
 }
 
-struct ChatMessage: Identifiable, Equatable {
+struct ChatMessage: Identifiable, Codable, Equatable {
     let id: UUID
     let text: String
     let sender: MessageSender
@@ -164,7 +165,7 @@ struct GroupChatRoute: Hashable, Identifiable {
 /// One message in a group thread. Unlike a 1:1 `ChatMessage`, every message
 /// carries its sender's identity so incoming bubbles can show who sent it
 /// (avatar + name). Supports text, image, and file kinds (mirrors `ChatMessage`).
-struct GroupChatMessage: Identifiable, Equatable {
+struct GroupChatMessage: Identifiable, Codable, Equatable {
     let id: UUID
     let text: String
     let sender: MessageSender

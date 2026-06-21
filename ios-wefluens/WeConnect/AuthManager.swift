@@ -35,6 +35,10 @@ final class AuthManager {
     static let resetRedirectURL = URL(string: "wefluens://reset-password")!
     static let signUpRedirectURL = URL(string: "wefluens://auth-callback")!
 
+    /// Keychain keys for the remembered sign-in credentials (pre-fill on next launch).
+    static let savedEmailKey = "wefluens.savedEmail"
+    static let savedPasswordKey = "wefluens.savedPassword"
+
     /// Set after a successful sign-up when email confirmation is required
     /// (no session returned). Drives the "check your email" screen.
     var signUpNeedsConfirmation = false
@@ -128,6 +132,10 @@ final class AuthManager {
                 password: password
             )
             isAuthenticated = true
+            // Remember the credentials so the login form pre-fills next launch
+            // (stored in the Keychain — survives app updates / reinstalls).
+            KeychainHelper.set(Self.savedEmailKey, value: email)
+            KeychainHelper.set(Self.savedPasswordKey, value: password)
             // Re-arm the listener for this fresh session (idempotent — cancels first).
             startAuthStateListener()
         } catch {
@@ -230,6 +238,9 @@ final class AuthManager {
         isAuthenticated = false
         isAdmin = false
         mustChangePassword = false
+        // Privacy: drop on-device caches so the next account can't see them.
+        MessageCache.clear()
+        AppDataService.clearMediaCache()
     }
 
     // MARK: - Account flags (admin + forced password change)

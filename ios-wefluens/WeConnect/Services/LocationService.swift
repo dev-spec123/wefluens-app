@@ -81,7 +81,9 @@ final class LocationService: NSObject, CLLocationManagerDelegate, @unchecked Sen
         guard let loc = locations.last else { return }
         manager.stopUpdatingLocation()
 
-        geocoder.reverseGeocodeLocation(loc) { [weak self] placemarks, error in
+        // Force English so the saved "City, Country" is the same for every viewer,
+        // regardless of the phone's language (mirrors the RN app's English geocode).
+        geocoder.reverseGeocodeLocation(loc, preferredLocale: Locale(identifier: "en_US")) { [weak self] placemarks, error in
             guard let self else { return }
             if let error {
                 Task { @MainActor in
@@ -110,10 +112,33 @@ final class LocationService: NSObject, CLLocationManagerDelegate, @unchecked Sen
         manager.requestLocation()
     }
 
+    /// Long country names shortened to keep "City, Country" compact (mirrors RN).
+    private static let countryShort: [String: String] = [
+        "United States": "US",
+        "United States of America": "US",
+        "United Kingdom": "UK",
+        "United Arab Emirates": "UAE",
+        "Russian Federation": "Russia",
+        "Republic of Korea": "South Korea",
+        "Democratic Republic of the Congo": "DR Congo",
+        "Czech Republic": "Czechia",
+        "Dominican Republic": "Dominican Rep.",
+        "Bolivarian Republic of Venezuela": "Venezuela",
+    ]
+
+    /// Shortens a long country name (US / UK / UAE…), falling back to the 2-letter
+    /// ISO code for anything still longer than 16 chars.
+    private static func shortCountry(_ name: String, isoCode: String?) -> String {
+        if name.isEmpty { return "" }
+        if let mapped = countryShort[name] { return mapped }
+        if name.count > 16, let code = isoCode, !code.isEmpty { return code.uppercased() }
+        return name
+    }
+
     private static func formatPlacemark(_ pm: CLPlacemark?) -> String {
         guard let pm else { return "Unknown location" }
         let city = pm.locality ?? pm.administrativeArea ?? ""
-        let country = pm.country ?? ""
+        let country = shortCountry(pm.country ?? "", isoCode: pm.isoCountryCode)
         if !city.isEmpty, !country.isEmpty {
             return "\(city), \(country)"
         } else if !city.isEmpty {

@@ -42,11 +42,15 @@ enum L10n: String {
     case chatsTitle, chatsUnread, chatsCaughtUp, chatsSearch, chatsPinned, chatsMessages, chatsEmpty
     case chatsNewGroup
 
+    // Conversation context menu (pin / mute / delete)
+    case convPin, convUnpin, convMute, convUnmute, convDelete
+
     // ChatDetail
     case chatDetailActiveNow, chatDetailOffline, chatDetailToday, chatDetailMessagePlaceholder
     case chatDetailGroupMembers
     case chatYouPrefix, chatThreadEmpty, chatStartError, chatSendError, chatImagePreview
     case chatFilePreview, chatAttachPhoto, chatAttachFile, chatFileTooLarge, chatFileError
+    case chatVoice, chatHoldToTalk, chatRecording, chatVoicePermissionDenied
     case chatRead, chatDelivered
     case chatReply, chatCopy, chatYou, chatVideoPreview
     case chatForward, chatDelete, chatRecall, chatRecallFailed, chatRecallExpired, chatRecallAlreadyRecalled, chatRecallForbidden, chatRecallError, chatClearHistory, chatClearHistoryConfirm, chatMessageRecalled, chatDeleteConversation
@@ -61,10 +65,14 @@ enum L10n: String {
     case groupSettingsOwner, groupSettingsRemove, groupSettingsRemoveConfirm
     case groupSettingsRenameError, groupSettingsAddError, groupSettingsRemoveError
     case groupSettingsNoFriendsToAdd
+    case groupSettingsChangePhoto, groupSettingsMute
+    case groupSettingsLeave, groupSettingsLeaveConfirm
+    case groupSettingsDissolve, groupSettingsDissolveConfirm
 
     // Contacts
     case contactsTitle, contactsSubtitle, contactsSearch, contactsInvite, contactsTopTalent, contactsBrands
     case contactsNewFriends, contactsFriendRequests, contactsAddFriend
+    case contactsRemark, contactsSetRemark
 
     // Add Friend (search + request)
     case addFriendSearchPlaceholder, addFriendHint, addFriendNoResults, addFriendSearching
@@ -94,7 +102,7 @@ enum L10n: String {
 
     // CampaignDetail
     case campaignDetailBudget, campaignDetailDeadline, campaignDetailSpots
-    case campaignDetailApply, campaignDetailAbout, campaignDetailDeliverables
+    case campaignDetailApply, campaignDetailApplied, campaignDetailAbout, campaignDetailDeliverables
     case campaignDetailEstimatedPayout
 
     // Edit Profile
@@ -120,7 +128,7 @@ enum L10n: String {
     case settingsAppearance, settingsAppearanceFooter
 
     // Theme
-    case themeLight, themeDark
+    case themeSystem, themeLight, themeDark
 
     // Auth
     case authTagline, authEmailPlaceholder, authPasswordPlaceholder
@@ -146,6 +154,27 @@ enum L10n: String {
     case adminInvite, adminInviteTitle, adminInviteSubtitle, adminInviteEmailPlaceholder
     case adminInviteSend, adminInviteSent, adminInviteErrInvalid, adminInviteErrExists
     case adminInviteErrEmail, adminInviteErrSend, adminInviteErrGeneric
+
+    // Trust & Safety (block / report / terms)
+    case reportTitle, reportSubtitle
+    case reportReasonSpam, reportReasonHarass, reportReasonHate
+    case reportReasonSexual, reportReasonViolence, reportReasonOther
+    case reportSubmit, reportThanksTitle, reportThanksMessage, reportAlsoBlock, reportError
+    case blockAction, blockConfirm, blockError, unblockAction, unblockConfirm
+    case blockedEmptyTitle, blockedEmptySub
+    case legalTerms, legalGuidelines, legalSafety
+    case authAgreePrefix
+
+    // Favorites (收藏) of messages
+    case favoritesTitle, favoriteAction, favoritesEmpty
+
+    // Pinned group message (群公告 banner)
+    case pinMessage, unpinMessage, pinnedLabel
+
+    // Parity batch: account deletion, About screen, chats "+" menu
+    case profileDeleteAccount, profileDeleteMessage, profileDeleteConfirm
+    case profileAbout, aboutTitle, aboutVersion
+    case chatsAddFriend, chatsScan
 }
 
 /// App-wide localization manager. Persists the chosen language.
@@ -176,6 +205,8 @@ final class LocalizationManager {
             .chatsTitle: "Chats", .chatsUnread: "unread messages", .chatsCaughtUp: "You're all caught up",
             .chatsSearch: "Search conversations", .chatsPinned: "Pinned", .chatsMessages: "Messages",
             .chatsEmpty: "No conversations found", .chatsNewGroup: "New Group",
+            .convPin: "Pin to top", .convUnpin: "Unpin", .convMute: "Mute",
+            .convUnmute: "Unmute", .convDelete: "Delete",
             .chatDetailActiveNow: "Active now", .chatDetailOffline: "Offline",
             .chatDetailToday: "Today", .chatDetailMessagePlaceholder: "Message…",
             .chatDetailGroupMembers: "members",
@@ -189,6 +220,10 @@ final class LocalizationManager {
             .chatAttachFile: "File",
             .chatFileTooLarge: "File too large (max 25 MB).",
             .chatFileError: "Couldn't attach that file. Please try again.",
+            .chatVoice: "[Voice]",
+            .chatHoldToTalk: "Hold to talk",
+            .chatRecording: "Recording… release to send",
+            .chatVoicePermissionDenied: "Microphone access is off. Enable it in Settings to send voice messages.",
             .chatRead: "Read",
             .chatDelivered: "Delivered",
             .chatReply: "Reply",
@@ -227,10 +262,17 @@ final class LocalizationManager {
             .groupSettingsAddError: "Couldn't add members. Please try again.",
             .groupSettingsRemoveError: "Couldn't remove this member. Please try again.",
             .groupSettingsNoFriendsToAdd: "All your friends are already in this group",
+            .groupSettingsChangePhoto: "Change Group Photo",
+            .groupSettingsMute: "Mute Notifications",
+            .groupSettingsLeave: "Leave Group",
+            .groupSettingsLeaveConfirm: "Leave this group? You'll stop receiving its messages.",
+            .groupSettingsDissolve: "Dissolve Group",
+            .groupSettingsDissolveConfirm: "Dissolve this group? It will be permanently removed for everyone. This can't be undone.",
             .contactsTitle: "Contacts", .contactsSubtitle: "creators & partners", .contactsSearch: "Search contacts",
             .contactsInvite: "Invite", .contactsTopTalent: "Top Talent", .contactsBrands: "Brands",
             .contactsNewFriends: "New Friends", .contactsFriendRequests: "Friend Request",
             .contactsAddFriend: "Add Friend",
+            .contactsRemark: "Remark", .contactsSetRemark: "Set remark",
             .addFriendSearchPlaceholder: "Search by email or @handle",
             .addFriendHint: "Find people by their email or username, then send a friend request.",
             .addFriendNoResults: "No users found",
@@ -268,7 +310,7 @@ final class LocalizationManager {
             .discoverDue: "Due", .discoverSpotsLeft: "spots left",
             .filterAll: "All", .filterBeauty: "Beauty", .filterFashion: "Fashion", .filterWellness: "Wellness", .filterTech: "Tech",
             .campaignDetailBudget: "Budget", .campaignDetailDeadline: "Deadline",
-            .campaignDetailSpots: "Spots", .campaignDetailApply: "Apply now",
+            .campaignDetailSpots: "Spots", .campaignDetailApply: "Apply now", .campaignDetailApplied: "Applied ✓",
             .campaignDetailAbout: "About this campaign", .campaignDetailDeliverables: "Deliverables",
             .campaignDetailEstimatedPayout: "Estimated payout",
             .editProfileTitle: "Edit Profile", .editProfileName: "Full Name",
@@ -284,13 +326,13 @@ final class LocalizationManager {
             .profileOpenDeals: "Open to new deals", .profileOpenDealsSub: "Brands can see you're available",
             .profilePreferences: "Preferences", .profileNotifications: "Push Notifications",
             .profilePrivacy: "Privacy & Security", .profileLanguage: "Language",
-            .profileSupport: "Support", .profileHelp: "Help Center", .profileContact: "Contact WeConnect", .profileRate: "Rate the App",
+            .profileSupport: "Support", .profileHelp: "Contact Support", .profileContact: "Contact Wefluens", .profileRate: "Rate the App",
             .profileSignOut: "Sign Out",
             .settingsTitle: "Settings", .settingsLanguage: "Language",
             .settingsLanguageFooter: "Choose your preferred language. It applies across the whole app.",
             .settingsDone: "Done",
             .settingsAppearance: "Appearance", .settingsAppearanceFooter: "Switch between light and dark mode.",
-            .themeLight: "Light", .themeDark: "Dark",
+            .themeSystem: "System", .themeLight: "Light", .themeDark: "Dark",
             .authTagline: "Where creators and brands connect",
             .authEmailPlaceholder: "Email",
             .authPasswordPlaceholder: "Password",
@@ -354,12 +396,52 @@ final class LocalizationManager {
             .adminInviteErrEmail: "Email service isn't configured yet — contact the developer",
             .adminInviteErrSend: "Couldn't send the email — the sender domain or address was rejected. Please try again.",
             .adminInviteErrGeneric: "Couldn't send the invite. Please try again.",
+            .reportTitle: "Report",
+            .reportSubtitle: "Tell us what's wrong. Reports are confidential and reviewed within 24 hours.",
+            .reportReasonSpam: "Spam or scam",
+            .reportReasonHarass: "Harassment or bullying",
+            .reportReasonHate: "Hate speech or symbols",
+            .reportReasonSexual: "Nudity or sexual content",
+            .reportReasonViolence: "Violence or threats",
+            .reportReasonOther: "Something else",
+            .reportSubmit: "Submit Report",
+            .reportThanksTitle: "Report received",
+            .reportThanksMessage: "Thanks for helping keep Wefluens Connect safe. Our team reviews every report within 24 hours and removes content or removes users that violate our guidelines.",
+            .reportAlsoBlock: "Also block this user",
+            .reportError: "Couldn't submit your report. Please try again.",
+            .blockAction: "Block",
+            .blockConfirm: "Block this user? They won't be able to contact you, and you won't see their content.",
+            .blockError: "Couldn't block this user. Please try again.",
+            .unblockAction: "Unblock",
+            .unblockConfirm: "Unblock this user? They'll be able to contact you again.",
+            .blockedEmptyTitle: "No blocked accounts",
+            .blockedEmptySub: "People you block can't contact you or see your content. They'll appear here.",
+            .legalTerms: "Terms of Use",
+            .legalGuidelines: "Community Guidelines",
+            .legalSafety: "Safety & Terms",
+            .authAgreePrefix: "I agree to Wefluens Connect's",
+            .favoritesTitle: "Favorites",
+            .favoriteAction: "Favorite",
+            .favoritesEmpty: "No favorites yet",
+            .pinMessage: "Pin",
+            .unpinMessage: "Unpin",
+            .pinnedLabel: "Pinned",
+            .profileDeleteAccount: "Delete Account",
+            .profileDeleteMessage: "This permanently deletes your account and all your data. This can't be undone.",
+            .profileDeleteConfirm: "Delete",
+            .profileAbout: "About",
+            .aboutTitle: "About",
+            .aboutVersion: "Version",
+            .chatsAddFriend: "Add Friend",
+            .chatsScan: "Scan",
         ],
         .chinese: [
             .tabChats: "聊天", .tabContacts: "通讯录", .tabDiscover: "发现", .tabMe: "我",
             .chatsTitle: "聊天", .chatsUnread: "条未读消息", .chatsCaughtUp: "消息已全部读完",
             .chatsSearch: "搜索聊天", .chatsPinned: "置顶", .chatsMessages: "消息",
             .chatsEmpty: "未找到聊天", .chatsNewGroup: "发起群聊",
+            .convPin: "置顶", .convUnpin: "取消置顶", .convMute: "消息免打扰",
+            .convUnmute: "取消免打扰", .convDelete: "删除该聊天",
             .chatDetailActiveNow: "在线", .chatDetailOffline: "离线",
             .chatDetailToday: "今天", .chatDetailMessagePlaceholder: "输入消息…",
             .chatDetailGroupMembers: "人",
@@ -373,6 +455,10 @@ final class LocalizationManager {
             .chatAttachFile: "文件",
             .chatFileTooLarge: "文件过大（最大 25 MB）。",
             .chatFileError: "无法添加该文件，请重试。",
+            .chatVoice: "[语音]",
+            .chatHoldToTalk: "按住说话",
+            .chatRecording: "正在录音…松开发送",
+            .chatVoicePermissionDenied: "麦克风权限已关闭。请在设置中开启后再发送语音消息。",
             .chatRead: "已读",
             .chatDelivered: "已送达",
             .chatReply: "回复",
@@ -411,10 +497,17 @@ final class LocalizationManager {
             .groupSettingsAddError: "添加成员失败，请重试。",
             .groupSettingsRemoveError: "移除成员失败，请重试。",
             .groupSettingsNoFriendsToAdd: "你的好友都已在群里了",
+            .groupSettingsChangePhoto: "更换群头像",
+            .groupSettingsMute: "消息免打扰",
+            .groupSettingsLeave: "退出群聊",
+            .groupSettingsLeaveConfirm: "确定退出该群聊？退出后将不再接收群消息。",
+            .groupSettingsDissolve: "解散群聊",
+            .groupSettingsDissolveConfirm: "确定解散该群聊？群聊将对所有人永久删除，此操作不可撤销。",
             .contactsTitle: "通讯录", .contactsSubtitle: "位创作者与合作伙伴", .contactsSearch: "搜索联系人",
             .contactsInvite: "邀请", .contactsTopTalent: "顶尖网红", .contactsBrands: "品牌",
             .contactsNewFriends: "新的朋友", .contactsFriendRequests: "好友申请",
             .contactsAddFriend: "添加好友",
+            .contactsRemark: "备注", .contactsSetRemark: "设置备注",
             .addFriendSearchPlaceholder: "搜索邮箱或用户名",
             .addFriendHint: "通过邮箱或用户名找到对方，然后发送好友申请。",
             .addFriendNoResults: "未找到用户",
@@ -452,7 +545,7 @@ final class LocalizationManager {
             .discoverDue: "截止", .discoverSpotsLeft: "个名额",
             .filterAll: "全部", .filterBeauty: "美妆", .filterFashion: "时尚", .filterWellness: "健康", .filterTech: "科技",
             .campaignDetailBudget: "预算", .campaignDetailDeadline: "截止日",
-            .campaignDetailSpots: "名额", .campaignDetailApply: "立即申请",
+            .campaignDetailSpots: "名额", .campaignDetailApply: "立即申请", .campaignDetailApplied: "已申请 ✓",
             .campaignDetailAbout: "活动简介", .campaignDetailDeliverables: "交付物",
             .campaignDetailEstimatedPayout: "预估报酬",
             .editProfileTitle: "编辑资料", .editProfileName: "姓名",
@@ -468,13 +561,13 @@ final class LocalizationManager {
             .profileOpenDeals: "接受新合作", .profileOpenDealsSub: "品牌可以看到你的空档",
             .profilePreferences: "偏好设置", .profileNotifications: "推送通知",
             .profilePrivacy: "隐私与安全", .profileLanguage: "语言",
-            .profileSupport: "支持", .profileHelp: "帮助中心", .profileContact: "联系 WeConnect", .profileRate: "给应用评分",
+            .profileSupport: "支持", .profileHelp: "联系客服", .profileContact: "联系 Wefluens", .profileRate: "给应用评分",
             .profileSignOut: "退出登录",
             .settingsTitle: "设置", .settingsLanguage: "语言",
             .settingsLanguageFooter: "选择你偏好的语言，将应用于整个 App。",
             .settingsDone: "完成",
             .settingsAppearance: "外观", .settingsAppearanceFooter: "在浅色与深色模式之间切换。",
-            .themeLight: "浅色", .themeDark: "深色",
+            .themeSystem: "跟随本机", .themeLight: "浅色", .themeDark: "深色",
             .authTagline: "创作者与品牌的连接之地",
             .authEmailPlaceholder: "邮箱",
             .authPasswordPlaceholder: "密码",
@@ -538,12 +631,52 @@ final class LocalizationManager {
             .adminInviteErrEmail: "邮件服务尚未配置，请联系开发者",
             .adminInviteErrSend: "邮件发送失败（发件域名或地址被拒），请稍后重试",
             .adminInviteErrGeneric: "邀请发送失败，请重试。",
+            .reportTitle: "举报",
+            .reportSubtitle: "请告诉我们问题所在。举报内容将保密，并在 24 小时内处理。",
+            .reportReasonSpam: "垃圾信息或诈骗",
+            .reportReasonHarass: "骚扰或欺凌",
+            .reportReasonHate: "仇恨言论或标志",
+            .reportReasonSexual: "裸露或色情内容",
+            .reportReasonViolence: "暴力或威胁",
+            .reportReasonOther: "其他问题",
+            .reportSubmit: "提交举报",
+            .reportThanksTitle: "举报已收到",
+            .reportThanksMessage: "感谢你帮助维护 Wefluens Connect 的安全。我们会在 24 小时内审核每一条举报，并移除违反社区准则的内容或用户。",
+            .reportAlsoBlock: "同时屏蔽该用户",
+            .reportError: "举报提交失败，请重试。",
+            .blockAction: "屏蔽",
+            .blockConfirm: "确定屏蔽该用户？对方将无法联系你，你也不会再看到其内容。",
+            .blockError: "屏蔽失败，请重试。",
+            .unblockAction: "解除屏蔽",
+            .unblockConfirm: "解除屏蔽该用户？对方将可以再次联系你。",
+            .blockedEmptyTitle: "暂无屏蔽账户",
+            .blockedEmptySub: "被你屏蔽的用户将无法联系你或查看你的内容，并会显示在这里。",
+            .legalTerms: "使用条款",
+            .legalGuidelines: "社区准则",
+            .legalSafety: "安全与条款",
+            .authAgreePrefix: "我同意 Wefluens Connect 的",
+            .favoritesTitle: "收藏",
+            .favoriteAction: "收藏",
+            .favoritesEmpty: "还没有收藏",
+            .pinMessage: "置顶",
+            .unpinMessage: "取消置顶",
+            .pinnedLabel: "群公告",
+            .profileDeleteAccount: "删除账号",
+            .profileDeleteMessage: "这将永久删除你的账号和所有数据,无法恢复。",
+            .profileDeleteConfirm: "删除",
+            .profileAbout: "关于",
+            .aboutTitle: "关于",
+            .aboutVersion: "版本",
+            .chatsAddFriend: "添加好友",
+            .chatsScan: "扫一扫",
         ],
         .spanish: [
             .tabChats: "Chats", .tabContacts: "Contactos", .tabDiscover: "Descubrir", .tabMe: "Yo",
             .chatsTitle: "Chats", .chatsUnread: "mensajes sin leer", .chatsCaughtUp: "Estás al día",
             .chatsSearch: "Buscar conversaciones", .chatsPinned: "Fijados", .chatsMessages: "Mensajes",
             .chatsEmpty: "No se encontraron conversaciones", .chatsNewGroup: "Nuevo Grupo",
+            .convPin: "Fijar arriba", .convUnpin: "Quitar fijado", .convMute: "Silenciar",
+            .convUnmute: "Reactivar", .convDelete: "Eliminar chat",
             .chatDetailActiveNow: "Activo ahora", .chatDetailOffline: "Desconectado",
             .chatDetailToday: "Hoy", .chatDetailMessagePlaceholder: "Mensaje…",
             .chatDetailGroupMembers: "miembros",
@@ -557,6 +690,10 @@ final class LocalizationManager {
             .chatAttachFile: "Archivo",
             .chatFileTooLarge: "Archivo demasiado grande (máx. 25 MB).",
             .chatFileError: "No se pudo adjuntar el archivo. Inténtalo de nuevo.",
+            .chatVoice: "[Voz]",
+            .chatHoldToTalk: "Mantén para hablar",
+            .chatRecording: "Grabando… suelta para enviar",
+            .chatVoicePermissionDenied: "El acceso al micrófono está desactivado. Actívalo en Ajustes para enviar mensajes de voz.",
             .chatRead: "Leído",
             .chatDelivered: "Entregado",
             .chatReply: "Responder",
@@ -595,10 +732,17 @@ final class LocalizationManager {
             .groupSettingsAddError: "No se pudieron agregar miembros. Inténtalo de nuevo.",
             .groupSettingsRemoveError: "No se pudo eliminar a este miembro. Inténtalo de nuevo.",
             .groupSettingsNoFriendsToAdd: "Todos tus amigos ya están en este grupo",
+            .groupSettingsChangePhoto: "Cambiar foto del grupo",
+            .groupSettingsMute: "Silenciar notificaciones",
+            .groupSettingsLeave: "Salir del grupo",
+            .groupSettingsLeaveConfirm: "¿Salir de este grupo? Dejarás de recibir sus mensajes.",
+            .groupSettingsDissolve: "Disolver grupo",
+            .groupSettingsDissolveConfirm: "¿Disolver este grupo? Se eliminará permanentemente para todos. No se puede deshacer.",
             .contactsTitle: "Contactos", .contactsSubtitle: "creadores y socios", .contactsSearch: "Buscar contactos",
             .contactsInvite: "Invitar", .contactsTopTalent: "Top Talento", .contactsBrands: "Marcas",
             .contactsNewFriends: "Nuevos Amigos", .contactsFriendRequests: "Solicitud de Amistad",
             .contactsAddFriend: "Agregar amigo",
+            .contactsRemark: "Nota", .contactsSetRemark: "Poner nota",
             .addFriendSearchPlaceholder: "Busca por correo o @usuario",
             .addFriendHint: "Encuentra personas por su correo o usuario y envía una solicitud de amistad.",
             .addFriendNoResults: "No se encontraron usuarios",
@@ -636,7 +780,7 @@ final class LocalizationManager {
             .discoverDue: "Entrega", .discoverSpotsLeft: "cupos",
             .filterAll: "Todo", .filterBeauty: "Belleza", .filterFashion: "Moda", .filterWellness: "Bienestar", .filterTech: "Tecnología",
             .campaignDetailBudget: "Presupuesto", .campaignDetailDeadline: "Fecha límite",
-            .campaignDetailSpots: "Cupos", .campaignDetailApply: "Aplicar",
+            .campaignDetailSpots: "Cupos", .campaignDetailApply: "Aplicar", .campaignDetailApplied: "Aplicado ✓",
             .campaignDetailAbout: "Sobre esta campaña", .campaignDetailDeliverables: "Entregables",
             .campaignDetailEstimatedPayout: "Pago estimado",
             .editProfileTitle: "Editar Perfil", .editProfileName: "Nombre completo",
@@ -652,13 +796,13 @@ final class LocalizationManager {
             .profileOpenDeals: "Abierto a nuevos tratos", .profileOpenDealsSub: "Las marcas ven que estás disponible",
             .profilePreferences: "Preferencias", .profileNotifications: "Notificaciones",
             .profilePrivacy: "Privacidad y Seguridad", .profileLanguage: "Idioma",
-            .profileSupport: "Soporte", .profileHelp: "Centro de Ayuda", .profileContact: "Contactar a WeConnect", .profileRate: "Valorar la App",
+            .profileSupport: "Soporte", .profileHelp: "Contactar soporte", .profileContact: "Contactar a Wefluens", .profileRate: "Valorar la App",
             .profileSignOut: "Cerrar Sesión",
             .settingsTitle: "Ajustes", .settingsLanguage: "Idioma",
             .settingsLanguageFooter: "Elige tu idioma preferido. Se aplica en toda la app.",
             .settingsDone: "Hecho",
             .settingsAppearance: "Apariencia", .settingsAppearanceFooter: "Cambia entre modo claro y oscuro.",
-            .themeLight: "Claro", .themeDark: "Oscuro",
+            .themeSystem: "Sistema", .themeLight: "Claro", .themeDark: "Oscuro",
             .authTagline: "Donde los creadores y las marcas se conectan",
             .authEmailPlaceholder: "Correo",
             .authPasswordPlaceholder: "Contraseña",
@@ -722,6 +866,44 @@ final class LocalizationManager {
             .adminInviteErrEmail: "El servicio de correo no está configurado — contacta al desarrollador",
             .adminInviteErrSend: "No se pudo enviar el correo (dominio o dirección del remitente rechazada). Inténtalo de nuevo.",
             .adminInviteErrGeneric: "No se pudo enviar la invitación. Inténtalo de nuevo.",
+            .reportTitle: "Reportar",
+            .reportSubtitle: "Cuéntanos qué ocurre. Los reportes son confidenciales y se revisan en 24 horas.",
+            .reportReasonSpam: "Spam o estafa",
+            .reportReasonHarass: "Acoso o intimidación",
+            .reportReasonHate: "Discurso o símbolos de odio",
+            .reportReasonSexual: "Desnudez o contenido sexual",
+            .reportReasonViolence: "Violencia o amenazas",
+            .reportReasonOther: "Otro motivo",
+            .reportSubmit: "Enviar reporte",
+            .reportThanksTitle: "Reporte recibido",
+            .reportThanksMessage: "Gracias por ayudar a mantener seguro Wefluens Connect. Revisamos cada reporte en un plazo de 24 horas y eliminamos el contenido o los usuarios que infrinjan nuestras normas.",
+            .reportAlsoBlock: "También bloquear a este usuario",
+            .reportError: "No se pudo enviar tu reporte. Inténtalo de nuevo.",
+            .blockAction: "Bloquear",
+            .blockConfirm: "¿Bloquear a este usuario? No podrá contactarte y no verás su contenido.",
+            .blockError: "No se pudo bloquear a este usuario. Inténtalo de nuevo.",
+            .unblockAction: "Desbloquear",
+            .unblockConfirm: "¿Desbloquear a este usuario? Podrá contactarte de nuevo.",
+            .blockedEmptyTitle: "Sin cuentas bloqueadas",
+            .blockedEmptySub: "Las personas que bloquees no podrán contactarte ni ver tu contenido. Aparecerán aquí.",
+            .legalTerms: "Términos de Uso",
+            .legalGuidelines: "Normas de la Comunidad",
+            .legalSafety: "Seguridad y Términos",
+            .authAgreePrefix: "Acepto los",
+            .favoritesTitle: "Favoritos",
+            .favoriteAction: "Guardar",
+            .favoritesEmpty: "Sin favoritos",
+            .pinMessage: "Fijar",
+            .unpinMessage: "Quitar",
+            .pinnedLabel: "Fijado",
+            .profileDeleteAccount: "Eliminar cuenta",
+            .profileDeleteMessage: "Esto elimina permanentemente tu cuenta y todos tus datos. No se puede deshacer.",
+            .profileDeleteConfirm: "Eliminar",
+            .profileAbout: "Acerca de",
+            .aboutTitle: "Acerca de",
+            .aboutVersion: "Versión",
+            .chatsAddFriend: "Agregar amigo",
+            .chatsScan: "Escanear",
         ],
     ]
 }

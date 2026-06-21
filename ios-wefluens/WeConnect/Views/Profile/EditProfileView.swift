@@ -20,6 +20,7 @@ struct EditProfileView: View {
     @State private var originalName: String = ""
     @State private var originalBio: String = ""
     @State private var originalLocation: String = ""
+    @State private var originalHandle: String = ""
 
     // --- editable fields ---
     @State private var name: String = ""
@@ -45,7 +46,14 @@ struct EditProfileView: View {
     // MARK: - Derived
 
     private var hasChanges: Bool {
-        name != originalName || bio != originalBio || location != originalLocation || photoHasChanged
+        name != originalName || bio != originalBio || location != originalLocation
+            || handle != originalHandle || photoHasChanged
+    }
+
+    /// Handles are public identifiers: 3–20 of [a–z 0–9 _].
+    private var handleIsValid: Bool {
+        handle == originalHandle
+            || handle.range(of: "^[a-z0-9_]{3,20}$", options: .regularExpression) != nil
     }
 
     private var displayInitials: String {
@@ -136,6 +144,7 @@ struct EditProfileView: View {
         originalName = name
         originalBio = bio
         originalLocation = location
+        originalHandle = handle
     }
 
     // MARK: - Avatar
@@ -226,7 +235,8 @@ struct EditProfileView: View {
             Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 56)
 
             formField(icon: "at", title: "Handle", text: $handle)
-                .disabled(true)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
             Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 56)
 
             formField(icon: "text.alignleft", title: l10n.t(.editProfileBio), text: $bio, axis: .vertical, lineLimit: 2...5)
@@ -367,7 +377,7 @@ struct EditProfileView: View {
                 radius: 14, y: 8
             )
         }
-        .disabled(!hasChanges || isSaving)
+        .disabled(!hasChanges || isSaving || !handleIsValid)
         .animation(.easeInOut(duration: 0.25), value: hasChanges)
     }
 
@@ -399,6 +409,7 @@ struct EditProfileView: View {
                 name: name,
                 bio: bio,
                 location: location,
+                handle: handle != originalHandle ? handle : nil,
                 avatarUrl: avatarUrl
             )
         } catch {
@@ -413,6 +424,7 @@ struct EditProfileView: View {
         originalName = name
         originalBio = bio
         originalLocation = location
+        originalHandle = handle
         photoHasChanged = false
 
         // Step 5: Show success + dismiss

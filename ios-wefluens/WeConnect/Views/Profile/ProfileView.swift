@@ -6,14 +6,18 @@
 //
 
 import SwiftUI
+import StoreKit
+import UIKit
 
 struct ProfileView: View {
     @Environment(AuthManager.self) private var auth
     @Environment(LocalizationManager.self) private var l10n
     @Environment(AppDataService.self) private var data
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openURL) private var openURL
     @State private var notificationsOn: Bool = true
     @State private var availableForDeals: Bool = true
+    @State private var showDeleteConfirm = false
 
     private var user: UserProfile {
         data.profile ?? UserProfile(
@@ -51,6 +55,7 @@ struct ProfileView: View {
                     }
                     supportGroup
                     signOut
+                    deleteAccountButton
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 8)
@@ -58,6 +63,21 @@ struct ProfileView: View {
             }
             .background(Theme.paper(for: colorScheme).ignoresSafeArea())
             .navigationBarHidden(true)
+            .alert(l10n.t(.profileDeleteAccount), isPresented: $showDeleteConfirm) {
+                Button(l10n.t(.adminCancel), role: .cancel) {}
+                Button(l10n.t(.profileDeleteConfirm), role: .destructive) {
+                    Task {
+                        do {
+                            try await data.deleteAccount()
+                            await auth.signOut()
+                        } catch {
+                            print("⚠️ delete account failed: \(error)")
+                        }
+                    }
+                }
+            } message: {
+                Text(l10n.t(.profileDeleteMessage))
+            }
             .task {
                 await data.refreshProfile()
             }
@@ -246,6 +266,13 @@ struct ProfileView: View {
         VStack(alignment: .leading, spacing: 10) {
             groupTitle(l10n.t(.profilePreferences))
             VStack(spacing: 0) {
+                NavigationLink {
+                    FavoritesView()
+                } label: {
+                    settingRowContent(icon: "star.fill", title: l10n.t(.favoritesTitle))
+                }
+                .buttonStyle(.plain)
+                rowDivider
                 toggleRow(icon: "bell.fill", title: l10n.t(.profileNotifications), isOn: $notificationsOn)
                 rowDivider
                 NavigationLink {
@@ -301,11 +328,17 @@ struct ProfileView: View {
         VStack(alignment: .leading, spacing: 10) {
             groupTitle(l10n.t(.profileSupport))
             VStack(spacing: 0) {
-                fakeRow(icon: "questionmark.circle.fill", title: l10n.t(.profileHelp))
+                actionRow(icon: "questionmark.circle.fill", title: l10n.t(.profileHelp)) {
+                    openSupportMail()
+                }
                 rowDivider
-                fakeRow(icon: "envelope.fill", title: l10n.t(.profileContact))
+                actionRow(icon: "envelope.fill", title: l10n.t(.profileContact)) {
+                    openSupportMail()
+                }
                 rowDivider
-                fakeRow(icon: "star.fill", title: l10n.t(.profileRate))
+                actionRow(icon: "star.fill", title: l10n.t(.profileRate)) {
+                    requestAppReview()
+                }
             }
             .padding(.vertical, 4)
             .cardStyle()
@@ -325,6 +358,19 @@ struct ProfileView: View {
         }
     }
 
+    /// Destructive self-service account deletion (App Store 5.1.1(v) requirement).
+    private var deleteAccountButton: some View {
+        Button {
+            showDeleteConfirm = true
+        } label: {
+            Text(l10n.t(.profileDeleteAccount))
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+        }
+    }
+
     private func groupTitle(_ text: String) -> some View {
         Text(text.uppercased())
             .font(.system(size: 12, weight: .bold))
@@ -337,12 +383,26 @@ struct ProfileView: View {
         Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 64)
     }
 
-    private func fakeRow(icon: String, title: String) -> some View {
-        Button {
-        } label: {
+    private func actionRow(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             settingRowContent(icon: icon, title: title)
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Support actions
+
+    private func openSupportMail() {
+        if let url = URL(string: "mailto:support@wefluens.com") {
+            openURL(url)
+        }
+    }
+
+    private func requestAppReview() {
+        guard let scene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+        else { return }
+        SKStoreReviewController.requestReview(in: scene)
     }
 
     private func settingRowContent(icon: String, title: String) -> some View {

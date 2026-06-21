@@ -31,6 +31,14 @@ struct ChatDetailView: View {
     @State private var forwardSource: ForwardSource?
     /// Confirmation dialog for clearing the chat history.
     @State private var showClearConfirm: Bool = false
+    // Trust & Safety
+    @State private var reportTarget: ReportTarget?
+    @State private var showBlockConfirm: Bool = false
+    @State private var isBlocking: Bool = false
+    @State private var showBlockError: Bool = false
+    // Voice messages
+    @State private var recorder = VoiceRecorder()
+    @State private var showMicPermissionAlert = false
     @FocusState private var inputFocused: Bool
 
     private var messages: [ChatMessage] { vm?.messages ?? [] }
@@ -71,6 +79,9 @@ struct ChatDetailView: View {
             }
             inputBar
         }
+        .overlay {
+            if recorder.isRecording { recordingOverlay }
+        }
         .animation(.spring(response: 0.32, dampingFraction: 0.85), value: vm?.replyingTo?.id)
         .background(Theme.paper(for: colorScheme).ignoresSafeArea())
         .navigationBarHidden(true)
@@ -91,6 +102,19 @@ struct ChatDetailView: View {
                 Task { await vm?.clearHistory() }
             }
             Button(l10n.t(.adminCancel), role: .cancel) { }
+        }
+        .confirmationDialog(l10n.t(.blockConfirm), isPresented: $showBlockConfirm, titleVisibility: .visible) {
+            Button(l10n.t(.blockAction), role: .destructive) { block() }
+            Button(l10n.t(.adminCancel), role: .cancel) { }
+        }
+        .alert(l10n.t(.blockError), isPresented: $showBlockError) {
+            Button(l10n.t(.authVerificationSentOk), role: .cancel) { }
+        }
+        .alert(l10n.t(.chatVoicePermissionDenied), isPresented: $showMicPermissionAlert) {
+            Button(l10n.t(.authVerificationSentOk), role: .cancel) { }
+        }
+        .sheet(item: $reportTarget) { target in
+            ReportSheet(target: target)
         }
         .alert(l10n.t(.chatRecallFailed), isPresented: recallErrorBinding) {
             Button(l10n.t(.authVerificationSentOk), role: .cancel) { vm?.recallError = nil }
@@ -173,6 +197,17 @@ struct ChatDetailView: View {
             Spacer()
 
             Menu {
+                Button {
+                    reportTarget = ReportTarget(user: route.otherUserId, name: route.title)
+                } label: {
+                    Label(l10n.t(.reportTitle), systemImage: "flag")
+                }
+                Button(role: .destructive) {
+                    showBlockConfirm = true
+                } label: {
+                    Label(l10n.t(.blockAction), systemImage: "hand.raised")
+                }
+                Divider()
                 Button(role: .destructive) {
                     showClearConfirm = true
                 } label: {
@@ -193,6 +228,24 @@ struct ChatDetailView: View {
         .background(Theme.paper(for: colorScheme))
     }
 
+    /// Blocks the other participant and pops the chat (their thread is then hidden).
+    private func block() {
+        guard !isBlocking else { return }
+        isBlocking = true
+        Task {
+            do {
+                try await data.blockUser(route.otherUserId)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                isBlocking = false
+                dismiss()
+            } catch {
+                isBlocking = false
+                showBlockError = true
+                print("⚠️ block failed: \(error)")
+            }
+        }
+    }
+
     private var messageList: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -210,8 +263,18 @@ struct ChatDetailView: View {
                                 isHighlighted: item.message.id == highlightedId,
                                 onReply: { startReply(to: item.message) },
                                 onForward: { forwardSource = ForwardSource(kind: .dm, messageId: item.message.id) },
+                                onFavorite: { favorite(item.message) },
                                 onDelete: { Task { await vm?.deleteMessage(item.message.id) } },
                                 onRecall: { Task { await vm?.recallMessage(item.message.id) } },
+                                onReport: {
+                                    reportTarget = ReportTarget(
+                                        messageId: item.message.id,
+                                        kind: "dm",
+                                        excerpt: item.message.text,
+                                        userId: route.otherUserId,
+                                        name: route.title
+                                    )
+                                },
                                 onTapQuoted: { id in scrollToMessage(id, proxy: proxy) }
                             )
                             .id(item.message.id)
@@ -266,6 +329,8 @@ struct ChatDetailView: View {
             .clipShape(RoundedRectangle(cornerRadius: 22))
             .overlay(RoundedRectangle(cornerRadius: 22).stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
 
+            micButton
+
             Button(action: send) {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 18, weight: .bold))
@@ -281,16 +346,20 @@ struct ChatDetailView: View {
         .padding(.top, 10)
         .padding(.bottom, 6)
         .background(Theme.paper(for: colorScheme))
-        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .any(of: [.images, .videos]))
         .fileImporter(isPresented: $showFileImporter, allowedContentTypes: allowedDocTypes, allowsMultipleSelection: false) { result in
             handleFileImport(result)
         }
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
+            let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
             Task {
                 let loaded = try? await item.loadTransferable(type: Data.self)
                 photoItem = nil
-                if let loaded { await vm?.sendImage(loaded) }
+                if let loaded {
+                    if isVideo { await vm?.sendVideo(loaded) }
+                    else { await vm?.sendImage(loaded) }
+                }
             }
         }
     }
@@ -299,7 +368,7 @@ struct ChatDetailView: View {
     /// while uploading). System-keyboard emoji already type straight into the field.
     @ViewBuilder
     private var plusButton: some View {
-        if vm?.isSendingImage == true || vm?.isSendingFile == true {
+        if vm?.isSendingImage == true || vm?.isSendingFile == true || vm?.isSendingVideo == true {
             ProgressView()
                 .tint(Theme.coral)
                 .frame(width: 30, height: 30)
@@ -322,6 +391,88 @@ struct ChatDetailView: View {
                     .frame(width: 30, height: 30)
             }
         }
+    }
+
+    /// Press-and-hold microphone button. A long-press (min 0s) starts recording;
+    /// releasing the finger ends it and sends. Shows a spinner while uploading.
+    @ViewBuilder
+    private var micButton: some View {
+        if vm?.isSendingVoice == true {
+            ProgressView()
+                .tint(Theme.coral)
+                .frame(width: 44, height: 44)
+        } else {
+            Image(systemName: recorder.isRecording ? "waveform" : "mic.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(recorder.isRecording ? .white : Theme.coral)
+                .frame(width: 44, height: 44)
+                .background(recorder.isRecording
+                            ? AnyShapeStyle(Theme.sunset)
+                            : AnyShapeStyle(Theme.card(for: colorScheme)))
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Theme.hairline(for: colorScheme), lineWidth: recorder.isRecording ? 0 : 1))
+                .scaleEffect(recorder.isRecording ? 1.12 : 1)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: recorder.isRecording)
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in
+                            if !recorder.isRecording { startRecording() }
+                        }
+                        .onEnded { _ in
+                            stopRecordingAndSend()
+                        }
+                )
+        }
+    }
+
+    /// A centered "recording…" indicator shown while the mic is held.
+    private var recordingOverlay: some View {
+        VStack {
+            Spacer()
+            VStack(spacing: 12) {
+                Image(systemName: "waveform")
+                    .font(.system(size: 40, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .symbolEffect(.variableColor.iterative, isActive: true)
+                Text(l10n.t(.chatRecording))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text(String(format: "%d:%02d", Int(recorder.elapsed) / 60, Int(recorder.elapsed) % 60))
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(.white)
+                    .monospacedDigit()
+            }
+            .padding(.horizontal, 36)
+            .padding(.vertical, 28)
+            .background(Theme.coral.opacity(0.92), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .padding(.bottom, 120)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black.opacity(0.18).ignoresSafeArea())
+        .allowsHitTesting(false)
+        .transition(.opacity)
+    }
+
+    /// Begins recording (requests mic permission as needed). Surfaces a permission
+    /// alert if it was denied so the user can enable it in Settings.
+    private func startRecording() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Task {
+            let started = await recorder.start()
+            if !started && recorder.permissionDenied {
+                recorder.permissionDenied = false
+                showMicPermissionAlert = true
+            }
+        }
+    }
+
+    /// Stops recording and sends the clip (clips under ~0.5s are discarded).
+    private func stopRecordingAndSend() {
+        guard recorder.isRecording else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        let data = recorder.stopAndFetchData()
+        guard let data, let vm else { return }
+        Task { await vm.sendVoice(data) }
     }
 
     private var canSend: Bool {
@@ -386,6 +537,33 @@ struct ChatDetailView: View {
         case .file:
             let name = message.fileName ?? ""
             return name.isEmpty ? l10n.t(.chatFilePreview) : name
+        case .audio:
+            return l10n.t(.chatVoice)
+        }
+    }
+
+    /// Saves a message to local favorites (收藏). Reuses the same kind-aware preview
+    /// as quoted replies so a media message reads as e.g. "[Photo]" rather than blank.
+    private func favorite(_ message: ChatMessage) {
+        data.favorites.add(Favorite(
+            id: message.id,
+            text: quotedPreviewText(for: message),
+            kind: kindLabel(for: message.kind),
+            sender: quotedSenderName(for: message),
+            source: "dm",
+            date: message.createdAt ?? Date()
+        ))
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    /// Stable string label for a message kind, stored on the favorite.
+    private func kindLabel(for kind: ChatMessageKind) -> String {
+        switch kind {
+        case .text: return "text"
+        case .image: return "image"
+        case .video: return "video"
+        case .file: return "file"
+        case .audio: return "audio"
         }
     }
 
@@ -464,8 +642,10 @@ private struct MessageBubble: View {
     var isHighlighted: Bool = false
     var onReply: (() -> Void)? = nil
     var onForward: (() -> Void)? = nil
+    var onFavorite: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
     var onRecall: (() -> Void)? = nil
+    var onReport: (() -> Void)? = nil
     var onTapQuoted: ((UUID) -> Void)? = nil
 
     private var isMe: Bool { message.sender == .me }
@@ -507,6 +687,16 @@ private struct MessageBubble: View {
                                 UIPasteboard.general.string = message.text
                             } label: {
                                 Label(l10n.t(.chatCopy), systemImage: "doc.on.doc")
+                            }
+                        }
+                        if !message.isRecalled {
+                            Button { onFavorite?() } label: {
+                                Label(l10n.t(.favoriteAction), systemImage: "star")
+                            }
+                        }
+                        if !isMe {
+                            Button { onReport?() } label: {
+                                Label(l10n.t(.reportTitle), systemImage: "flag")
                             }
                         }
                         Divider()
@@ -556,6 +746,8 @@ private struct MessageBubble: View {
                         caption: message.text,
                         isMe: isMe
                     )
+                } else if message.kind == .video, let path = message.imagePath {
+                    ChatVideoBubble(path: path, caption: message.text, isMe: isMe)
                 } else if message.kind == .file, let path = message.imagePath {
                     ChatFileBubble(
                         path: path,
@@ -563,6 +755,8 @@ private struct MessageBubble: View {
                         fileSize: message.fileSize,
                         isMe: isMe
                     )
+                } else if message.kind == .audio, let path = message.imagePath {
+                    AudioMessageBubble(path: path, isMe: isMe)
                 } else {
                     textBubble
                 }
@@ -702,8 +896,9 @@ struct ChatImageBubble: View {
     let caption: String
     let isMe: Bool
 
-    @State private var url: URL?
+    @State private var image: UIImage?
     @State private var didFail = false
+    @State private var showFullscreen = false
 
     private let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
 
@@ -747,19 +942,8 @@ struct ChatImageBubble: View {
         Theme.cardSubtle(for: colorScheme)
             .frame(width: displaySize.width, height: displaySize.height)
             .overlay {
-                if let url {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image.resizable().aspectRatio(contentMode: .fill)
-                        case .failure:
-                            placeholderIcon
-                        case .empty:
-                            ProgressView().tint(Theme.coral)
-                        @unknown default:
-                            ProgressView().tint(Theme.coral)
-                        }
-                    }
+                if let image {
+                    Image(uiImage: image).resizable().aspectRatio(contentMode: .fill)
                 } else if didFail {
                     placeholderIcon
                 } else {
@@ -772,11 +956,22 @@ struct ChatImageBubble: View {
                     radius: 5, y: 2)
             .task(id: path) {
                 didFail = false
-                do {
-                    url = try await data.signedChatImageURL(path: path)
-                } catch {
+                // Loads from the on-device cache (downloaded once, keyed by path) —
+                // no bandwidth on re-view, no re-download when the signed URL rotates.
+                if let img = await data.cachedChatImage(path: path) {
+                    image = img
+                } else {
                     didFail = true
-                    print("⚠️ signed chat image url failed: \(error)")
+                }
+            }
+            // Tap to open fullscreen (pinch-zoom + share/save).
+            .contentShape(shape)
+            .onTapGesture {
+                if image != nil { showFullscreen = true }
+            }
+            .fullScreenCover(isPresented: $showFullscreen) {
+                if let image {
+                    FullscreenImageView(image: image)
                 }
             }
     }
@@ -931,5 +1126,92 @@ struct ChatFileBubble: View {
         ))
         .environment(LocalizationManager())
         .environment(AppDataService(userId: nil))
+    }
+}
+
+// MARK: - Fullscreen image viewer
+
+/// Tap a chat image to open it fullscreen with pinch-to-zoom, double-tap zoom,
+/// drag-to-pan, and a share button (the system share sheet includes "Save Image",
+/// so no Photos-library usage string is required). Shared by 1:1 and group chats.
+struct FullscreenImageView: View {
+    let image: UIImage
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var scale: CGFloat = 1
+    @State private var lastScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            imageContent
+                .scaleEffect(scale)
+                .offset(offset)
+                .gesture(
+                    MagnificationGesture()
+                        .onChanged { value in scale = max(1, min(lastScale * value, 5)) }
+                        .onEnded { _ in
+                            lastScale = scale
+                            if scale <= 1 {
+                                withAnimation { offset = .zero; lastOffset = .zero }
+                            }
+                        }
+                )
+                .simultaneousGesture(
+                    DragGesture()
+                        .onChanged { value in
+                            guard scale > 1 else { return }
+                            offset = CGSize(
+                                width: lastOffset.width + value.translation.width,
+                                height: lastOffset.height + value.translation.height
+                            )
+                        }
+                        .onEnded { _ in lastOffset = offset }
+                )
+                .onTapGesture(count: 2) {
+                    withAnimation {
+                        if scale > 1 {
+                            scale = 1; lastScale = 1; offset = .zero; lastOffset = .zero
+                        } else {
+                            scale = 2.5; lastScale = 2.5
+                        }
+                    }
+                }
+
+            VStack {
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 40, height: 40)
+                            .background(.black.opacity(0.4), in: Circle())
+                    }
+                    Spacer()
+                    ShareLink(
+                        item: Image(uiImage: image),
+                        preview: SharePreview("Image", image: Image(uiImage: image))
+                    ) {
+                        Image(systemName: "square.and.arrow.down")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 40, height: 40)
+                            .background(.black.opacity(0.4), in: Circle())
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
+                Spacer()
+            }
+        }
+    }
+
+    private var imageContent: some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaledToFit()
     }
 }

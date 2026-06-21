@@ -17,6 +17,14 @@ struct ContactDetailView: View {
     @State private var openingChat: Bool = false
     @State private var chatRoute: DMChatRoute?
     @State private var showChatError: Bool = false
+    // Trust & Safety
+    @State private var reportTarget: ReportTarget?
+    @State private var showBlockConfirm: Bool = false
+    @State private var isBlocking: Bool = false
+    @State private var showBlockError: Bool = false
+    // Friend remark (备注) — local-only custom name I see for this friend.
+    @State private var showRemarkEditor: Bool = false
+    @State private var remarkDraft: String = ""
 
     var body: some View {
         ScrollView {
@@ -50,6 +58,27 @@ struct ContactDetailView: View {
         .navigationDestination(item: $chatRoute) { route in
             ChatDetailView(route: route)
         }
+        .confirmationDialog(
+            l10n.t(.blockConfirm),
+            isPresented: $showBlockConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(l10n.t(.blockAction), role: .destructive) { block() }
+            Button(l10n.t(.adminCancel), role: .cancel) { }
+        }
+        .alert(l10n.t(.blockError), isPresented: $showBlockError) {
+            Button(l10n.t(.authVerificationSentOk), role: .cancel) { }
+        }
+        .alert(l10n.t(.contactsSetRemark), isPresented: $showRemarkEditor) {
+            TextField(l10n.t(.contactsRemark), text: $remarkDraft)
+            Button(l10n.t(.groupSettingsSave)) {
+                data.setRemark(remarkDraft, for: contact.id)
+            }
+            Button(l10n.t(.adminCancel), role: .cancel) { }
+        }
+        .sheet(item: $reportTarget) { target in
+            ReportSheet(target: target)
+        }
         .overlay(alignment: .topLeading) {
             Button { dismiss() } label: {
                 Image(systemName: "chevron.left")
@@ -62,6 +91,54 @@ struct ContactDetailView: View {
             .padding(.leading, 18)
             .padding(.top, 8)
         }
+        .overlay(alignment: .topTrailing) {
+            Menu {
+                Button {
+                    remarkDraft = data.remark(for: contact.id) ?? ""
+                    showRemarkEditor = true
+                } label: {
+                    Label(l10n.t(.contactsSetRemark), systemImage: "square.and.pencil")
+                }
+                Button {
+                    reportTarget = ReportTarget(user: contact.id, name: contact.name)
+                } label: {
+                    Label(l10n.t(.reportTitle), systemImage: "flag")
+                }
+                Button(role: .destructive) {
+                    showBlockConfirm = true
+                } label: {
+                    Label(l10n.t(.blockAction), systemImage: "hand.raised")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40)
+                    .background(.black.opacity(0.25))
+                    .clipShape(Circle())
+            }
+            .padding(.trailing, 18)
+            .padding(.top, 8)
+        }
+    }
+
+    /// Blocks this contact (records the block, drops the friendship, hides them
+    /// everywhere) and pops back to the previous screen.
+    private func block() {
+        guard !isBlocking else { return }
+        isBlocking = true
+        Task {
+            do {
+                try await data.blockUser(contact.id)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                isBlocking = false
+                dismiss()
+            } catch {
+                isBlocking = false
+                showBlockError = true
+                print("⚠️ block failed: \(error)")
+            }
+        }
     }
 
     private var hero: some View {
@@ -69,9 +146,16 @@ struct ContactDetailView: View {
             Avatar(colors: contact.avatarColors, initials: contact.initials, imageURL: contact.avatarUrl, size: 96, isOnline: contact.isOnline)
                 .shadow(color: .black.opacity(0.15), radius: 20, y: 10)
             VStack(spacing: 4) {
-                Text(contact.name)
+                Text(data.remark(for: contact.id) ?? contact.name)
                     .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundStyle(Theme.ink(for: colorScheme))
+                // When a remark (备注) is set, show the real name beneath it so the
+                // friend's actual identity stays visible.
+                if let remark = data.remark(for: contact.id), !remark.isEmpty {
+                    Text("\(l10n.t(.contactsRemark)) · \(contact.name)")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                }
                 Text(contact.handle)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Theme.inkSecondary(for: colorScheme))
@@ -119,39 +203,26 @@ struct ContactDetailView: View {
     }
 
     private var actions: some View {
-        HStack(spacing: 12) {
-            Button {
-                startChat()
-            } label: {
-                HStack(spacing: 8) {
-                    if openingChat {
-                        ProgressView().tint(.white)
-                    } else {
-                        Image(systemName: "bubble.left.fill")
-                    }
-                    Text(l10n.t(.contactDetailMessage))
+        Button {
+            startChat()
+        } label: {
+            HStack(spacing: 8) {
+                if openingChat {
+                    ProgressView().tint(.white)
+                } else {
+                    Image(systemName: "bubble.left.fill")
                 }
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 15)
-                .background(Theme.sunset)
-                .clipShape(Capsule())
-                .shadow(color: Theme.coral.opacity(0.35), radius: 12, y: 6)
+                Text(l10n.t(.contactDetailMessage))
             }
-            .disabled(openingChat)
-
-            Button {
-            } label: {
-                Image(systemName: "phone.fill")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Theme.coral)
-                    .frame(width: 52, height: 52)
-                    .background(Theme.card(for: colorScheme))
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
-            }
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 15)
+            .background(Theme.sunset)
+            .clipShape(Capsule())
+            .shadow(color: Theme.coral.opacity(0.35), radius: 12, y: 6)
         }
+        .disabled(openingChat)
     }
 
     /// Opens (or creates) the 1:1 thread with this friend via get_or_create_thread,

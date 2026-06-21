@@ -26,7 +26,22 @@ struct DiscoverView: View {
     }
 
     private var visibleCampaigns: [Campaign] {
-        campaigns
+        guard selectedFilter != l10n.t(.filterAll) else { return campaigns }
+        // Map the selected (localized) chip back to an English match term so the
+        // filter works regardless of the app's language.
+        let term: String
+        switch selectedFilter {
+        case l10n.t(.filterBeauty): term = "beauty"
+        case l10n.t(.filterFashion): term = "fashion"
+        case l10n.t(.filterWellness): term = "wellness"
+        case l10n.t(.filterTech): term = "tech"
+        default: return campaigns
+        }
+        return campaigns.filter { c in
+            c.tags.contains { $0.lowercased().contains(term) }
+                || c.title.lowercased().contains(term)
+                || c.brand.lowercased().contains(term)
+        }
     }
 
     var body: some View {
@@ -57,6 +72,10 @@ struct DiscoverView: View {
         }
     }
 
+    private var featuredCampaign: Campaign? {
+        campaigns.first(where: { $0.brand.localizedCaseInsensitiveContains("Glossier") }) ?? campaigns.first
+    }
+
     private var featured: some View {
         ZStack(alignment: .bottomLeading) {
             Theme.dusk
@@ -69,24 +88,26 @@ struct DiscoverView: View {
             VStack(alignment: .leading, spacing: 12) {
                 TagChip(text: l10n.t(.discoverFeatured), filled: false)
                     .colorScheme(.dark)
-                Text("Glossier Summer\nGlow Launch")
+                Text(featuredCampaign?.title ?? "Glossier Summer\nGlow Launch")
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
-                Text("3 creator spots · $8K–12K budget")
+                Text(featuredCampaign.map { "\($0.brand) · \($0.budget)" } ?? "3 creator spots · $8K–12K budget")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.white.opacity(0.85))
 
-                Button {
-                } label: {
-                    Text(l10n.t(.discoverViewBrief))
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Theme.plum)
-                        .padding(.horizontal, 22)
-                        .padding(.vertical, 11)
-                        .background(.white)
-                        .clipShape(Capsule())
+                if let featuredCampaign {
+                    NavigationLink(value: featuredCampaign.id) {
+                        Text(l10n.t(.discoverViewBrief))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.plum)
+                            .padding(.horizontal, 22)
+                            .padding(.vertical, 11)
+                            .background(.white)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
                 }
-                .padding(.top, 4)
             }
             .padding(22)
         }
