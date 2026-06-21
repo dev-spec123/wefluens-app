@@ -1351,7 +1351,8 @@ final class AppDataService {
                     fileSize: isRecalled ? nil : row.fileSize,
                     fileMime: isRecalled ? nil : row.fileMime,
                     isRecalled: isRecalled,
-                    createdAt: row.createdAt
+                    createdAt: row.createdAt,
+                    replyTo: isRecalled ? nil : row.replyToMessageId
                 )
             }
         } catch {

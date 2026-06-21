@@ -193,6 +193,9 @@ struct GroupChatMessage: Identifiable, Codable, Equatable {
     /// When this message was created (server timestamptz). Used by the client-side
     /// 2-minute recall window gate so the button isn't shown for expired messages.
     let createdAt: Date?
+    /// Id of the message this one quotes (nil for a normal message). Resolved
+    /// against the loaded thread to render the quoted preview above the bubble.
+    let replyTo: UUID?
 
     init(id: UUID, text: String, sender: MessageSender, senderId: UUID,
          senderName: String, senderColors: [UInt], senderAvatarUrl: String?,
@@ -200,7 +203,7 @@ struct GroupChatMessage: Identifiable, Codable, Equatable {
          imageWidth: Int? = nil, imageHeight: Int? = nil,
          fileName: String? = nil, fileSize: Int? = nil, fileMime: String? = nil,
          isRecalled: Bool = false,
-         createdAt: Date? = nil) {
+         createdAt: Date? = nil, replyTo: UUID? = nil) {
         self.id = id
         self.text = text
         self.sender = sender
@@ -218,6 +221,7 @@ struct GroupChatMessage: Identifiable, Codable, Equatable {
         self.fileMime = fileMime
         self.isRecalled = isRecalled
         self.createdAt = createdAt
+        self.replyTo = replyTo
     }
 }
 
