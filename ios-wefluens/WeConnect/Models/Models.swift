@@ -108,8 +108,10 @@ struct Conversation: Identifiable {
     let lastMessageRecalled: Bool
     /// The other participant's profile photo URL (nil for sample data / groups).
     let avatarUrl: String?
+    /// True when an unread group message @-mentions me (drives the "@me" badge).
+    let mentioned: Bool
 
-    init(id: UUID = UUID(), name: String, avatar: String, avatarColors: [UInt], lastMessage: String, time: String, unread: Int, isPinned: Bool, isOfficial: Bool, isOnline: Bool, isGroup: Bool, participantCount: Int, messages: [ChatMessage], otherUserId: UUID? = nil, avatarInitials: String? = nil, lastMessageAt: Date? = nil, lastFromMe: Bool = false, lastMessageIsImage: Bool = false, lastMessageType: String = "text", lastMessageRecalled: Bool = false, avatarUrl: String? = nil) {
+    init(id: UUID = UUID(), name: String, avatar: String, avatarColors: [UInt], lastMessage: String, time: String, unread: Int, isPinned: Bool, isOfficial: Bool, isOnline: Bool, isGroup: Bool, participantCount: Int, messages: [ChatMessage], otherUserId: UUID? = nil, avatarInitials: String? = nil, lastMessageAt: Date? = nil, lastFromMe: Bool = false, lastMessageIsImage: Bool = false, lastMessageType: String = "text", lastMessageRecalled: Bool = false, avatarUrl: String? = nil, mentioned: Bool = false) {
         self.id = id
         self.name = name
         self.avatar = avatar
@@ -131,6 +133,7 @@ struct Conversation: Identifiable {
         self.lastMessageType = lastMessageType
         self.lastMessageRecalled = lastMessageRecalled
         self.avatarUrl = avatarUrl
+        self.mentioned = mentioned
     }
 }
 

@@ -411,10 +411,14 @@ final class AppDataService {
     @MainActor
     private func loadGroupThreads(uid: UUID) async -> [Conversation] {
         do {
+            // Compute @me mentions concurrently with the thread list (client-side,
+            // mirrors the RN app — no backend change needed).
+            async let mentionedTask = loadMentionedGroupIds(uid: uid)
             let rows: [GroupThreadListRow] = try await supabase
                 .rpc("list_group_threads")
                 .execute()
                 .value
+            let mentionedSet = await mentionedTask
 
             return rows.map { row in
                 let displayName = (row.name.flatMap { $0.isEmpty ? nil : $0 }) ?? "Group"
@@ -439,13 +443,68 @@ final class AppDataService {
                     lastMessageIsImage: (row.lastMessageType ?? "text") == "image",
                     lastMessageType: row.lastMessageType ?? "text",
                     lastMessageRecalled: row.lastMessageRecalled ?? false,
-                    avatarUrl: row.avatarUrl
+                    avatarUrl: row.avatarUrl,
+                    mentioned: mentionedSet.contains(row.groupId)
                 )
             }
         } catch {
             print("⚠️ Group threads load failed: \(error)")
             return []
         }
+    }
+
+    private struct GroupMemberReadRow: Decodable {
+        let groupId: UUID
+        let lastReadAt: Date?
+        enum CodingKeys: String, CodingKey { case groupId = "group_id"; case lastReadAt = "last_read_at" }
+    }
+
+    private struct GroupMentionRow: Decodable {
+        let groupId: UUID
+        let body: String
+        let createdAt: Date?
+        enum CodingKeys: String, CodingKey { case groupId = "group_id"; case body; case createdAt = "created_at" }
+    }
+
+    /// Group ids where an unread message (created after my last_read_at) @-mentions
+    /// me. Two batched queries; the @me match runs client-side via Mentions.
+    @MainActor
+    private func loadMentionedGroupIds(uid: UUID) async -> Set<UUID> {
+        var result = Set<UUID>()
+        let myName = profile?.name ?? ""
+        do {
+            let members: [GroupMemberReadRow] = try await supabase
+                .from("group_members")
+                .select("group_id,last_read_at")
+                .eq("user_id", value: uid.uuidString)
+                .execute()
+                .value
+            if members.isEmpty { return result }
+            var lastRead: [UUID: Date] = [:]
+            var groupIds: [String] = []
+            for m in members {
+                if let lr = m.lastReadAt { lastRead[m.groupId] = lr }
+                groupIds.append(m.groupId.uuidString)
+            }
+            let msgs: [GroupMentionRow] = try await supabase
+                .from("group_messages")
+                .select("group_id,body,created_at,sender_id")
+                .in("group_id", values: groupIds)
+                .neq("sender_id", value: uid.uuidString)
+                .ilike("body", pattern: "%@%")
+                .order("created_at", ascending: false)
+                .limit(300)
+                .execute()
+                .value
+            for m in msgs {
+                if result.contains(m.groupId) { continue }
+                if let lr = lastRead[m.groupId], let created = m.createdAt, created <= lr { continue }
+                if Mentions.messageMentionsMe(m.body, myName: myName) { result.insert(m.groupId) }
+            }
+        } catch {
+            print("⚠️ Mentioned group ids failed: \(error)")
+        }
+        return result
     }
 
     // MARK: - Contacts

@@ -1138,6 +1138,7 @@ struct FullscreenImageView: View {
     let image: UIImage
     @Environment(\.dismiss) private var dismiss
 
+    @State private var savedFlash = false
     @State private var scale: CGFloat = 1
     @State private var lastScale: CGFloat = 1
     @State private var offset: CGSize = .zero
@@ -1191,11 +1192,18 @@ struct FullscreenImageView: View {
                             .background(.black.opacity(0.4), in: Circle())
                     }
                     Spacer()
+                    Button { saveToPhotos() } label: {
+                        Image(systemName: savedFlash ? "checkmark" : "arrow.down.to.line")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 40, height: 40)
+                            .background(.black.opacity(0.4), in: Circle())
+                    }
                     ShareLink(
                         item: Image(uiImage: image),
                         preview: SharePreview("Image", image: Image(uiImage: image))
                     ) {
-                        Image(systemName: "square.and.arrow.down")
+                        Image(systemName: "square.and.arrow.up")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: 40, height: 40)
@@ -1206,6 +1214,16 @@ struct FullscreenImageView: View {
                 .padding(.top, 8)
                 Spacer()
             }
+        }
+    }
+
+    /// One-tap save to the photo library (needs NSPhotoLibraryAddUsageDescription).
+    private func saveToPhotos() {
+        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+        savedFlash = true
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            savedFlash = false
         }
     }
 

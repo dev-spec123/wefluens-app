@@ -357,6 +357,11 @@ private struct ConversationRow: View {
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.inkSecondary(for: colorScheme))
                     }
+                    if conversation.mentioned {
+                        Image(systemName: "at")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Theme.coral)
+                    }
                 }
                 Text(previewText)
                     .font(.system(size: 14))
