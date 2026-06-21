@@ -17,19 +17,49 @@ struct ContactsView: View {
     private var requests: [FriendRequest] { data.friendRequests }
 
     private var filtered: [Contact] {
-        guard !searchText.isEmpty else { return contacts }
-        return contacts.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText) ||
-            $0.handle.localizedCaseInsensitiveContains(searchText) ||
-            $0.role.localizedCaseInsensitiveContains(searchText)
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return contacts }
+        return contacts.filter { contact in
+            let remark = data.remark(for: contact.id) ?? ""
+            return contact.name.localizedCaseInsensitiveContains(trimmed) ||
+                remark.localizedCaseInsensitiveContains(trimmed) ||
+                contact.handle.localizedCaseInsensitiveContains(trimmed) ||
+                contact.role.localizedCaseInsensitiveContains(trimmed)
         }
     }
 
-    /// Contacts grouped by first letter, sorted alphabetically.
+    /// The name used for sorting / sectioning a contact: its remark when set,
+    /// otherwise the real name (so a 备注 also moves the friend in the A–Z list).
+    private func sortName(for contact: Contact) -> String {
+        data.remark(for: contact.id) ?? contact.name
+    }
+
+    /// Pinyin first letter (A–Z) of a display name for A–Z sectioning. Chinese is
+    /// transliterated to Latin via Foundation, diacritics stripped; anything that
+    /// isn't an A–Z letter (digits, symbols, emoji) buckets under "#".
+    private func sectionLetter(for name: String) -> String {
+        let latin = name
+            .applyingTransform(.toLatin, reverse: false)?
+            .applyingTransform(.stripDiacritics, reverse: false)
+        guard let first = (latin ?? name).first.map({ String($0).uppercased() }),
+              let scalar = first.unicodeScalars.first,
+              ("A"..."Z").contains(scalar) else { return "#" }
+        return first
+    }
+
+    /// Contacts grouped into A–Z sections by pinyin first letter, headers sorted
+    /// A..Z with "#" (non-letters) pushed to the end.
     private var grouped: [(letter: String, items: [Contact])] {
-        let sorted = filtered.sorted { $0.name < $1.name }
-        let dict = Dictionary(grouping: sorted) { String($0.name.prefix(1)).uppercased() }
-        return dict.keys.sorted().map { (letter: $0, items: dict[$0] ?? []) }
+        let sorted = filtered.sorted {
+            sortName(for: $0).localizedCaseInsensitiveCompare(sortName(for: $1)) == .orderedAscending
+        }
+        let dict = Dictionary(grouping: sorted) { sectionLetter(for: sortName(for: $0)) }
+        let letters = dict.keys.sorted { a, b in
+            if a == "#" { return false }
+            if b == "#" { return true }
+            return a < b
+        }
+        return letters.map { (letter: $0, items: dict[$0] ?? []) }
     }
 
     var body: some View {
@@ -56,7 +86,7 @@ struct ContactsView: View {
                             VStack(spacing: 0) {
                                 ForEach(Array(group.items.enumerated()), id: \.element.id) { index, contact in
                                     NavigationLink(value: contact.id) {
-                                        ContactRow(contact: contact)
+                                        ContactRow(contact: contact, displayName: data.displayName(for: contact))
                                     }
                                     .buttonStyle(.plain)
                                     if index < group.items.count - 1 {
@@ -147,6 +177,15 @@ struct ContactsView: View {
             TextField(l10n.t(.contactsSearch), text: $searchText)
                 .font(.system(size: 16))
                 .foregroundStyle(Theme.ink(for: colorScheme))
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 13)
@@ -366,13 +405,15 @@ struct FriendRequestDetailView: View {
 private struct ContactRow: View {
     @Environment(\.colorScheme) private var colorScheme
     let contact: Contact
+    /// The name to show: the friend's remark (备注) when set, else their real name.
+    let displayName: String
 
     var body: some View {
         HStack(spacing: 14) {
             Avatar(colors: contact.avatarColors, initials: contact.initials, imageURL: contact.avatarUrl, size: 50, isOnline: contact.isOnline)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(contact.name)
+                Text(displayName)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Theme.ink(for: colorScheme))
                 Text(contact.role)

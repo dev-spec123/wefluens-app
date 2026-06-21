@@ -23,7 +23,9 @@ final class ChatThreadViewModel {
     /// Set to nil to dismiss. Replaces the old generic `recallFailed` bool.
     var recallError: L10n?
     var isSendingImage = false
+    var isSendingVideo = false
     var isSendingFile = false
+    var isSendingVoice = false
     /// The message the user is quoting in their next send (nil = normal message).
     /// Set by long-press → Reply; cleared by the × or after a successful send.
     var replyingTo: ChatMessage?
@@ -40,15 +42,31 @@ final class ChatThreadViewModel {
     /// Loads history, marks the thread read, refreshes the inbox, then subscribes
     /// to live inserts so the other person's replies appear in real time.
     func start() async {
-        await reload()
+        // Show the last cached view instantly (秒开 / survives a brief offline blip),
+        // then refresh from the server.
+        if let cached = MessageCache.loadDM(route.threadId), !cached.isEmpty {
+            messages = cached
+            isLoading = false
+        }
+        await reload(allowEmpty: false)
         isLoading = false
         await data.markThreadRead(threadId: route.threadId)
         await data.loadConversations()
         await subscribe()
     }
 
-    func reload() async {
-        messages = await data.loadThreadMessages(threadId: route.threadId)
+    /// Re-reads the thread and re-caches it. `allowEmpty` is false only for the
+    /// initial load, so a transient empty fetch (offline) doesn't wipe the cached
+    /// view; mutations (delete / clear / recall) keep the default `true` so an
+    /// emptied thread correctly clears.
+    func reload(allowEmpty: Bool = true) async {
+        let fresh = await data.loadThreadMessages(threadId: route.threadId)
+        if allowEmpty || !fresh.isEmpty {
+            messages = fresh
+        }
+        if !fresh.isEmpty {
+            MessageCache.saveDM(route.threadId, fresh)
+        }
     }
 
     /// Sends a message through the friend-validated `send_dm` function. The list
@@ -93,6 +111,29 @@ final class ChatThreadViewModel {
         }
     }
 
+    /// Uploads a picked video to the private `chat-media` bucket and sends it as a
+    /// video message via `send_dm_attachment` (p_type "video"). Re-reads on success.
+    func sendVideo(_ videoData: Data) async {
+        guard !isSendingVideo else { return }
+        isSendingVideo = true
+        defer { isSendingVideo = false }
+        let reply = replyingTo?.id
+        do {
+            let upload = try await data.uploadChatFile(
+                threadId: route.threadId,
+                data: videoData,
+                fileName: "video.mp4",
+                mimeType: "video/mp4"
+            )
+            try await data.sendVideoMessage(to: route.otherUserId, upload: upload, replyTo: reply)
+            replyingTo = nil
+            await reload()
+        } catch {
+            sendFailed = true
+            print("⚠️ send_dm_attachment (video) failed: \(error)")
+        }
+    }
+
     /// Uploads a picked document to the private `chat-media` bucket and sends it as a
     /// file message via the generic `send_dm_attachment` (friends-only). Re-reads
     /// from the DB on success; surfaces a real error on failure (never a silent no-op).
@@ -114,6 +155,22 @@ final class ChatThreadViewModel {
         } catch {
             sendFailed = true
             print("⚠️ send_dm_attachment (file) failed: \(error)")
+        }
+    }
+
+    /// Uploads a recorded voice clip to the private `chat-media` bucket and sends it
+    /// as an audio message via the generic `send_dm_attachment` (friends-only).
+    /// Re-reads from the DB on success; surfaces a real error on failure.
+    func sendVoice(_ audioData: Data) async {
+        guard !isSendingVoice else { return }
+        isSendingVoice = true
+        defer { isSendingVoice = false }
+        do {
+            try await data.sendVoiceMessage(to: route.otherUserId, threadId: route.threadId, data: audioData)
+            await reload()
+        } catch {
+            sendFailed = true
+            print("⚠️ send_dm_attachment (audio) failed: \(error)")
         }
     }
 

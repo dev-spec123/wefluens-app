@@ -44,7 +44,7 @@ struct RootTabView: View {
         TabView(selection: $selection) {
             ChatsListView()
                 .tabItem { Label(l10n.t(AppTab.chats.titleKey), systemImage: AppTab.chats.icon) }
-                .badge(data.totalUnread)
+                .badge(data.unmutedUnread)
                 .tag(AppTab.chats)
 
             ContactsView()

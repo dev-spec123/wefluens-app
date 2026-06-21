@@ -7,23 +7,26 @@ import SwiftUI
 
 struct ChatsListView: View {
     @Environment(LocalizationManager.self) private var l10n
-    @Environment(ThemeManager.self) private var theme
     @Environment(AppDataService.self) private var data
     @Environment(\.colorScheme) private var colorScheme
     @State private var searchText: String = ""
     @State private var showCreateGroup: Bool = false
+    @State private var showAddFriend: Bool = false
+    @State private var showScan: Bool = false
     @State private var showDeleteConfirm: Bool = false
     @State private var conversationToDelete: Conversation?
     @State private var path = NavigationPath()
 
     private var conversations: [Conversation] { data.conversations }
 
+    /// Pinned conversations float to the top of the list. `filtered` is already in
+    /// recency order, so filtering preserves a stable order within the pinned group.
     private var pinned: [Conversation] {
-        filtered.filter { $0.isPinned }
+        filtered.filter { data.isPinned($0.id) }
     }
 
     private var recent: [Conversation] {
-        filtered.filter { !$0.isPinned }
+        filtered.filter { !data.isPinned($0.id) }
     }
 
     private var filtered: [Conversation] {
@@ -76,6 +79,19 @@ struct ChatsListView: View {
                     })
                 }
             }
+            .sheet(isPresented: $showAddFriend) {
+                AddFriendView()
+            }
+            .fullScreenCover(isPresented: $showScan) {
+                NavigationStack {
+                    QRScanView()
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button(l10n.t(.adminCancel)) { showScan = false }
+                            }
+                        }
+                }
+            }
             .alert(l10n.t(.chatDeleteConversation), isPresented: $showDeleteConfirm) {
                 Button(l10n.t(.chatDelete), role: .destructive) {
                     if let convo = conversationToDelete {
@@ -115,6 +131,35 @@ struct ChatsListView: View {
         )
     }
 
+    /// Long-press context menu for a conversation row: pin/unpin (置顶), mute/unmute
+    /// (免打扰), and delete (hides the conversation via the existing RPC).
+    @ViewBuilder
+    private func conversationMenu(for convo: Conversation) -> some View {
+        let pinned = data.isPinned(convo.id)
+        let muted = data.isMuted(convo.id)
+
+        Button {
+            data.setPinned(convo.id, on: !pinned)
+        } label: {
+            Label(l10n.t(pinned ? .convUnpin : .convPin),
+                  systemImage: pinned ? "pin.slash.fill" : "pin.fill")
+        }
+
+        Button {
+            data.setMuted(convo.id, on: !muted)
+        } label: {
+            Label(l10n.t(muted ? .convUnmute : .convMute),
+                  systemImage: muted ? "bell.fill" : "bell.slash.fill")
+        }
+
+        Button(role: .destructive) {
+            conversationToDelete = convo
+            showDeleteConfirm = true
+        } label: {
+            Label(l10n.t(.convDelete), systemImage: "trash.fill")
+        }
+    }
+
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
@@ -127,12 +172,21 @@ struct ChatsListView: View {
             }
             Spacer()
             HStack(spacing: 10) {
-                themeToggle
                 Menu {
                     Button {
                         showCreateGroup = true
                     } label: {
                         Label(l10n.t(.chatsNewGroup), systemImage: "person.3.fill")
+                    }
+                    Button {
+                        showAddFriend = true
+                    } label: {
+                        Label(l10n.t(.chatsAddFriend), systemImage: "person.badge.plus")
+                    }
+                    Button {
+                        showScan = true
+                    } label: {
+                        Label(l10n.t(.chatsScan), systemImage: "qrcode.viewfinder")
                     }
                 } label: {
                     Image(systemName: "square.and.pencil")
@@ -146,22 +200,6 @@ struct ChatsListView: View {
             }
         }
         .padding(.top, 8)
-    }
-
-    private var themeToggle: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.35)) {
-                theme.mode = (theme.mode == .light) ? .dark : .light
-            }
-        } label: {
-            Image(systemName: theme.mode == .light ? "moon.fill" : "sun.max.fill")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(theme.mode == .light ? Color(hex: 0x7B8CDE) : Theme.tangerine)
-                .frame(width: 44, height: 44)
-                .background(Theme.card(for: colorScheme))
-                .clipShape(Circle())
-                .overlay(Circle().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
-        }
     }
 
     private var searchBar: some View {
@@ -205,17 +243,18 @@ struct ChatsListView: View {
                             Group {
                                 if convo.isGroup {
                                     NavigationLink(value: groupRoute(for: convo)) {
-                                        ConversationRow(conversation: convo)
+                                        ConversationRow(conversation: convo, isPinned: data.isPinned(convo.id), isMuted: data.isMuted(convo.id))
                                     }
                                 } else {
                                     NavigationLink(value: route(for: convo)) {
-                                        ConversationRow(conversation: convo)
+                                        ConversationRow(conversation: convo, isPinned: data.isPinned(convo.id), isMuted: data.isMuted(convo.id))
                                     }
                                 }
                             }
                         }
                     )
                     .buttonStyle(.plain)
+                    .contextMenu { conversationMenu(for: convo) }
                     if index < items.count - 1 {
                         Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 78)
                     }
@@ -243,6 +282,10 @@ private struct ConversationRow: View {
     @Environment(LocalizationManager.self) private var l10n
     @Environment(\.colorScheme) private var colorScheme
     let conversation: Conversation
+    /// Local pin/mute prefs (置顶 / 免打扰), passed in from the parent so the row
+    /// stays a pure presentation view. Drive the pin + mute indicators.
+    let isPinned: Bool
+    let isMuted: Bool
 
     /// Prepends a localized "You: " when I sent the last message (WeChat-style).
     /// Media messages show a localized placeholder: files always "[File]", images
@@ -259,6 +302,10 @@ private struct ConversationRow: View {
         switch conversation.lastMessageType {
         case "file":
             base = l10n.t(.chatFilePreview)
+        case "audio":
+            base = l10n.t(.chatVoice)
+        case "video":
+            base = l10n.t(.chatVideoPreview)
         case "image" where conversation.lastMessage.isEmpty:
             base = l10n.t(.chatImagePreview)
         default:
@@ -305,6 +352,11 @@ private struct ConversationRow: View {
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.inkSecondary(for: colorScheme))
                     }
+                    if isMuted {
+                        Image(systemName: "bell.slash.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                    }
                 }
                 Text(previewText)
                     .font(.system(size: 14))
@@ -317,18 +369,18 @@ private struct ConversationRow: View {
             VStack(alignment: .trailing, spacing: 8) {
                 Text(conversation.time)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(conversation.unread > 0 ? Theme.coral : Theme.inkTertiary(for: colorScheme))
+                    .foregroundStyle(conversation.unread > 0 && !isMuted ? Theme.coral : Theme.inkTertiary(for: colorScheme))
                 if conversation.unread > 0 {
                     Text("\(conversation.unread)")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(minWidth: 22, minHeight: 22)
-                        .background(Theme.sunset)
+                        .background(isMuted ? AnyShapeStyle(Theme.inkTertiary(for: colorScheme)) : AnyShapeStyle(Theme.sunset))
                         .clipShape(Circle())
-                } else if conversation.isPinned {
+                } else if isPinned {
                     Image(systemName: "pin.fill")
                         .font(.system(size: 11))
-                        .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                        .foregroundStyle(Theme.coral)
                         .rotationEffect(.degrees(45))
                 }
             }

@@ -13,6 +13,7 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 struct GroupSettingsView: View {
     @Environment(LocalizationManager.self) private var l10n
@@ -22,9 +23,28 @@ struct GroupSettingsView: View {
 
     let groupId: UUID
     let initialName: String
+    /// The group's current photo (if any). Owner can replace it via PhotosPicker.
+    let initialAvatarUrl: String?
     /// Called after any change (rename / add / remove) with the latest name +
     /// member count, so the chat header and inbox reflect it without a manual refresh.
     var onChanged: ((String, Int) -> Void)? = nil
+    /// Called after I leave or the owner dissolves the group, so the parent can pop
+    /// back to the inbox (the group no longer exists for me).
+    var onLeft: (() -> Void)? = nil
+
+    init(
+        groupId: UUID,
+        initialName: String,
+        initialAvatarUrl: String? = nil,
+        onChanged: ((String, Int) -> Void)? = nil,
+        onLeft: (() -> Void)? = nil
+    ) {
+        self.groupId = groupId
+        self.initialName = initialName
+        self.initialAvatarUrl = initialAvatarUrl
+        self.onChanged = onChanged
+        self.onLeft = onLeft
+    }
 
     @State private var members: [GroupMember] = []
     @State private var currentName: String = ""
@@ -34,6 +54,22 @@ struct GroupSettingsView: View {
     @State private var showAddMembers: Bool = false
     @State private var memberToRemove: GroupMember?
     @State private var errorMessage: String?
+
+    // --- avatar ---
+    @State private var avatarUrl: String?
+    @State private var avatarItem: PhotosPickerItem?
+    @State private var isUploadingAvatar: Bool = false
+
+    // --- mute (local, per-group UserDefaults flag) ---
+    @State private var isMuted: Bool = false
+
+    // --- leave / dissolve ---
+    @State private var showLeaveConfirm: Bool = false
+    @State private var showDissolveConfirm: Bool = false
+    @State private var isLeaving: Bool = false
+
+    /// UserDefaults key for this group's mute flag.
+    private var muteKey: String { "wefluens.group.mute.\(groupId.uuidString)" }
 
     /// I'm the owner when my own member row carries the owner flag (server-stamped).
     private var isOwner: Bool {
@@ -61,6 +97,8 @@ struct GroupSettingsView: View {
                     VStack(spacing: 22) {
                         nameSection
                         membersSection
+                        muteSection
+                        leaveDissolveSection
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
@@ -93,11 +131,37 @@ struct GroupSettingsView: View {
                 )
             }
         }
+        .confirmationDialog(
+            l10n.t(.groupSettingsLeaveConfirm),
+            isPresented: $showLeaveConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(l10n.t(.groupSettingsLeave), role: .destructive) { leave() }
+            Button(l10n.t(.adminCancel), role: .cancel) { }
+        }
+        .confirmationDialog(
+            l10n.t(.groupSettingsDissolveConfirm),
+            isPresented: $showDissolveConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(l10n.t(.groupSettingsDissolve), role: .destructive) { dissolve() }
+            Button(l10n.t(.adminCancel), role: .cancel) { }
+        }
+        .onChange(of: avatarItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let imgData = try? await newItem.loadTransferable(type: Data.self) {
+                    await changeAvatar(imgData)
+                }
+            }
+        }
         .task {
             if currentName.isEmpty {
                 currentName = initialName
                 nameDraft = initialName
             }
+            if avatarUrl == nil { avatarUrl = initialAvatarUrl }
+            isMuted = UserDefaults.standard.bool(forKey: muteKey)
             await reload()
         }
     }
@@ -143,12 +207,7 @@ struct GroupSettingsView: View {
             sectionLabel(l10n.t(.groupSettingsName))
 
             HStack(spacing: 12) {
-                Image(systemName: "person.3.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .background(Theme.sunset)
-                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                groupAvatar
 
                 if isOwner {
                     TextField(l10n.t(.groupSettingsNamePlaceholder), text: $nameDraft)
@@ -174,6 +233,48 @@ struct GroupSettingsView: View {
             .background(Theme.card(for: colorScheme))
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
+        }
+    }
+
+    /// The group photo. For the owner it's a PhotosPicker (tap to change); for
+    /// other members it's a plain thumbnail. Falls back to the gradient + symbol
+    /// placeholder when there's no photo yet.
+    @ViewBuilder
+    private var groupAvatar: some View {
+        if isOwner {
+            PhotosPicker(selection: $avatarItem, matching: .images) {
+                avatarThumb
+            }
+            .buttonStyle(.plain)
+        } else {
+            avatarThumb
+        }
+    }
+
+    private var avatarThumb: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Avatar(
+                colors: AppDataService.avatarPalette(for: groupId),
+                symbol: "person.3.fill",
+                imageURL: avatarUrl,
+                size: 44
+            )
+            if isUploadingAvatar {
+                ZStack {
+                    Circle().fill(Color.black.opacity(0.35))
+                    ProgressView().tint(.white).scaleEffect(0.7)
+                }
+                .frame(width: 44, height: 44)
+            } else if isOwner {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 18, height: 18)
+                    .background(Theme.sunset)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Theme.card(for: colorScheme), lineWidth: 2))
+                    .offset(x: 3, y: 3)
+            }
         }
     }
 
@@ -283,6 +384,85 @@ struct GroupSettingsView: View {
             .tracking(1)
     }
 
+    // MARK: - Mute
+
+    /// "Mute Notifications" toggle. Local-only — persisted per group id in
+    /// UserDefaults (no server round-trip), mirroring the Expo client's behavior.
+    private var muteSection: some View {
+        HStack(spacing: 12) {
+            Image(systemName: isMuted ? "bell.slash.fill" : "bell.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Theme.coral)
+                .frame(width: 22, height: 22)
+
+            Text(l10n.t(.groupSettingsMute))
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Theme.ink(for: colorScheme))
+
+            Spacer(minLength: 6)
+
+            Toggle("", isOn: $isMuted)
+                .labelsHidden()
+                .tint(Theme.coral)
+                .onChange(of: isMuted) { _, newValue in
+                    UserDefaults.standard.set(newValue, forKey: muteKey)
+                    UISelectionFeedbackGenerator().selectionChanged()
+                }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Theme.card(for: colorScheme))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
+    }
+
+    // MARK: - Leave / Dissolve
+
+    /// "Leave Group" (every member) and, for the owner, "Dissolve Group". Both
+    /// confirm first; the server re-checks the rule (membership DELETE = self-only;
+    /// group_threads DELETE = owner-only).
+    private var leaveDissolveSection: some View {
+        VStack(spacing: 12) {
+            Button { showLeaveConfirm = true } label: {
+                dangerRow(icon: "rectangle.portrait.and.arrow.right", title: l10n.t(.groupSettingsLeave))
+            }
+            .buttonStyle(.plain)
+            .disabled(isLeaving)
+
+            if isOwner {
+                Button { showDissolveConfirm = true } label: {
+                    dangerRow(icon: "trash.fill", title: l10n.t(.groupSettingsDissolve))
+                }
+                .buttonStyle(.plain)
+                .disabled(isLeaving)
+            }
+        }
+    }
+
+    private func dangerRow(icon: String, title: String) -> some View {
+        HStack(spacing: 12) {
+            if isLeaving {
+                ProgressView().tint(Theme.danger).frame(width: 22, height: 22)
+            } else {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.danger)
+                    .frame(width: 22, height: 22)
+            }
+            Text(title)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Theme.danger)
+            Spacer(minLength: 6)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.card(for: colorScheme))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
+        .contentShape(Rectangle())
+    }
+
     // MARK: - Actions
 
     private func reload() async {
@@ -329,6 +509,60 @@ struct GroupSettingsView: View {
             } catch {
                 errorMessage = l10n.t(.groupSettingsRemoveError)
                 print("⚠️ group_remove_member failed: \(error)")
+            }
+        }
+    }
+
+    /// Owner-only avatar change. Uploads to the `avatars` bucket and stamps the URL
+    /// onto group_threads (re-checked server-side). Mirrors the new photo locally.
+    @MainActor
+    private func changeAvatar(_ imageData: Data) async {
+        isUploadingAvatar = true
+        defer { isUploadingAvatar = false }
+        do {
+            let url = try await data.changeGroupAvatar(groupId: groupId, imageData: imageData)
+            avatarUrl = url
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        } catch {
+            errorMessage = l10n.t(.groupSettingsRenameError)
+            print("⚠️ changeGroupAvatar failed: \(error)")
+        }
+    }
+
+    /// Leaves the group (any member). On success notify the parent so it pops back.
+    private func leave() {
+        guard !isLeaving else { return }
+        isLeaving = true
+        Task {
+            do {
+                try await data.leaveGroup(groupId: groupId)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                isLeaving = false
+                onLeft?()
+                dismiss()
+            } catch {
+                isLeaving = false
+                errorMessage = l10n.t(.groupSettingsRemoveError)
+                print("⚠️ leaveGroup failed: \(error)")
+            }
+        }
+    }
+
+    /// Owner-only dissolve. On success notify the parent so it pops back.
+    private func dissolve() {
+        guard !isLeaving else { return }
+        isLeaving = true
+        Task {
+            do {
+                try await data.dissolveGroup(groupId: groupId)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                isLeaving = false
+                onLeft?()
+                dismiss()
+            } catch {
+                isLeaving = false
+                errorMessage = l10n.t(.groupSettingsRemoveError)
+                print("⚠️ dissolveGroup failed: \(error)")
             }
         }
     }

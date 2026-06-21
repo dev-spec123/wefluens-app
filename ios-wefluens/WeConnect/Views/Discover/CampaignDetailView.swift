@@ -10,6 +10,7 @@ struct CampaignDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
     let campaign: Campaign
     @Environment(\.dismiss) private var dismiss
+    @State private var applied = false
 
     var body: some View {
         ScrollView {
@@ -24,6 +25,7 @@ struct CampaignDetailView: View {
         .background(Theme.paper(for: colorScheme).ignoresSafeArea())
         .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
+        .onAppear { applied = Self.isCampaignApplied(campaign.id.uuidString) }
         .overlay(alignment: .topLeading) {
             Button { dismiss() } label: {
                 Image(systemName: "chevron.left")
@@ -154,20 +156,45 @@ struct CampaignDetailView: View {
             }
             Spacer()
             Button {
+                // Tap to apply; tap again to withdraw. Persisted so it survives
+                // leaving and re-opening the campaign.
+                let next = !applied
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    applied = next
+                }
+                Self.setCampaignApplied(campaign.id.uuidString, next)
             } label: {
-                Text(l10n.t(.campaignDetailApply))
+                Text(l10n.t(applied ? .campaignDetailApplied : .campaignDetailApply))
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 32)
                     .padding(.vertical, 15)
-                    .background(Theme.sunset)
+                    .background(applied ? AnyShapeStyle(Theme.inkSecondary(for: colorScheme)) : AnyShapeStyle(Theme.sunset))
                     .clipShape(Capsule())
-                    .shadow(color: Theme.coral.opacity(0.4), radius: 12, y: 6)
+                    .shadow(color: Theme.coral.opacity(applied ? 0 : 0.4), radius: 12, y: 6)
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .background(.ultraThinMaterial)
+    }
+
+    // MARK: - Applied-state persistence (local, reversible)
+
+    private static let appliedKey = "wefluens.appliedCampaigns"
+
+    private static func appliedIds() -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: appliedKey) ?? [])
+    }
+
+    private static func isCampaignApplied(_ id: String) -> Bool {
+        appliedIds().contains(id)
+    }
+
+    private static func setCampaignApplied(_ id: String, _ value: Bool) {
+        var ids = appliedIds()
+        if value { ids.insert(id) } else { ids.remove(id) }
+        UserDefaults.standard.set(Array(ids), forKey: appliedKey)
     }
 }
 

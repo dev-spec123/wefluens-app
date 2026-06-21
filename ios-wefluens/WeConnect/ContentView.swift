@@ -42,6 +42,13 @@ struct ContentView: View {
                             await ds.syncProfile(userId: uid, email: auth.userEmail)
                             // Then read account flags (admin + forced password change) — profile must exist for this to work
                             await auth.checkAccountFlags()
+                            // Load my block list before conversations/contacts so blocked users are filtered out.
+                            await ds.loadBlocks()
+                            // If the user just agreed to the terms at sign-up, stamp acceptance once.
+                            if UserDefaults.standard.bool(forKey: AuthView.pendingTermsKey) {
+                                await ds.acceptTerms()
+                                UserDefaults.standard.removeObject(forKey: AuthView.pendingTermsKey)
+                            }
                             await ds.loadConversations()
                             await ds.loadContacts()
                             await ds.loadDiscover()

@@ -13,8 +13,9 @@ struct AuthView: View {
     @Environment(LocalizationManager.self) private var l10n
     @Environment(\.colorScheme) private var colorScheme
 
-    @State private var email = ""
-    @State private var password = ""
+    // Pre-filled from the Keychain with the last-used credentials (remember me).
+    @State private var email = KeychainHelper.get(AuthManager.savedEmailKey) ?? ""
+    @State private var password = KeychainHelper.get(AuthManager.savedPasswordKey) ?? ""
     @State private var confirmPassword = ""
     @State private var isSignUp = false
     @State private var keyboardHeight: CGFloat = 0
@@ -25,7 +26,15 @@ struct AuthView: View {
     @State private var passwordError: String?
     @State private var confirmError: String?
 
+    // Sign-up requires agreeing to the Terms of Use + Community Guidelines (EULA).
+    @State private var agreedToTerms = false
+    @State private var showTerms = false
+    @State private var showGuidelines = false
+
     private static let minPasswordLength = 8
+    /// Set just before sign-up so the data layer can stamp terms acceptance once
+    /// the account's session exists (see ContentView bootstrap).
+    static let pendingTermsKey = "wefluens.pendingTermsAccept"
 
     var body: some View {
         @Bindable var auth = auth
@@ -61,6 +70,12 @@ struct AuthView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             keyboardHeight = 0
+        }
+        .sheet(isPresented: $showTerms) {
+            NavigationStack { LegalDocView(kind: .terms) }
+        }
+        .sheet(isPresented: $showGuidelines) {
+            NavigationStack { LegalDocView(kind: .guidelines) }
         }
     }
 
@@ -186,6 +201,12 @@ struct AuthView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
+                // Terms agreement (sign-up only)
+                if isSignUp {
+                    agreementRow
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
                 // Sign in / Create account button
                 Button {
                     submit()
@@ -227,6 +248,7 @@ struct AuthView: View {
                         emailError = nil
                         passwordError = nil
                         confirmError = nil
+                        agreedToTerms = false
                     }
                 } label: {
                     Text(l10n.t(isSignUp ? .authHaveAccount : .authNoAccount))
@@ -240,10 +262,54 @@ struct AuthView: View {
         }
     }
 
+    /// Sign-up agreement: a checkbox plus tappable links to the Terms of Use and
+    /// Community Guidelines. Sign-up is disabled until this is checked (the EULA
+    /// gate required for user-generated-content apps).
+    private var agreementRow: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { agreedToTerms.toggle() }
+                UISelectionFeedbackGenerator().selectionChanged()
+            } label: {
+                Image(systemName: agreedToTerms ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 22))
+                    .foregroundStyle(agreedToTerms ? .white : .white.opacity(0.55))
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(l10n.t(.authAgreePrefix))
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.8))
+                HStack(spacing: 6) {
+                    Button { showTerms = true } label: {
+                        Text(l10n.t(.legalTerms))
+                            .font(.system(size: 13, weight: .semibold))
+                            .underline()
+                            .foregroundStyle(.white)
+                    }
+                    Text("·").foregroundStyle(.white.opacity(0.5))
+                    Button { showGuidelines = true } label: {
+                        Text(l10n.t(.legalGuidelines))
+                            .font(.system(size: 13, weight: .semibold))
+                            .underline()
+                            .foregroundStyle(.white)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 2)
+    }
+
     private func submit() {
         let trimmedEmail = email.trimmingCharacters(in: .whitespaces)
         if isSignUp {
             guard validateSignUp(trimmedEmail) else { return }
+            // Record that the user accepted the terms at sign-up; stamped server-side
+            // once the session exists (ContentView bootstrap).
+            UserDefaults.standard.set(true, forKey: Self.pendingTermsKey)
             Task { await auth.signUp(email: trimmedEmail, password: password) }
         } else {
             guard isValidEmail(trimmedEmail) else {
@@ -318,7 +384,7 @@ struct AuthView: View {
 
     private var canSubmit: Bool {
         if isSignUp {
-            return !email.isEmpty && !password.isEmpty && !confirmPassword.isEmpty
+            return !email.isEmpty && !password.isEmpty && !confirmPassword.isEmpty && agreedToTerms
         }
         return !email.isEmpty && !password.isEmpty
     }

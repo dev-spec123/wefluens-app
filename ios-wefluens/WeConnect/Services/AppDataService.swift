@@ -22,6 +22,47 @@ final class AppDataService {
     var campaigns: [Campaign] = []
     var profile: UserProfile?
 
+    /// UUIDs of users I've blocked. Maintained in memory and refreshed by
+    /// `loadBlocks()` / `blockUser` / `unblockUser`. Used to filter blocked users
+    /// out of conversations, contacts, group messages, and friend search so a
+    /// blocked person disappears from every surface (Trust & Safety / Guideline 1.2).
+    var blockedUserIds: Set<UUID> = []
+
+    /// Ids of conversations I've pinned to the top of my chat list (置顶) and
+    /// muted (消息免打扰). Local-only, on-device prefs (WeChat-style): pinned sorts
+    /// to the top, muted hides the unread badge contribution. Persisted to
+    /// UserDefaults as a JSON array of uuid strings; loaded once in `init`.
+    var pinnedIds: Set<UUID> = []
+    var mutedIds: Set<UUID> = []
+
+    /// Local-only friend remarks (备注), WeChat-style: a custom display name I set
+    /// for a friend that only I see. Maps a friend's uuid string → remark text.
+    /// Persisted to UserDefaults as a JSON object; loaded once in `init`. Published
+    /// (it's a stored property on this `@Observable`), so setting a remark refreshes
+    /// the contact list / detail immediately.
+    var remarks: [String: String] = [:]
+
+    /// Local-only favorites (收藏) of chat messages, persisted on-device. Held here
+    /// so every screen that already has the `AppDataService` in scope (chats, group
+    /// chats, profile) can read/write favorites without a separate environment
+    /// object. It's @Observable, so list views observing `data.favorites` refresh
+    /// the moment a favorite is added or removed.
+    let favorites = FavoritesStore()
+
+    /// Local-only pinned group messages (群公告), one per group, persisted on-device.
+    /// Held here so the group chat view can read/write the pinned banner through the
+    /// existing `AppDataService` in scope. It's @Observable, so the banner refreshes
+    /// the moment a message is pinned or unpinned.
+    let pinnedMessages = PinnedMessageStore()
+
+    /// In-memory LRU of decoded chat images, keyed by storage path. Backs the
+    /// on-device media cache (see `cachedChatImage`). Not observable state.
+    @ObservationIgnored private let imageMemoryCache = NSCache<NSString, UIImage>()
+
+    private static let pinnedKey = "wefluens.pinned"
+    private static let mutedKey = "wefluens.muted"
+    private static let remarksKey = "wefluens.remarks"
+
     var isLoadingConversations = false
     var isLoadingContacts = false
     var isLoadingProfile = false
@@ -30,6 +71,86 @@ final class AppDataService {
 
     init(userId: UUID?) {
         self.userId = userId
+        self.pinnedIds = Self.loadIdSet(forKey: Self.pinnedKey)
+        self.mutedIds = Self.loadIdSet(forKey: Self.mutedKey)
+        self.remarks = Self.loadStringMap(forKey: Self.remarksKey)
+    }
+
+    // MARK: - Friend Remarks (备注)
+
+    /// The custom remark I've set for a friend, or nil when none. Empty strings are
+    /// treated as "no remark" so a cleared field falls back to the real name.
+    func remark(for id: UUID) -> String? {
+        let value = remarks[id.uuidString]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (value?.isEmpty == false) ? value : nil
+    }
+
+    /// Sets (or clears, when trimmed-empty) a friend's remark and persists it.
+    func setRemark(_ remark: String, for id: UUID) {
+        let trimmed = remark.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            remarks.removeValue(forKey: id.uuidString)
+        } else {
+            remarks[id.uuidString] = trimmed
+        }
+        Self.saveStringMap(remarks, forKey: Self.remarksKey)
+    }
+
+    /// The name to show for a friend: their remark when set, otherwise their real name.
+    func displayName(for contact: Contact) -> String {
+        remark(for: contact.id) ?? contact.name
+    }
+
+    // MARK: - Conversation Prefs (pin / mute)
+
+    /// True when the conversation is pinned to the top of my chat list.
+    func isPinned(_ id: UUID) -> Bool { pinnedIds.contains(id) }
+
+    /// True when the conversation is muted (免打扰) — its unread count is excluded
+    /// from the Chats tab badge.
+    func isMuted(_ id: UUID) -> Bool { mutedIds.contains(id) }
+
+    /// Pins / unpins a conversation and persists the change.
+    func setPinned(_ id: UUID, on: Bool) {
+        if on { pinnedIds.insert(id) } else { pinnedIds.remove(id) }
+        Self.saveIdSet(pinnedIds, forKey: Self.pinnedKey)
+    }
+
+    /// Mutes / unmutes a conversation and persists the change.
+    func setMuted(_ id: UUID, on: Bool) {
+        if on { mutedIds.insert(id) } else { mutedIds.remove(id) }
+        Self.saveIdSet(mutedIds, forKey: Self.mutedKey)
+    }
+
+    /// Reads a stored set of UUIDs from UserDefaults (JSON array of uuid strings).
+    private static func loadIdSet(forKey key: String) -> Set<UUID> {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let strings = try? JSONDecoder().decode([String].self, from: data)
+        else { return [] }
+        return Set(strings.compactMap { UUID(uuidString: $0) })
+    }
+
+    /// Persists a set of UUIDs to UserDefaults as a JSON array of uuid strings.
+    private static func saveIdSet(_ ids: Set<UUID>, forKey key: String) {
+        let strings = ids.map { $0.uuidString }
+        if let data = try? JSONEncoder().encode(strings) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
+    }
+
+    /// Reads a stored [String: String] map from UserDefaults (JSON object).
+    private static func loadStringMap(forKey key: String) -> [String: String] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let map = try? JSONDecoder().decode([String: String].self, from: data)
+        else { return [:] }
+        return map
+    }
+
+    /// Persists a [String: String] map to UserDefaults as a JSON object.
+    private static func saveStringMap(_ map: [String: String], forKey key: String) {
+        if let data = try? JSONEncoder().encode(map) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
     }
 
     // MARK: - Profile
@@ -169,18 +290,19 @@ final class AppDataService {
     /// Persist profile fields to Supabase via upsert — works even if the row
     /// was never created by syncProfile. Throws on failure so the caller can show an error.
     @MainActor
-    func updateProfile(name: String, bio: String, location: String, avatarUrl: String? = nil) async throws {
+    func updateProfile(name: String, bio: String, location: String, handle: String? = nil, avatarUrl: String? = nil) async throws {
         guard let uid = userId else {
             throw DataError(message: "Not signed in")
         }
 
         // Upsert guarantees the row exists — safe even when syncProfile failed silently.
+        // A nil `handle` is omitted by the encoder, so it's left unchanged.
         let upsert = ProfileUpsert(
             id: uid,
             email: nil,
             name: name,
             avatarUrl: avatarUrl,
-            handle: nil,
+            handle: handle,
             role: nil,
             bio: bio,
             location: location,
@@ -198,6 +320,7 @@ final class AppDataService {
             profile?.name = name
             profile?.bio = bio
             profile?.location = location
+            if let handle { profile?.handle = handle }
             // Always mirror the avatar (including a freshly uploaded one).
             profile?.avatarUrl = avatarUrl
         } else {
@@ -229,9 +352,15 @@ final class AppDataService {
         async let groupsTask = loadGroupThreads(uid: uid)
         let dms = await dmsTask
         let groups = await groupsTask
-        conversations = (dms + groups).sorted {
-            ($0.lastMessageAt ?? .distantPast) > ($1.lastMessageAt ?? .distantPast)
-        }
+        conversations = (dms + groups)
+            // Hide 1:1 threads with users I've blocked (groups have no otherUserId).
+            .filter { conv in
+                guard let other = conv.otherUserId else { return true }
+                return !blockedUserIds.contains(other)
+            }
+            .sorted {
+                ($0.lastMessageAt ?? .distantPast) > ($1.lastMessageAt ?? .distantPast)
+            }
     }
 
     /// Loads my 1:1 DM threads via `list_dm_threads`. Returns [] on error so a
@@ -331,6 +460,9 @@ final class AppDataService {
         isLoadingContacts = true
         defer { isLoadingContacts = false }
 
+        // Refresh the block list first so blocked friends are filtered out below.
+        await loadBlocks()
+
         do {
             // Friends are derived from the `friendships` graph (the source of truth
             // for both the contact list and the count). Each accepted request
@@ -354,6 +486,7 @@ final class AppDataService {
                     .value
                 contacts = profs
                     .map { contact(from: $0) }
+                    .filter { !blockedUserIds.contains($0.id) }
                     .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
             }
 
@@ -400,7 +533,8 @@ final class AppDataService {
             .rpc("search_users", params: SearchUsersParams(search_query: trimmed))
             .execute()
             .value
-        return results
+        // Don't surface users I've blocked in search.
+        return results.filter { !blockedUserIds.contains($0.id) }
     }
 
     /// Sends a friend request (pure DB, no email). Returns the server status:
@@ -588,11 +722,127 @@ final class AppDataService {
         return palettes[Int(sum % UInt(palettes.count))]
     }
 
+    // MARK: - Trust & Safety (block / report / terms)
+
+    /// Refreshes the set of users I've blocked (`blocks.blocker_id = me`). Cheap —
+    /// a small table — and called at bootstrap and on every contact reload so the
+    /// in-memory set stays current for the conversation/group/search filters.
+    @MainActor
+    func loadBlocks() async {
+        guard let uid = userId else { blockedUserIds = []; return }
+        do {
+            let rows: [BlockRow] = try await supabase
+                .from("blocks")
+                .select("blocked_id")
+                .eq("blocker_id", value: uid.uuidString)
+                .execute()
+                .value
+            blockedUserIds = Set(rows.map { $0.blockedId })
+        } catch {
+            print("⚠️ Load blocks failed: \(error)")
+        }
+    }
+
+    /// Blocks a user: records the block, removes any friendship so they leave my
+    /// contacts entirely, and refreshes contacts + conversations so they disappear
+    /// immediately everywhere. Idempotent (upsert on the composite key).
+    @MainActor
+    func blockUser(_ otherId: UUID) async throws {
+        guard let uid = userId else { throw DataError(message: "Not signed in") }
+        try await supabase
+            .from("blocks")
+            .upsert(BlockInsert(blockerId: uid, blockedId: otherId))
+            .execute()
+        blockedUserIds.insert(otherId)
+        // Best-effort: drop the friendship too (no-op / throws harmlessly if not friends).
+        try? await removeFriend(friendId: otherId)
+        await loadContacts()
+        await loadConversations()
+    }
+
+    /// Removes a block. Refreshes contacts + conversations so the user can reappear.
+    @MainActor
+    func unblockUser(_ otherId: UUID) async throws {
+        guard let uid = userId else { throw DataError(message: "Not signed in") }
+        try await supabase
+            .from("blocks")
+            .delete()
+            .eq("blocker_id", value: uid.uuidString)
+            .eq("blocked_id", value: otherId.uuidString)
+            .execute()
+        blockedUserIds.remove(otherId)
+        await loadContacts()
+        await loadConversations()
+    }
+
+    /// Loads the profiles of users I've blocked, for the Blocked Accounts screen.
+    @MainActor
+    func loadBlockedContacts() async -> [Contact] {
+        await loadBlocks()
+        guard !blockedUserIds.isEmpty else { return [] }
+        do {
+            let profs: [ProfileRow] = try await supabase
+                .from("profiles")
+                .select()
+                .in("id", values: blockedUserIds.map { $0.uuidString })
+                .execute()
+                .value
+            return profs
+                .map { contact(from: $0) }
+                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        } catch {
+            print("⚠️ Load blocked contacts failed: \(error)")
+            return []
+        }
+    }
+
+    /// Files a report against a user and/or a specific message. The excerpt is
+    /// capped so a long message can't bloat the row. Reports land in `reports`
+    /// for operator review + action (objectionable-content moderation pipeline).
+    @MainActor
+    func report(reportedUserId: UUID?, messageId: UUID? = nil, messageKind: String? = nil, excerpt: String? = nil, reason: String) async throws {
+        guard let uid = userId else { throw DataError(message: "Not signed in") }
+        try await supabase
+            .from("reports")
+            .insert(ReportInsert(
+                reporterId: uid,
+                reportedUserId: reportedUserId,
+                messageId: messageId,
+                messageKind: messageKind,
+                contentExcerpt: excerpt.map { String($0.prefix(280)) },
+                reason: reason
+            ))
+            .execute()
+    }
+
+    /// Stamps the EULA / Community Guidelines acceptance timestamp on my profile.
+    /// Called once after a user signs up having agreed to the terms.
+    @MainActor
+    func acceptTerms() async {
+        guard let uid = userId else { return }
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        do {
+            try await supabase
+                .from("profiles")
+                .update(TermsAcceptedUpdate(terms_accepted_at: stamp))
+                .eq("id", value: uid.uuidString)
+                .execute()
+        } catch {
+            print("⚠️ Accept terms failed: \(error)")
+        }
+    }
+
     // MARK: - Direct Messages (1:1 chat)
 
-    /// Total unread across all DM threads — drives the Chats tab badge.
+    /// Total unread across all DM threads.
     var totalUnread: Int {
         conversations.reduce(0) { $0 + $1.unread }
+    }
+
+    /// Total unread excluding muted conversations (免打扰) — drives the Chats tab
+    /// badge so muted chats don't contribute to it.
+    var unmutedUnread: Int {
+        conversations.reduce(0) { $0 + (mutedIds.contains($1.id) ? 0 : $1.unread) }
     }
 
     /// Returns the existing (or freshly created) thread id for a 1:1 chat with a
@@ -717,6 +967,69 @@ final class AppDataService {
         return threadId
     }
 
+    /// Sends a previously-uploaded video as a 1:1 video message (reuses the file
+    /// upload; only the attachment `p_type` is "video").
+    @MainActor
+    @discardableResult
+    func sendVideoMessage(to otherId: UUID, upload: ChatFileUpload, replyTo: UUID? = nil) async throws -> UUID {
+        let raw: String = try await supabase
+            .rpc("send_dm_attachment", params: SendDMAttachmentParams(
+                p_other: otherId.uuidString,
+                p_type: "video",
+                p_path: upload.path,
+                p_caption: "",
+                p_file_name: upload.fileName,
+                p_file_size: upload.fileSize,
+                p_file_mime: upload.mime,
+                p_reply_to: replyTo?.uuidString
+            ))
+            .execute()
+            .value
+        await loadConversations()
+        guard let threadId = UUID(uuidString: raw) else {
+            throw DataError(message: "Invalid thread id")
+        }
+        return threadId
+    }
+
+    /// Uploads a voice recording into the private `chat-media` bucket under
+    /// `{threadId}/{uuid}.m4a` — the same thread-scoped Storage RLS as images/files,
+    /// so only the two participants can read/write. No compression (the AAC clip is
+    /// already small). Returns the stored path (kept in `dm_messages.image_url`).
+    @MainActor
+    func uploadChatAudio(threadId: UUID, data: Data) async throws -> String {
+        let folder = threadId.uuidString.lowercased()
+        let path = "\(folder)/\(UUID().uuidString.lowercased()).m4a"
+        try await supabase.storage
+            .from("chat-media")
+            .upload(path, data: data, options: FileOptions(contentType: "audio/m4a", upsert: false))
+        return path
+    }
+
+    /// Uploads a voice recording then sends it as an audio message via the generic
+    /// friend-validated `send_dm_attachment` function (p_type "audio"). Refreshes
+    /// the inbox afterwards.
+    @MainActor
+    func sendVoiceMessage(to otherId: UUID, threadId: UUID, data: Data) async throws {
+        let path = try await uploadChatAudio(threadId: threadId, data: data)
+        let _: String = try await supabase
+            .rpc("send_dm_attachment", params: SendDMAttachmentParams(
+                p_other: otherId.uuidString,
+                // Sent as "file" with an audio MIME — the message_type CHECK only
+                // allows text/image/video/file. Decoded back to .audio by MIME on load.
+                p_type: "file",
+                p_path: path,
+                p_caption: "",
+                p_file_name: "voice.m4a",
+                p_file_size: data.count,
+                p_file_mime: "audio/m4a",
+                p_reply_to: nil
+            ))
+            .execute()
+            .value
+        await loadConversations()
+    }
+
     /// Short-lived signed URLs for private chat images, cached by path so the
     /// realtime-driven reloads don't re-sign the same image on every insert.
     private var signedURLCache: [String: (url: URL, expires: Date)] = [:]
@@ -731,6 +1044,84 @@ final class AppDataService {
             .createSignedURL(path: path, expiresIn: 3600)
         signedURLCache[path] = (url, Date().addingTimeInterval(3600))
         return url
+    }
+
+    // MARK: - On-device media cache
+    //
+    // Download a chat-media object ONCE (keyed by its stable storage path) and
+    // reuse the local copy, so re-viewing it costs no bandwidth. The signed URL
+    // rotates hourly, so caching by URL (what AsyncImage does) re-downloads every
+    // hour — caching by path avoids that. Lives in the Caches directory, which the
+    // OS may reclaim under storage pressure.
+
+    private static let mediaCacheDir: URL = {
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let dir = base.appendingPathComponent("wf-media", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    private static func mediaCacheFile(path: String, ext: String) -> URL {
+        let safe = path.replacingOccurrences(of: "[^A-Za-z0-9]", with: "_", options: .regularExpression)
+        return mediaCacheDir.appendingPathComponent("\(safe).\(ext)")
+    }
+
+    /// A chat image from the on-device cache: downloaded once (keyed by its stable
+    /// storage `path`) and reused from memory/disk. Returns nil on failure.
+    @MainActor
+    func cachedChatImage(path: String) async -> UIImage? {
+        let key = path as NSString
+        if let mem = imageMemoryCache.object(forKey: key) { return mem }
+        let file = Self.mediaCacheFile(path: path, ext: "img")
+        if let data = try? Data(contentsOf: file), let img = UIImage(data: data) {
+            imageMemoryCache.setObject(img, forKey: key)
+            return img
+        }
+        do {
+            let url = try await signedChatImageURL(path: path)
+            let (data, _) = try await URLSession.shared.data(from: url)
+            try? data.write(to: file, options: .atomic)
+            guard let img = UIImage(data: data) else { return nil }
+            imageMemoryCache.setObject(img, forKey: key)
+            return img
+        } catch {
+            print("⚠️ cachedChatImage failed: \(error)")
+            return nil
+        }
+    }
+
+    /// Removes the on-disk media cache (called on sign-out, for privacy + space).
+    static func clearMediaCache() {
+        try? FileManager.default.removeItem(at: mediaCacheDir)
+        try? FileManager.default.createDirectory(at: mediaCacheDir, withIntermediateDirectories: true)
+    }
+
+    /// Local `file://` url for a chat-media object (e.g. a video), downloaded once
+    /// to the on-device cache and reused — so re-watching costs no bandwidth. The
+    /// hourly signed URL is only used for that first download.
+    @MainActor
+    func cachedMediaFileURL(path: String, ext: String = "mp4") async throws -> URL {
+        let file = Self.mediaCacheFile(path: path, ext: ext)
+        if FileManager.default.fileExists(atPath: file.path) { return file }
+        let url = try await signedChatImageURL(path: path)
+        let (tmp, _) = try await URLSession.shared.download(from: url)
+        try? FileManager.default.removeItem(at: file)
+        try FileManager.default.moveItem(at: tmp, to: file)
+        return file
+    }
+
+    // MARK: - Account deletion
+
+    private struct DeleteAccountResponse: Decodable { let ok: Bool?; let success: Bool?; let error: String? }
+
+    /// Permanently deletes the signed-in user's account via the `delete-account`
+    /// edge function (App Store 5.1.1(v) requirement). The caller signs out after.
+    @MainActor
+    func deleteAccount() async throws {
+        let _: DeleteAccountResponse = try await supabase.functions.invoke(
+            "delete-account",
+            options: .init()
+        )
     }
 
     /// Loads all messages in a thread (RLS limits this to the two participants),
@@ -783,7 +1174,10 @@ final class AppDataService {
                     switch row.messageType ?? "text" {
                     case "image": kind = .image
                     case "video": kind = .video
-                    case "file": kind = .file
+                    case "audio": kind = .audio
+                    // Voice clips are stored as "file" with an audio MIME (the
+                    // message_type CHECK has no "audio") — surface them as voice.
+                    case "file": kind = (row.fileMime?.hasPrefix("audio") == true) ? .audio : .file
                     default: kind = .text
                     }
                 }
@@ -921,6 +1315,8 @@ final class AppDataService {
             return rows.compactMap { row in
                 if deletedSet.contains(row.id) { return nil }
                 if let threshold = clearedBefore, let createdAt = row.createdAt, createdAt <= threshold { return nil }
+                // Hide messages from users I've blocked.
+                if blockedUserIds.contains(row.senderId) { return nil }
 
                 let name = row.sender?.name ?? row.sender?.handle ?? "User"
                 let isRecalled = row.recalledAt != nil
@@ -931,7 +1327,10 @@ final class AppDataService {
                     switch row.messageType ?? "text" {
                     case "image": kind = .image
                     case "video": kind = .video
-                    case "file": kind = .file
+                    case "audio": kind = .audio
+                    // Voice clips are stored as "file" with an audio MIME (the
+                    // message_type CHECK has no "audio") — surface them as voice.
+                    case "file": kind = (row.fileMime?.hasPrefix("audio") == true) ? .audio : .file
                     default: kind = .text
                     }
                 }
@@ -1053,6 +1452,66 @@ final class AppDataService {
         await loadConversations()
     }
 
+    /// Sends a previously-uploaded video into a group (reuses the file upload; only
+    /// the attachment `p_type` is "video").
+    @MainActor
+    func sendGroupVideoMessage(groupId: UUID, upload: ChatFileUpload, replyTo: UUID? = nil) async throws {
+        let _: String = try await supabase
+            .rpc("send_group_attachment", params: SendGroupAttachmentParams(
+                p_group: groupId.uuidString,
+                p_type: "video",
+                p_path: upload.path,
+                p_caption: "",
+                p_file_name: upload.fileName,
+                p_file_size: upload.fileSize,
+                p_file_mime: upload.mime,
+                p_width: nil,
+                p_height: nil,
+                p_reply_to: replyTo?.uuidString
+            ))
+            .execute()
+            .value
+        await loadConversations()
+    }
+
+    /// Uploads a voice recording into the private `chat-media` bucket under
+    /// `{groupId}/{uuid}.m4a` — the same group-scoped Storage RLS as group images.
+    /// No compression (the AAC clip is already small). Returns the stored path.
+    @MainActor
+    func uploadGroupAudio(groupId: UUID, data: Data) async throws -> String {
+        let folder = groupId.uuidString.lowercased()
+        let path = "\(folder)/\(UUID().uuidString.lowercased()).m4a"
+        try await supabase.storage
+            .from("chat-media")
+            .upload(path, data: data, options: FileOptions(contentType: "audio/m4a", upsert: false))
+        return path
+    }
+
+    /// Uploads a voice recording then sends it as a group audio message via the
+    /// member-validated `send_group_attachment` (type=audio). Refreshes the inbox.
+    @MainActor
+    func sendGroupVoice(groupId: UUID, data: Data) async throws {
+        let path = try await uploadGroupAudio(groupId: groupId, data: data)
+        let _: String = try await supabase
+            .rpc("send_group_attachment", params: SendGroupAttachmentParams(
+                p_group: groupId.uuidString,
+                // Sent as "file" with an audio MIME — message_type only allows
+                // text/image/video/file. Decoded back to .audio by MIME on load.
+                p_type: "file",
+                p_path: path,
+                p_caption: "",
+                p_file_name: "voice.m4a",
+                p_file_size: data.count,
+                p_file_mime: "audio/m4a",
+                p_width: nil,
+                p_height: nil,
+                p_reply_to: nil
+            ))
+            .execute()
+            .value
+        await loadConversations()
+    }
+
     /// Marks the group read up to now (clears my unread count) via `mark_group_read`.
     @MainActor
     func markGroupRead(groupId: UUID) async {
@@ -1115,6 +1574,61 @@ final class AppDataService {
         _ = try await supabase
             .rpc("group_remove_member", params: GroupMemberParams(p_group: groupId.uuidString, p_user: userId.uuidString))
             .execute()
+    }
+
+    /// Uploads a new group avatar to the public `avatars` bucket and stamps its
+    /// public URL onto the `group_threads` row. Direct table ops — Storage RLS +
+    /// the `group_threads` UPDATE policy (owner-only) gate this server-side, so a
+    /// non-owner write is rejected. Refreshes the inbox so the new photo shows in
+    /// the conversation list. Returns the new public URL.
+    @MainActor
+    @discardableResult
+    func changeGroupAvatar(groupId: UUID, imageData: Data) async throws -> String {
+        let compressed = Self.compressedJPEG(imageData, maxDimension: 512, quality: 0.82) ?? imageData
+        let folder = groupId.uuidString.lowercased()
+        let filePath = "\(folder)/group-\(UUID().uuidString.lowercased()).jpg"
+        try await supabase.storage
+            .from("avatars")
+            .upload(filePath, data: compressed, options: FileOptions(contentType: "image/jpeg", upsert: true))
+        let publicURL = try supabase.storage
+            .from("avatars")
+            .getPublicURL(path: filePath)
+        let url = publicURL.absoluteString
+        try await supabase
+            .from("group_threads")
+            .update(["avatar_url": url])
+            .eq("id", value: groupId.uuidString)
+            .execute()
+        await loadConversations()
+        return url
+    }
+
+    /// Leaves the group by deleting my own `group_members` row (any member). The
+    /// DELETE RLS policy only lets me remove my own membership, so this can't evict
+    /// anyone else. Refreshes the inbox so the group disappears from my list.
+    @MainActor
+    func leaveGroup(groupId: UUID) async throws {
+        guard let uid = userId else { throw DataError(message: "Not signed in") }
+        try await supabase
+            .from("group_members")
+            .delete()
+            .eq("group_id", value: groupId.uuidString)
+            .eq("user_id", value: uid.uuidString)
+            .execute()
+        await loadConversations()
+    }
+
+    /// Dissolves the group by deleting the `group_threads` row (owner-only — the
+    /// DELETE RLS policy rejects non-owners). Cascades remove the members + messages.
+    /// Refreshes the inbox so the group disappears for everyone.
+    @MainActor
+    func dissolveGroup(groupId: UUID) async throws {
+        try await supabase
+            .from("group_threads")
+            .delete()
+            .eq("id", value: groupId.uuidString)
+            .execute()
+        await loadConversations()
     }
 
     // MARK: - Delete / Recall / Clear Chat

@@ -46,6 +46,19 @@ struct GroupChatDetailView: View {
     /// so the title + member count update without leaving the chat.
     @State private var liveTitle: String?
     @State private var liveMemberCount: Int?
+    // Trust & Safety
+    @State private var reportTarget: ReportTarget?
+    @State private var showBlockConfirm: Bool = false
+    @State private var pendingBlockId: UUID?
+    @State private var showBlockError: Bool = false
+    // Voice messages
+    @State private var recorder = VoiceRecorder()
+    @State private var showMicPermissionAlert = false
+    // @mentions
+    /// Cached group roster, loaded the first time the "@" button is tapped.
+    @State private var members: [GroupMember] = []
+    /// Drives the member picker for inserting an @mention (false = closed).
+    @State private var showMentionPicker = false
     @FocusState private var inputFocused: Bool
 
     private var messages: [GroupChatMessage] { vm?.messages ?? [] }
@@ -67,8 +80,14 @@ struct GroupChatDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             navBar
+            if let pin = data.pinnedMessages.message(for: route.groupId) {
+                pinnedBanner(pin)
+            }
             messageList
             inputBar
+        }
+        .overlay {
+            if recorder.isRecording { recordingOverlay }
         }
         .background(Theme.paper(for: colorScheme).ignoresSafeArea())
         .navigationBarHidden(true)
@@ -94,6 +113,27 @@ struct GroupChatDetailView: View {
             Button(l10n.t(.authVerificationSentOk), role: .cancel) { vm?.recallError = nil }
         } message: {
             if let key = vm?.recallError { Text(l10n.t(key)) }
+        }
+        .confirmationDialog(l10n.t(.blockConfirm), isPresented: $showBlockConfirm, titleVisibility: .visible) {
+            Button(l10n.t(.blockAction), role: .destructive) {
+                if let id = pendingBlockId { block(id) }
+            }
+            Button(l10n.t(.adminCancel), role: .cancel) { }
+        }
+        .alert(l10n.t(.blockError), isPresented: $showBlockError) {
+            Button(l10n.t(.authVerificationSentOk), role: .cancel) { }
+        }
+        .alert(l10n.t(.chatVoicePermissionDenied), isPresented: $showMicPermissionAlert) {
+            Button(l10n.t(.authVerificationSentOk), role: .cancel) { }
+        }
+        .confirmationDialog(l10n.t(.groupSettingsMembers), isPresented: $showMentionPicker, titleVisibility: .visible) {
+            ForEach(mentionableMembers) { member in
+                Button(member.name) { insertMention(member) }
+            }
+            Button(l10n.t(.adminCancel), role: .cancel) { }
+        }
+        .sheet(item: $reportTarget) { target in
+            ReportSheet(target: target)
         }
         .sheet(isPresented: $showSettings) {
             NavigationStack {
@@ -215,6 +255,45 @@ struct GroupChatDetailView: View {
         .background(Theme.paper(for: colorScheme))
     }
 
+    // MARK: - Pinned banner (群公告)
+
+    /// A slim coral-tinted banner pinned to the top of the chat when the group has a
+    /// pinned message: 📌 + the "Pinned" label + a single line of text, with an ✕ to
+    /// unpin. Tapping ✕ removes the pin (local-only, on-device).
+    private func pinnedBanner(_ pin: PinnedMessage) -> some View {
+        HStack(spacing: 8) {
+            Text("📌")
+                .font(.system(size: 13))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(l10n.t(.pinnedLabel))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.coral)
+                Text(pin.text)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.ink(for: colorScheme))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                data.pinnedMessages.unpin(in: route.groupId)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                    .frame(width: 28, height: 28)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Theme.coral.opacity(0.10))
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Theme.hairline(for: colorScheme))
+                .frame(height: 1)
+        }
+    }
+
     // MARK: - Messages
 
     private var messageList: some View {
@@ -228,9 +307,26 @@ struct GroupChatDetailView: View {
                             GroupMessageBubble(
                                 message: row.message,
                                 showSenderHeader: row.showSenderHeader,
+                                isPinned: data.pinnedMessages.isPinned(row.message.id, in: route.groupId),
                                 onForward: { forwardSource = ForwardSource(kind: .group, messageId: row.message.id) },
+                                onFavorite: { favorite(row.message) },
+                                onPin: { pin(row.message) },
+                                onUnpin: { data.pinnedMessages.unpin(in: route.groupId) },
                                 onDelete: { Task { await vm?.deleteMessage(row.message.id) } },
-                                onRecall: { Task { await vm?.recallMessage(row.message.id) } }
+                                onRecall: { Task { await vm?.recallMessage(row.message.id) } },
+                                onReport: {
+                                    reportTarget = ReportTarget(
+                                        messageId: row.message.id,
+                                        kind: "group",
+                                        excerpt: row.message.text,
+                                        userId: row.message.senderId,
+                                        name: row.message.senderName
+                                    )
+                                },
+                                onBlock: {
+                                    pendingBlockId = row.message.senderId
+                                    showBlockConfirm = true
+                                }
                             )
                             .id(row.message.id)
                             .padding(.top, row.startsRun ? 8 : 0)
@@ -287,6 +383,10 @@ struct GroupChatDetailView: View {
             .clipShape(RoundedRectangle(cornerRadius: 22))
             .overlay(RoundedRectangle(cornerRadius: 22).stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
 
+            mentionButton
+
+            micButton
+
             Button(action: send) {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 18, weight: .bold))
@@ -302,16 +402,20 @@ struct GroupChatDetailView: View {
         .padding(.top, 10)
         .padding(.bottom, 6)
         .background(Theme.paper(for: colorScheme))
-        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .any(of: [.images, .videos]))
         .fileImporter(isPresented: $showFileImporter, allowedContentTypes: allowedDocTypes, allowsMultipleSelection: false) { result in
             handleFileImport(result)
         }
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
+            let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
             Task {
                 let loaded = try? await item.loadTransferable(type: Data.self)
                 photoItem = nil
-                if let loaded { await vm?.sendImage(loaded) }
+                if let loaded {
+                    if isVideo { await vm?.sendVideo(loaded) }
+                    else { await vm?.sendImage(loaded) }
+                }
             }
         }
     }
@@ -320,7 +424,7 @@ struct GroupChatDetailView: View {
     /// while uploading). System-keyboard emoji already type straight into the field.
     @ViewBuilder
     private var plusButton: some View {
-        if vm?.isSendingImage == true || vm?.isSendingFile == true {
+        if vm?.isSendingImage == true || vm?.isSendingFile == true || vm?.isSendingVideo == true {
             ProgressView()
                 .tint(Theme.coral)
                 .frame(width: 30, height: 30)
@@ -343,6 +447,57 @@ struct GroupChatDetailView: View {
                     .frame(width: 30, height: 30)
             }
         }
+    }
+
+    /// The "@" button loads the group roster (cached after the first tap) and then
+    /// presents a picker of members to mention. Tapping a member inserts
+    /// `@Name ` into the draft.
+    private var mentionButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            loadMembersAndPresentPicker()
+        } label: {
+            Image(systemName: "at")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Theme.coral)
+                .frame(width: 44, height: 44)
+                .background(Theme.card(for: colorScheme))
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
+        }
+    }
+
+    /// Members eligible to be @mentioned — everyone except me.
+    private var mentionableMembers: [GroupMember] {
+        members.filter { $0.id != data.userId }
+    }
+
+    /// Loads the roster (reusing the cache once populated) then opens the picker.
+    private func loadMembersAndPresentPicker() {
+        if !members.isEmpty {
+            showMentionPicker = true
+            return
+        }
+        Task {
+            do {
+                members = try await data.listGroupMembers(groupId: route.groupId)
+            } catch {
+                print("⚠️ load group members failed: \(error)")
+            }
+            if !mentionableMembers.isEmpty {
+                showMentionPicker = true
+            }
+        }
+    }
+
+    /// Appends `@Name ` to the draft, adding a leading space when the draft is
+    /// non-empty and doesn't already end in whitespace.
+    private func insertMention(_ member: GroupMember) {
+        if !draft.isEmpty, let last = draft.last, !last.isWhitespace {
+            draft += " "
+        }
+        draft += "@\(member.name) "
+        inputFocused = true
     }
 
     /// Reads the picked document into memory (enforcing the 25 MB cap with a real
@@ -374,6 +529,88 @@ struct GroupChatDetailView: View {
         }
     }
 
+    /// Press-and-hold microphone button. A long-press (min 0s) starts recording;
+    /// releasing the finger ends it and sends. Shows a spinner while uploading.
+    @ViewBuilder
+    private var micButton: some View {
+        if vm?.isSendingVoice == true {
+            ProgressView()
+                .tint(Theme.coral)
+                .frame(width: 44, height: 44)
+        } else {
+            Image(systemName: recorder.isRecording ? "waveform" : "mic.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(recorder.isRecording ? .white : Theme.coral)
+                .frame(width: 44, height: 44)
+                .background(recorder.isRecording
+                            ? AnyShapeStyle(Theme.sunset)
+                            : AnyShapeStyle(Theme.card(for: colorScheme)))
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Theme.hairline(for: colorScheme), lineWidth: recorder.isRecording ? 0 : 1))
+                .scaleEffect(recorder.isRecording ? 1.12 : 1)
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: recorder.isRecording)
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in
+                            if !recorder.isRecording { startRecording() }
+                        }
+                        .onEnded { _ in
+                            stopRecordingAndSend()
+                        }
+                )
+        }
+    }
+
+    /// A centered "recording…" indicator shown while the mic is held.
+    private var recordingOverlay: some View {
+        VStack {
+            Spacer()
+            VStack(spacing: 12) {
+                Image(systemName: "waveform")
+                    .font(.system(size: 40, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .symbolEffect(.variableColor.iterative, isActive: true)
+                Text(l10n.t(.chatRecording))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text(String(format: "%d:%02d", Int(recorder.elapsed) / 60, Int(recorder.elapsed) % 60))
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(.white)
+                    .monospacedDigit()
+            }
+            .padding(.horizontal, 36)
+            .padding(.vertical, 28)
+            .background(Theme.coral.opacity(0.92), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .padding(.bottom, 120)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black.opacity(0.18).ignoresSafeArea())
+        .allowsHitTesting(false)
+        .transition(.opacity)
+    }
+
+    /// Begins recording (requests mic permission as needed). Surfaces a permission
+    /// alert if it was denied so the user can enable it in Settings.
+    private func startRecording() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Task {
+            let started = await recorder.start()
+            if !started && recorder.permissionDenied {
+                recorder.permissionDenied = false
+                showMicPermissionAlert = true
+            }
+        }
+    }
+
+    /// Stops recording and sends the clip (clips under ~0.5s are discarded).
+    private func stopRecordingAndSend() {
+        guard recorder.isRecording else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        let data = recorder.stopAndFetchData()
+        guard let data, let vm else { return }
+        Task { await vm.sendVoice(data) }
+    }
+
     private var canSend: Bool {
         vm != nil && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -387,6 +624,79 @@ struct GroupChatDetailView: View {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         Task { await vm.send(text) }
     }
+
+    /// Saves a group message to local favorites (收藏). Uses a kind-aware preview so
+    /// media reads as e.g. "[Photo]" rather than blank, and shows "You" for my own
+    /// messages (otherwise the sender's name).
+    private func favorite(_ message: GroupChatMessage) {
+        data.favorites.add(Favorite(
+            id: message.id,
+            text: favoritePreview(for: message),
+            kind: kindLabel(for: message.kind),
+            sender: message.sender == .me ? l10n.t(.chatYou) : message.senderName,
+            source: "group",
+            date: message.createdAt ?? Date()
+        ))
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    /// Pins a group message as the group's 群公告 banner (local-only, on-device).
+    /// Reuses the kind-aware single-line preview so media reads as e.g. "[Photo]"
+    /// rather than blank, and records the pinner's name ("You" for my own messages).
+    private func pin(_ message: GroupChatMessage) {
+        data.pinnedMessages.pin(
+            PinnedMessage(
+                id: message.id,
+                text: favoritePreview(for: message),
+                by: message.sender == .me ? l10n.t(.chatYou) : message.senderName
+            ),
+            in: route.groupId
+        )
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    /// Single-line preview for a favorited group message, by kind (mirrors the 1:1 chat).
+    private func favoritePreview(for message: GroupChatMessage) -> String {
+        switch message.kind {
+        case .text:
+            return message.text
+        case .image:
+            return l10n.t(.chatImagePreview)
+        case .video:
+            return message.text.isEmpty ? l10n.t(.chatVideoPreview) : message.text
+        case .file:
+            let name = message.fileName ?? ""
+            return name.isEmpty ? l10n.t(.chatFilePreview) : name
+        case .audio:
+            return l10n.t(.chatVoice)
+        }
+    }
+
+    /// Stable string label for a message kind, stored on the favorite.
+    private func kindLabel(for kind: ChatMessageKind) -> String {
+        switch kind {
+        case .text: return "text"
+        case .image: return "image"
+        case .video: return "video"
+        case .file: return "file"
+        case .audio: return "audio"
+        }
+    }
+
+    /// Blocks a group member: their messages are hidden from me everywhere and they
+    /// leave my contacts. The group reloads so their bubbles disappear immediately.
+    private func block(_ id: UUID) {
+        Task {
+            do {
+                try await data.blockUser(id)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                await vm?.reload()
+            } catch {
+                showBlockError = true
+                print("⚠️ block failed: \(error)")
+            }
+        }
+    }
 }
 
 // MARK: - Group Message Bubble
@@ -399,9 +709,17 @@ private struct GroupMessageBubble: View {
     @Environment(LocalizationManager.self) private var l10n
     let message: GroupChatMessage
     let showSenderHeader: Bool
+    /// True when this message is the group's currently pinned (群公告) message — the
+    /// menu then offers "Unpin" instead of "Pin".
+    var isPinned: Bool = false
     var onForward: (() -> Void)? = nil
+    var onFavorite: (() -> Void)? = nil
+    var onPin: (() -> Void)? = nil
+    var onUnpin: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
     var onRecall: (() -> Void)? = nil
+    var onReport: (() -> Void)? = nil
+    var onBlock: (() -> Void)? = nil
 
     private var isMe: Bool { message.sender == .me }
 
@@ -443,6 +761,32 @@ private struct GroupMessageBubble: View {
             Button { onForward?() } label: {
                 Label(l10n.t(.chatForward), systemImage: "arrowshape.turn.up.right")
             }
+            if message.kind == .text {
+                Button {
+                    UIPasteboard.general.string = message.text
+                } label: {
+                    Label(l10n.t(.chatCopy), systemImage: "doc.on.doc")
+                }
+            }
+            if !message.isRecalled {
+                Button { onFavorite?() } label: {
+                    Label(l10n.t(.favoriteAction), systemImage: "star")
+                }
+                if isPinned {
+                    Button { onUnpin?() } label: {
+                        Label(l10n.t(.unpinMessage), systemImage: "pin.slash")
+                    }
+                } else {
+                    Button { onPin?() } label: {
+                        Label(l10n.t(.pinMessage), systemImage: "pin")
+                    }
+                }
+            }
+            if !isMe {
+                Button { onReport?() } label: {
+                    Label(l10n.t(.reportTitle), systemImage: "flag")
+                }
+            }
             Divider()
             if isWithinRecallWindow {
                 Button(role: .destructive) { onRecall?() } label: {
@@ -451,6 +795,11 @@ private struct GroupMessageBubble: View {
             }
             Button(role: .destructive) { onDelete?() } label: {
                 Label(l10n.t(.chatDelete), systemImage: "trash")
+            }
+            if !isMe {
+                Button(role: .destructive) { onBlock?() } label: {
+                    Label(l10n.t(.blockAction), systemImage: "hand.raised")
+                }
             }
         }
     }
@@ -503,7 +852,19 @@ private struct GroupMessageBubble: View {
                 } else {
                     textBubble
                 }
-            case .text, .video:
+            case .audio:
+                if let path = message.imagePath {
+                    AudioMessageBubble(path: path, isMe: isMe)
+                } else {
+                    textBubble
+                }
+            case .video:
+                if let path = message.imagePath {
+                    ChatVideoBubble(path: path, caption: message.text, isMe: isMe)
+                } else {
+                    textBubble
+                }
+            case .text:
                 textBubble
             }
         }
@@ -524,9 +885,8 @@ private struct GroupMessageBubble: View {
     /// Uniform rounded-rectangle bubble — coral gradient for me, paper card for
     /// others (matches the 1:1 text bubble look exactly).
     private var textBubble: some View {
-        Text(message.text)
+        Text(mentionAttributed(message.text, base: isMe ? .white : Theme.ink(for: colorScheme)))
             .font(.system(size: 15.5))
-            .foregroundStyle(isMe ? .white : Theme.ink(for: colorScheme))
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(Group {
@@ -542,6 +902,25 @@ private struct GroupMessageBubble: View {
                         : Color.black.opacity(colorScheme == .dark ? 0.12 : 0.04),
                     radius: isMe ? 6 : 3,
                     y: isMe ? 3 : 1)
+    }
+
+    /// Builds an `AttributedString` from the message text where any `@token`
+    /// (regex `@[^\s@]+`) is colored `Theme.coral` and semibold; the rest uses
+    /// `base` (white on my coral bubble, ink on others').
+    private func mentionAttributed(_ text: String, base: Color) -> AttributedString {
+        var result = AttributedString(text)
+        result.foregroundColor = base
+
+        guard let regex = try? NSRegularExpression(pattern: "@[^\\s@]+") else { return result }
+        let nsText = text as NSString
+        let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsText.length))
+        for match in matches {
+            guard let range = Range(match.range, in: text),
+                  let attrRange = Range(range, in: result) else { continue }
+            result[attrRange].foregroundColor = Theme.coral
+            result[attrRange].font = .system(size: 15.5, weight: .semibold)
+        }
+        return result
     }
 
     private var timestamp: some View {

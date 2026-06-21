@@ -23,7 +23,9 @@ final class GroupChatViewModel {
     /// message (resolved in the view via `l10n.t(recallError!)`).
     var recallError: L10n?
     var isSendingImage = false
+    var isSendingVideo = false
     var isSendingFile = false
+    var isSendingVoice = false
 
     private var channel: RealtimeChannelV2?
     private var listenTask: Task<Void, Never>?
@@ -37,15 +39,31 @@ final class GroupChatViewModel {
     /// Loads history, marks the group read, refreshes the inbox, then subscribes
     /// to live inserts so other members' messages appear in real time.
     func start() async {
-        await reload()
+        // Show the last cached view instantly (秒开 / survives a brief offline blip),
+        // then refresh from the server.
+        if let cached = MessageCache.loadGroup(route.groupId), !cached.isEmpty {
+            messages = cached
+            isLoading = false
+        }
+        await reload(allowEmpty: false)
         isLoading = false
         await data.markGroupRead(groupId: route.groupId)
         await data.loadConversations()
         await subscribe()
     }
 
-    func reload() async {
-        messages = await data.loadGroupMessages(groupId: route.groupId)
+    /// Re-reads the group and re-caches it. `allowEmpty` is false only for the
+    /// initial load, so a transient empty fetch (offline) doesn't wipe the cached
+    /// view; mutations (delete / clear / recall) keep the default `true` so an
+    /// emptied thread correctly clears.
+    func reload(allowEmpty: Bool = true) async {
+        let fresh = await data.loadGroupMessages(groupId: route.groupId)
+        if allowEmpty || !fresh.isEmpty {
+            messages = fresh
+        }
+        if !fresh.isEmpty {
+            MessageCache.saveGroup(route.groupId, fresh)
+        }
     }
 
     /// Sends a group message through the member-validated `send_group_message`
@@ -143,6 +161,27 @@ final class GroupChatViewModel {
         }
     }
 
+    /// Uploads a picked video to the private `chat-media` bucket and sends it as a
+    /// group video via `send_group_attachment` (p_type "video"). Re-reads on success.
+    func sendVideo(_ videoData: Data) async {
+        guard !isSendingVideo else { return }
+        isSendingVideo = true
+        defer { isSendingVideo = false }
+        do {
+            let upload = try await data.uploadGroupFile(
+                groupId: route.groupId,
+                data: videoData,
+                fileName: "video.mp4",
+                mimeType: "video/mp4"
+            )
+            try await data.sendGroupVideoMessage(groupId: route.groupId, upload: upload)
+            await reload()
+        } catch {
+            sendFailed = true
+            print("⚠️ send_group_attachment (video) failed: \(error)")
+        }
+    }
+
     /// Uploads a picked document to the private `chat-media` bucket and sends it as a
     /// group file via `send_group_attachment` (member-validated). Re-reads from the DB
     /// on success; surfaces a real error on failure (never a silent no-op).
@@ -162,6 +201,22 @@ final class GroupChatViewModel {
         } catch {
             sendFailed = true
             print("⚠️ send_group_attachment (file) failed: \(error)")
+        }
+    }
+
+    /// Uploads a recorded voice clip to the private `chat-media` bucket and sends it
+    /// as a group audio message via `send_group_attachment` (member-validated).
+    /// Re-reads from the DB on success; surfaces a real error on failure.
+    func sendVoice(_ audioData: Data) async {
+        guard !isSendingVoice else { return }
+        isSendingVoice = true
+        defer { isSendingVoice = false }
+        do {
+            try await data.sendGroupVoice(groupId: route.groupId, data: audioData)
+            await reload()
+        } catch {
+            sendFailed = true
+            print("⚠️ send_group_attachment (audio) failed: \(error)")
         }
     }
 

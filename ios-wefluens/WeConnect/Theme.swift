@@ -10,6 +10,7 @@ import SwiftUI
 
 /// App-wide color scheme mode.
 enum ColorSchemeMode: String, CaseIterable, Identifiable {
+    case system
     case light
     case dark
 
@@ -17,6 +18,7 @@ enum ColorSchemeMode: String, CaseIterable, Identifiable {
 
     var labelKey: L10n {
         switch self {
+        case .system: return .themeSystem
         case .light: return .themeLight
         case .dark: return .themeDark
         }
@@ -24,6 +26,7 @@ enum ColorSchemeMode: String, CaseIterable, Identifiable {
 
     var colorScheme: ColorScheme? {
         switch self {
+        case .system: return nil
         case .light: return .light
         case .dark: return .dark
         }
@@ -43,7 +46,7 @@ final class ThemeManager {
 
     init() {
         let stored = UserDefaults.standard.string(forKey: Self.storageKey)
-        self.mode = stored.flatMap(ColorSchemeMode.init(rawValue:)) ?? .light
+        self.mode = stored.flatMap(ColorSchemeMode.init(rawValue:)) ?? .system
     }
 }
 
