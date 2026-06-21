@@ -42,7 +42,7 @@ struct CreateGroupView: View {
         friends.filter { selectedIDs.contains($0.id) }
     }
 
-    private var canCreate: Bool { selectedIDs.count >= 2 && !isCreating }
+    private var canCreate: Bool { selectedIDs.count >= 1 && !isCreating }
 
     var body: some View {
         VStack(spacing: 0) {
