@@ -1755,16 +1755,19 @@ final class AppDataService {
         let targets = friendIds.map { ForwardTargetParam(kind: "friend", id: $0.uuidString) }
             + groupIds.map { ForwardTargetParam(kind: "group", id: $0.uuidString) }
         guard !targets.isEmpty else { return }
-        let request = ForwardRequest(
-            source: ForwardSourceParam(kind: source.kind.rawValue, messageId: source.messageId.uuidString),
-            targets: targets
-        )
-        let response: ForwardResponse = try await supabase.functions.invoke(
-            "forward-message",
-            options: .init(body: request)
-        )
-        guard response.ok else {
-            throw DataError(message: "Forward failed")
+        // One edge-function call per source message (multi-select forwards several).
+        for messageId in source.messageIds {
+            let request = ForwardRequest(
+                source: ForwardSourceParam(kind: source.kind.rawValue, messageId: messageId.uuidString),
+                targets: targets
+            )
+            let response: ForwardResponse = try await supabase.functions.invoke(
+                "forward-message",
+                options: .init(body: request)
+            )
+            guard response.ok else {
+                throw DataError(message: "Forward failed")
+            }
         }
         await loadConversations()
     }

@@ -237,8 +237,9 @@ enum ForwardKind: String, Sendable {
 
 struct ForwardSource: Identifiable, Equatable {
     let kind: ForwardKind
-    let messageId: UUID
-    var id: UUID { messageId }
+    /// One or more messages to forward (multi-select forwards several at once).
+    let messageIds: [UUID]
+    var id: UUID { messageIds.first ?? UUID() }
 }
 
 /// A group member shown in the group settings roster (profile + role + owner flag).

@@ -175,6 +175,7 @@ enum L10n: String {
     case profileDeleteAccount, profileDeleteMessage, profileDeleteConfirm
     case profileAbout, aboutTitle, aboutVersion
     case chatsAddFriend, chatsScan
+    case chatSelect, chatSelectedLabel
 }
 
 /// App-wide localization manager. Persists the chosen language.
@@ -434,6 +435,7 @@ final class LocalizationManager {
             .aboutVersion: "Version",
             .chatsAddFriend: "Add Friend",
             .chatsScan: "Scan",
+            .chatSelect: "Select", .chatSelectedLabel: "Selected",
         ],
         .chinese: [
             .tabChats: "聊天", .tabContacts: "通讯录", .tabDiscover: "发现", .tabMe: "我",
@@ -669,6 +671,7 @@ final class LocalizationManager {
             .aboutVersion: "版本",
             .chatsAddFriend: "添加好友",
             .chatsScan: "扫一扫",
+            .chatSelect: "多选", .chatSelectedLabel: "已选",
         ],
         .spanish: [
             .tabChats: "Chats", .tabContacts: "Contactos", .tabDiscover: "Descubrir", .tabMe: "Yo",
@@ -904,6 +907,7 @@ final class LocalizationManager {
             .aboutVersion: "Versión",
             .chatsAddFriend: "Agregar amigo",
             .chatsScan: "Escanear",
+            .chatSelect: "Seleccionar", .chatSelectedLabel: "Seleccionados",
         ],
     ]
 }

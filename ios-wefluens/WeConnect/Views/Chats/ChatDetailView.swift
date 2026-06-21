@@ -29,6 +29,9 @@ struct ChatDetailView: View {
     @State private var highlightedId: UUID?
     /// Set by long-press → Forward; drives the target-picker sheet (nil = closed).
     @State private var forwardSource: ForwardSource?
+    // Multi-select (enter via long-press → Select; batch forward / delete).
+    @State private var selectMode = false
+    @State private var selectedIds = Set<UUID>()
     /// Confirmation dialog for clearing the chat history.
     @State private var showClearConfirm: Bool = false
     // Trust & Safety
@@ -71,13 +74,17 @@ struct ChatDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            navBar
+            if selectMode { selectNavBar } else { navBar }
             messageList
-            if let replying = vm?.replyingTo {
-                replyComposerBar(for: replying)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            if selectMode {
+                selectActionBar
+            } else {
+                if let replying = vm?.replyingTo {
+                    replyComposerBar(for: replying)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                inputBar
             }
-            inputBar
         }
         .overlay {
             if recorder.isRecording { recordingOverlay }
@@ -171,6 +178,82 @@ struct ChatDetailView: View {
         return types
     }
 
+    // MARK: - Multi-select
+
+    private func enterSelect(_ id: UUID) {
+        selectMode = true
+        selectedIds = [id]
+    }
+    private func exitSelect() {
+        selectMode = false
+        selectedIds = []
+    }
+    private func toggleSelect(_ id: UUID) {
+        if selectedIds.contains(id) { selectedIds.remove(id) } else { selectedIds.insert(id) }
+    }
+    private func forwardSelected() {
+        let ids = messages.filter { selectedIds.contains($0.id) && !$0.isRecalled }.map { $0.id }
+        guard !ids.isEmpty else { return }
+        forwardSource = ForwardSource(kind: .dm, messageIds: ids)
+        exitSelect()
+    }
+    private func deleteSelected() {
+        let ids = Array(selectedIds)
+        guard !ids.isEmpty else { return }
+        Task {
+            for id in ids { await vm?.deleteMessage(id) }
+            exitSelect()
+        }
+    }
+
+    private var selectNavBar: some View {
+        HStack(spacing: 12) {
+            Button { exitSelect() } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Theme.ink(for: colorScheme))
+                    .frame(width: 40, height: 40)
+                    .background(Theme.card(for: colorScheme))
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
+            }
+            Text("\(l10n.t(.chatSelectedLabel)) \(selectedIds.count)")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Theme.ink(for: colorScheme))
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
+        .background(Theme.paper(for: colorScheme))
+    }
+
+    private var selectActionBar: some View {
+        HStack {
+            Button { forwardSelected() } label: {
+                VStack(spacing: 3) {
+                    Image(systemName: "arrowshape.turn.up.right").font(.system(size: 22))
+                    Text(l10n.t(.chatForward)).font(.system(size: 12))
+                }
+                .foregroundStyle(selectedIds.isEmpty ? Theme.inkTertiary(for: colorScheme) : Theme.ink(for: colorScheme))
+                .frame(maxWidth: .infinity)
+            }
+            .disabled(selectedIds.isEmpty)
+            Button { deleteSelected() } label: {
+                VStack(spacing: 3) {
+                    Image(systemName: "trash").font(.system(size: 22))
+                    Text(l10n.t(.chatDelete)).font(.system(size: 12))
+                }
+                .foregroundStyle(selectedIds.isEmpty ? Theme.inkTertiary(for: colorScheme) : Theme.coral)
+                .frame(maxWidth: .infinity)
+            }
+            .disabled(selectedIds.isEmpty)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 8)
+        .background(Theme.paper(for: colorScheme))
+        .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.hairline(for: colorScheme)), alignment: .top)
+    }
+
     private var navBar: some View {
         HStack(spacing: 12) {
             Button { dismiss() } label: {
@@ -254,29 +337,40 @@ struct ChatDetailView: View {
                 } else {
                     LazyVStack(spacing: 8) {
                         ForEach(renderedMessages) { item in
-                            MessageBubble(
-                                message: item.message,
-                                showReadReceipt: item.message.id == lastMineId,
-                                quotedSender: item.quoted.map { quotedSenderName(for: $0) },
-                                quotedPreview: item.quoted.map { quotedPreviewText(for: $0) },
-                                quotedId: item.quoted?.id,
-                                isHighlighted: item.message.id == highlightedId,
-                                onReply: { startReply(to: item.message) },
-                                onForward: { forwardSource = ForwardSource(kind: .dm, messageId: item.message.id) },
-                                onFavorite: { favorite(item.message) },
-                                onDelete: { Task { await vm?.deleteMessage(item.message.id) } },
-                                onRecall: { Task { await vm?.recallMessage(item.message.id) } },
-                                onReport: {
-                                    reportTarget = ReportTarget(
-                                        messageId: item.message.id,
-                                        kind: "dm",
-                                        excerpt: item.message.text,
-                                        userId: route.otherUserId,
-                                        name: route.title
-                                    )
-                                },
-                                onTapQuoted: { id in scrollToMessage(id, proxy: proxy) }
-                            )
+                            HStack(spacing: 8) {
+                                if selectMode {
+                                    Image(systemName: selectedIds.contains(item.message.id) ? "checkmark.circle.fill" : "circle")
+                                        .font(.system(size: 22))
+                                        .foregroundStyle(selectedIds.contains(item.message.id) ? Theme.coral : Theme.inkTertiary(for: colorScheme))
+                                }
+                                MessageBubble(
+                                    message: item.message,
+                                    showReadReceipt: item.message.id == lastMineId,
+                                    quotedSender: item.quoted.map { quotedSenderName(for: $0) },
+                                    quotedPreview: item.quoted.map { quotedPreviewText(for: $0) },
+                                    quotedId: item.quoted?.id,
+                                    isHighlighted: item.message.id == highlightedId,
+                                    onReply: { startReply(to: item.message) },
+                                    onForward: { forwardSource = ForwardSource(kind: .dm, messageIds: [item.message.id]) },
+                                    onSelect: { enterSelect(item.message.id) },
+                                    onFavorite: { favorite(item.message) },
+                                    onDelete: { Task { await vm?.deleteMessage(item.message.id) } },
+                                    onRecall: { Task { await vm?.recallMessage(item.message.id) } },
+                                    onReport: {
+                                        reportTarget = ReportTarget(
+                                            messageId: item.message.id,
+                                            kind: "dm",
+                                            excerpt: item.message.text,
+                                            userId: route.otherUserId,
+                                            name: route.title
+                                        )
+                                    },
+                                    onTapQuoted: { id in scrollToMessage(id, proxy: proxy) }
+                                )
+                                .allowsHitTesting(!selectMode)
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture { if selectMode { toggleSelect(item.message.id) } }
                             .id(item.message.id)
                         }
                     }
@@ -642,6 +736,7 @@ private struct MessageBubble: View {
     var isHighlighted: Bool = false
     var onReply: (() -> Void)? = nil
     var onForward: (() -> Void)? = nil
+    var onSelect: (() -> Void)? = nil
     var onFavorite: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
     var onRecall: (() -> Void)? = nil
@@ -681,6 +776,9 @@ private struct MessageBubble: View {
                         }
                         Button { onForward?() } label: {
                             Label(l10n.t(.chatForward), systemImage: "arrowshape.turn.up.right")
+                        }
+                        Button { onSelect?() } label: {
+                            Label(l10n.t(.chatSelect), systemImage: "checkmark.circle")
                         }
                         if message.kind == .text {
                             Button {

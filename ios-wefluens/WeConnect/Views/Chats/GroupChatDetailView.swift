@@ -320,7 +320,7 @@ struct GroupChatDetailView: View {
                                 quotedSender: row.quoted.map { quotedSenderName(for: $0) },
                                 quotedPreview: row.quoted.map { quotedPreviewText(for: $0) },
                                 onReply: { startReply(to: row.message) },
-                                onForward: { forwardSource = ForwardSource(kind: .group, messageId: row.message.id) },
+                                onForward: { forwardSource = ForwardSource(kind: .group, messageIds: [row.message.id]) },
                                 onFavorite: { favorite(row.message) },
                                 onPin: { pin(row.message) },
                                 onUnpin: { data.pinnedMessages.unpin(in: route.groupId) },
