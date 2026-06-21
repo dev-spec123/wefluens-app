@@ -34,6 +34,19 @@ jobs:
       - name: Allow SPM macros without an interactive prompt
         run: defaults write com.apple.dt.Xcode IDESkipMacroFingerprintValidation -bool YES
 
+      - name: Generate Config.swift (gitignored; PUBLIC anon key + URL)
+        run: |
+          cat > ios-wefluens/WeConnect/Config.swift <<'SWIFT'
+          import Foundation
+
+          // Auto-generated in CI (Config.swift is gitignored). The Supabase anon key
+          // and project URL are public — safe to embed; they ship in the app binary.
+          enum Config {
+              static let EXPO_PUBLIC_SUPABASE_URL = "https://zlyufsfbzssjseprkuvd.supabase.co"
+              static let EXPO_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpseXVmc2ZienNzanNlcHJrdXZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3Mjg3MzAsImV4cCI6MjA5NzMwNDczMH0.H1wCxe01gaUJVLRCoPNAZgnHefUTbaOojRDknUe-9RM"
+          }
+          SWIFT
+
       - name: Resolve Swift packages
         run: |
           xcodebuild -resolvePackageDependencies \
