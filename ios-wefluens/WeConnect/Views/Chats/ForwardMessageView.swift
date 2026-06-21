@@ -353,7 +353,7 @@ struct ForwardMessageView: View {
 
 #Preview {
     NavigationStack {
-        ForwardMessageView(source: ForwardSource(kind: .dm, messageId: UUID()))
+        ForwardMessageView(source: ForwardSource(kind: .dm, messageIds: [UUID()]))
             .environment(LocalizationManager())
             .environment(AppDataService(userId: nil))
     }

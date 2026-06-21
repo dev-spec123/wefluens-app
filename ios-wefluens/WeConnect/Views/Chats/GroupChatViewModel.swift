@@ -26,6 +26,8 @@ final class GroupChatViewModel {
     var isSendingVideo = false
     var isSendingFile = false
     var isSendingVoice = false
+    /// The message the user is quoting in their next send (nil = normal message).
+    var replyingTo: GroupChatMessage?
 
     private var channel: RealtimeChannelV2?
     private var listenTask: Task<Void, Never>?
@@ -71,13 +73,20 @@ final class GroupChatViewModel {
     func send(_ text: String) async {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return }
+        let reply = replyingTo?.id
         do {
-            try await data.sendGroupMessage(groupId: route.groupId, body: clean)
+            try await data.sendGroupMessage(groupId: route.groupId, body: clean, replyTo: reply)
+            replyingTo = nil
             await reload()
         } catch {
             sendFailed = true
             print("⚠️ send_group_message failed: \(error)")
         }
+    }
+
+    /// Clears the active quoted-reply context (the × on the composer bar).
+    func cancelReply() {
+        replyingTo = nil
     }
 
     /// Soft-deletes a single group message for me only (A).

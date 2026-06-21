@@ -108,8 +108,10 @@ struct Conversation: Identifiable {
     let lastMessageRecalled: Bool
     /// The other participant's profile photo URL (nil for sample data / groups).
     let avatarUrl: String?
+    /// True when an unread group message @-mentions me (drives the "@me" badge).
+    let mentioned: Bool
 
-    init(id: UUID = UUID(), name: String, avatar: String, avatarColors: [UInt], lastMessage: String, time: String, unread: Int, isPinned: Bool, isOfficial: Bool, isOnline: Bool, isGroup: Bool, participantCount: Int, messages: [ChatMessage], otherUserId: UUID? = nil, avatarInitials: String? = nil, lastMessageAt: Date? = nil, lastFromMe: Bool = false, lastMessageIsImage: Bool = false, lastMessageType: String = "text", lastMessageRecalled: Bool = false, avatarUrl: String? = nil) {
+    init(id: UUID = UUID(), name: String, avatar: String, avatarColors: [UInt], lastMessage: String, time: String, unread: Int, isPinned: Bool, isOfficial: Bool, isOnline: Bool, isGroup: Bool, participantCount: Int, messages: [ChatMessage], otherUserId: UUID? = nil, avatarInitials: String? = nil, lastMessageAt: Date? = nil, lastFromMe: Bool = false, lastMessageIsImage: Bool = false, lastMessageType: String = "text", lastMessageRecalled: Bool = false, avatarUrl: String? = nil, mentioned: Bool = false) {
         self.id = id
         self.name = name
         self.avatar = avatar
@@ -131,6 +133,7 @@ struct Conversation: Identifiable {
         self.lastMessageType = lastMessageType
         self.lastMessageRecalled = lastMessageRecalled
         self.avatarUrl = avatarUrl
+        self.mentioned = mentioned
     }
 }
 
@@ -193,6 +196,9 @@ struct GroupChatMessage: Identifiable, Codable, Equatable {
     /// When this message was created (server timestamptz). Used by the client-side
     /// 2-minute recall window gate so the button isn't shown for expired messages.
     let createdAt: Date?
+    /// Id of the message this one quotes (nil for a normal message). Resolved
+    /// against the loaded thread to render the quoted preview above the bubble.
+    let replyTo: UUID?
 
     init(id: UUID, text: String, sender: MessageSender, senderId: UUID,
          senderName: String, senderColors: [UInt], senderAvatarUrl: String?,
@@ -200,7 +206,7 @@ struct GroupChatMessage: Identifiable, Codable, Equatable {
          imageWidth: Int? = nil, imageHeight: Int? = nil,
          fileName: String? = nil, fileSize: Int? = nil, fileMime: String? = nil,
          isRecalled: Bool = false,
-         createdAt: Date? = nil) {
+         createdAt: Date? = nil, replyTo: UUID? = nil) {
         self.id = id
         self.text = text
         self.sender = sender
@@ -218,6 +224,7 @@ struct GroupChatMessage: Identifiable, Codable, Equatable {
         self.fileMime = fileMime
         self.isRecalled = isRecalled
         self.createdAt = createdAt
+        self.replyTo = replyTo
     }
 }
 
@@ -230,8 +237,9 @@ enum ForwardKind: String, Sendable {
 
 struct ForwardSource: Identifiable, Equatable {
     let kind: ForwardKind
-    let messageId: UUID
-    var id: UUID { messageId }
+    /// One or more messages to forward (multi-select forwards several at once).
+    let messageIds: [UUID]
+    var id: UUID { messageIds.first ?? UUID() }
 }
 
 /// A group member shown in the group settings roster (profile + role + owner flag).

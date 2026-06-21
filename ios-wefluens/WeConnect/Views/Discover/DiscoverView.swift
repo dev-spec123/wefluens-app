@@ -14,6 +14,7 @@ struct DiscoverView: View {
     private var campaigns: [Campaign] { data.campaigns }
 
     @State private var selectedFilter: String = "All"
+    @State private var selectedBrand: String? = nil
 
     private var filters: [(key: L10n, label: String)] {
         [
@@ -26,22 +27,31 @@ struct DiscoverView: View {
     }
 
     private var visibleCampaigns: [Campaign] {
-        guard selectedFilter != l10n.t(.filterAll) else { return campaigns }
-        // Map the selected (localized) chip back to an English match term so the
-        // filter works regardless of the app's language.
-        let term: String
-        switch selectedFilter {
-        case l10n.t(.filterBeauty): term = "beauty"
-        case l10n.t(.filterFashion): term = "fashion"
-        case l10n.t(.filterWellness): term = "wellness"
-        case l10n.t(.filterTech): term = "tech"
-        default: return campaigns
+        var list = campaigns
+        // Brand filter — tapping a brand card narrows to that brand.
+        if let selectedBrand {
+            list = list.filter { $0.brand == selectedBrand }
         }
-        return campaigns.filter { c in
-            c.tags.contains { $0.lowercased().contains(term) }
-                || c.title.lowercased().contains(term)
-                || c.brand.lowercased().contains(term)
+        // Category chip filter — map the localized chip to an English match term so
+        // it works regardless of the app's language.
+        if selectedFilter != l10n.t(.filterAll) {
+            let term: String?
+            switch selectedFilter {
+            case l10n.t(.filterBeauty): term = "beauty"
+            case l10n.t(.filterFashion): term = "fashion"
+            case l10n.t(.filterWellness): term = "wellness"
+            case l10n.t(.filterTech): term = "tech"
+            default: term = nil
+            }
+            if let term {
+                list = list.filter { c in
+                    c.tags.contains { $0.lowercased().contains(term) }
+                        || c.title.lowercased().contains(term)
+                        || c.brand.lowercased().contains(term)
+                }
+            }
         }
+        return list
     }
 
     var body: some View {
@@ -141,7 +151,14 @@ struct DiscoverView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(brands) { brand in
-                        BrandCard(brand: brand)
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                selectedBrand = (selectedBrand == brand.name) ? nil : brand.name
+                            }
+                        } label: {
+                            BrandCard(brand: brand)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 18)
@@ -153,6 +170,23 @@ struct DiscoverView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle(l10n.t(.discoverOpenCampaigns))
                 .padding(.horizontal, 18)
+            if let selectedBrand {
+                Button {
+                    withAnimation { self.selectedBrand = nil }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(selectedBrand)
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.coral)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Theme.coral.opacity(0.12), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 18)
+            }
             VStack(spacing: 14) {
                 ForEach(visibleCampaigns) { campaign in
                     NavigationLink(value: campaign.id) {

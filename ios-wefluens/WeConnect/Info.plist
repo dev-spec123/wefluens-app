@@ -4,6 +4,8 @@
 <dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Wefluens Connect uses the microphone so you can send voice messages.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Wefluens Connect saves photos and videos you choose to your photo library.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

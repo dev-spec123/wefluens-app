@@ -339,6 +339,12 @@ struct ProfileView: View {
                 actionRow(icon: "star.fill", title: l10n.t(.profileRate)) {
                     requestAppReview()
                 }
+                rowDivider
+                NavigationLink {
+                    AboutView()
+                } label: {
+                    settingRowContent(icon: "info.circle.fill", title: l10n.t(.profileAbout))
+                }
             }
             .padding(.vertical, 4)
             .cardStyle()

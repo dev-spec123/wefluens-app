@@ -19,6 +19,8 @@ private struct GroupRow: Identifiable {
     let message: GroupChatMessage
     let startsRun: Bool
     let showSenderHeader: Bool
+    /// The resolved original this message quotes (nil = not a reply).
+    let quoted: GroupChatMessage?
     var id: UUID { message.id }
 }
 
@@ -38,6 +40,9 @@ struct GroupChatDetailView: View {
     @State private var fileError: String?
     /// Set by long-press → Forward; drives the target-picker sheet (nil = closed).
     @State private var forwardSource: ForwardSource?
+    // Multi-select (enter via long-press → Select; batch forward / delete).
+    @State private var selectMode = false
+    @State private var selectedIds = Set<UUID>()
     /// Confirmation dialog for clearing the group chat history.
     @State private var showClearConfirm: Bool = false
     /// Opens the group info / settings sheet.
@@ -64,6 +69,7 @@ struct GroupChatDetailView: View {
     private var messages: [GroupChatMessage] { vm?.messages ?? [] }
 
     private var rows: [GroupRow] {
+        let byId = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         var result: [GroupRow] = []
         for (i, m) in messages.enumerated() {
             let prev = i > 0 ? messages[i - 1] : nil
@@ -71,7 +77,8 @@ struct GroupChatDetailView: View {
             result.append(GroupRow(
                 message: m,
                 startsRun: startsRun,
-                showSenderHeader: m.sender == .them && startsRun
+                showSenderHeader: m.sender == .them && startsRun,
+                quoted: m.replyTo.flatMap { byId[$0] }
             ))
         }
         return result
@@ -79,16 +86,25 @@ struct GroupChatDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            navBar
-            if let pin = data.pinnedMessages.message(for: route.groupId) {
+            if selectMode { selectNavBar } else { navBar }
+            if let pin = data.pinnedMessages.message(for: route.groupId), !selectMode {
                 pinnedBanner(pin)
             }
             messageList
-            inputBar
+            if selectMode {
+                selectActionBar
+            } else {
+                if let replying = vm?.replyingTo {
+                    replyComposerBar(for: replying)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                inputBar
+            }
         }
         .overlay {
             if recorder.isRecording { recordingOverlay }
         }
+        .animation(.spring(response: 0.32, dampingFraction: 0.85), value: vm?.replyingTo?.id)
         .background(Theme.paper(for: colorScheme).ignoresSafeArea())
         .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
@@ -194,6 +210,82 @@ struct GroupChatDetailView: View {
     }
 
     // MARK: - Nav bar
+
+    // MARK: - Multi-select
+
+    private func enterSelect(_ id: UUID) {
+        selectMode = true
+        selectedIds = [id]
+    }
+    private func exitSelect() {
+        selectMode = false
+        selectedIds = []
+    }
+    private func toggleSelect(_ id: UUID) {
+        if selectedIds.contains(id) { selectedIds.remove(id) } else { selectedIds.insert(id) }
+    }
+    private func forwardSelected() {
+        let ids = messages.filter { selectedIds.contains($0.id) && !$0.isRecalled }.map { $0.id }
+        guard !ids.isEmpty else { return }
+        forwardSource = ForwardSource(kind: .group, messageIds: ids)
+        exitSelect()
+    }
+    private func deleteSelected() {
+        let ids = Array(selectedIds)
+        guard !ids.isEmpty else { return }
+        Task {
+            for id in ids { await vm?.deleteMessage(id) }
+            exitSelect()
+        }
+    }
+
+    private var selectNavBar: some View {
+        HStack(spacing: 12) {
+            Button { exitSelect() } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Theme.ink(for: colorScheme))
+                    .frame(width: 40, height: 40)
+                    .background(Theme.card(for: colorScheme))
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
+            }
+            Text("\(l10n.t(.chatSelectedLabel)) \(selectedIds.count)")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Theme.ink(for: colorScheme))
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
+        .background(Theme.paper(for: colorScheme))
+    }
+
+    private var selectActionBar: some View {
+        HStack {
+            Button { forwardSelected() } label: {
+                VStack(spacing: 3) {
+                    Image(systemName: "arrowshape.turn.up.right").font(.system(size: 22))
+                    Text(l10n.t(.chatForward)).font(.system(size: 12))
+                }
+                .foregroundStyle(selectedIds.isEmpty ? Theme.inkTertiary(for: colorScheme) : Theme.ink(for: colorScheme))
+                .frame(maxWidth: .infinity)
+            }
+            .disabled(selectedIds.isEmpty)
+            Button { deleteSelected() } label: {
+                VStack(spacing: 3) {
+                    Image(systemName: "trash").font(.system(size: 22))
+                    Text(l10n.t(.chatDelete)).font(.system(size: 12))
+                }
+                .foregroundStyle(selectedIds.isEmpty ? Theme.inkTertiary(for: colorScheme) : Theme.coral)
+                .frame(maxWidth: .infinity)
+            }
+            .disabled(selectedIds.isEmpty)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 8)
+        .background(Theme.paper(for: colorScheme))
+        .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.hairline(for: colorScheme)), alignment: .top)
+    }
 
     private var navBar: some View {
         HStack(spacing: 12) {
@@ -304,30 +396,44 @@ struct GroupChatDetailView: View {
                 } else {
                     LazyVStack(spacing: 3) {
                         ForEach(rows) { row in
-                            GroupMessageBubble(
-                                message: row.message,
-                                showSenderHeader: row.showSenderHeader,
-                                isPinned: data.pinnedMessages.isPinned(row.message.id, in: route.groupId),
-                                onForward: { forwardSource = ForwardSource(kind: .group, messageId: row.message.id) },
-                                onFavorite: { favorite(row.message) },
-                                onPin: { pin(row.message) },
-                                onUnpin: { data.pinnedMessages.unpin(in: route.groupId) },
-                                onDelete: { Task { await vm?.deleteMessage(row.message.id) } },
-                                onRecall: { Task { await vm?.recallMessage(row.message.id) } },
-                                onReport: {
-                                    reportTarget = ReportTarget(
-                                        messageId: row.message.id,
-                                        kind: "group",
-                                        excerpt: row.message.text,
-                                        userId: row.message.senderId,
-                                        name: row.message.senderName
-                                    )
-                                },
-                                onBlock: {
-                                    pendingBlockId = row.message.senderId
-                                    showBlockConfirm = true
+                            HStack(spacing: 8) {
+                                if selectMode {
+                                    Image(systemName: selectedIds.contains(row.message.id) ? "checkmark.circle.fill" : "circle")
+                                        .font(.system(size: 22))
+                                        .foregroundStyle(selectedIds.contains(row.message.id) ? Theme.coral : Theme.inkTertiary(for: colorScheme))
                                 }
-                            )
+                                GroupMessageBubble(
+                                    message: row.message,
+                                    showSenderHeader: row.showSenderHeader,
+                                    isPinned: data.pinnedMessages.isPinned(row.message.id, in: route.groupId),
+                                    quotedSender: row.quoted.map { quotedSenderName(for: $0) },
+                                    quotedPreview: row.quoted.map { quotedPreviewText(for: $0) },
+                                    onReply: { startReply(to: row.message) },
+                                    onForward: { forwardSource = ForwardSource(kind: .group, messageIds: [row.message.id]) },
+                                    onSelect: { enterSelect(row.message.id) },
+                                    onFavorite: { favorite(row.message) },
+                                    onPin: { pin(row.message) },
+                                    onUnpin: { data.pinnedMessages.unpin(in: route.groupId) },
+                                    onDelete: { Task { await vm?.deleteMessage(row.message.id) } },
+                                    onRecall: { Task { await vm?.recallMessage(row.message.id) } },
+                                    onReport: {
+                                        reportTarget = ReportTarget(
+                                            messageId: row.message.id,
+                                            kind: "group",
+                                            excerpt: row.message.text,
+                                            userId: row.message.senderId,
+                                            name: row.message.senderName
+                                        )
+                                    },
+                                    onBlock: {
+                                        pendingBlockId = row.message.senderId
+                                        showBlockConfirm = true
+                                    }
+                                )
+                                .allowsHitTesting(!selectMode)
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture { if selectMode { toggleSelect(row.message.id) } }
                             .id(row.message.id)
                             .padding(.top, row.startsRun ? 8 : 0)
                         }
@@ -365,6 +471,67 @@ struct GroupChatDetailView: View {
     }
 
     // MARK: - Composer
+
+    // MARK: - Quoted replies
+
+    /// Display name for a quoted message's original sender ("You" for mine).
+    private func quotedSenderName(for message: GroupChatMessage) -> String {
+        message.sender == .me ? l10n.t(.chatYou) : message.senderName
+    }
+
+    /// Single-line preview for a quoted message, by kind (mirrors the list preview).
+    private func quotedPreviewText(for message: GroupChatMessage) -> String {
+        switch message.kind {
+        case .text: return message.text
+        case .image: return l10n.t(.chatImagePreview)
+        case .video: return l10n.t(.chatVideoPreview)
+        case .file:
+            let name = message.fileName ?? ""
+            return name.isEmpty ? l10n.t(.chatFilePreview) : name
+        case .audio: return l10n.t(.chatVoice)
+        }
+    }
+
+    private func startReply(to message: GroupChatMessage) {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
+            vm?.replyingTo = message
+        }
+        inputFocused = true
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    /// "Replying to" context bar above the input while composing a quoted reply.
+    private func replyComposerBar(for message: GroupChatMessage) -> some View {
+        HStack(spacing: 10) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(Theme.coral)
+                .frame(width: 3, height: 34)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(quotedSenderName(for: message))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.coral)
+                    .lineLimit(1)
+                Text(quotedPreviewText(for: message))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.ink(for: colorScheme))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Spacer(minLength: 8)
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    vm?.cancelReply()
+                }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 9)
+        .background(Theme.card(for: colorScheme))
+    }
 
     private var inputBar: some View {
         HStack(spacing: 10) {
@@ -704,6 +871,50 @@ struct GroupChatDetailView: View {
 /// A group message row. Mine sits on the right (coral gradient); others sit on
 /// the left with the sender's avatar + name (shown once per run). Reuses the 1:1
 /// bubble look without touching the existing private bubble views.
+/// Quoted-original panel shown above a group reply bubble (mirrors the 1:1 one).
+private struct GroupQuotedReplyPreview: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let senderName: String
+    let preview: String
+    var isMe: Bool = false
+
+    private var panelFill: Color {
+        if isMe {
+            return colorScheme == .dark ? Theme.tangerine.opacity(0.24) : Theme.tangerine.opacity(0.16)
+        }
+        return colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.08)
+    }
+    private var bodyColor: Color {
+        colorScheme == .dark ? Color(hex: 0xEDEDED) : Color(hex: 0x3A3A3A)
+    }
+    private var nameColor: Color {
+        colorScheme == .dark ? Color(hex: 0xC0C0C0) : Color(hex: 0x595959)
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(Theme.sunset)
+                .frame(width: 4)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(senderName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(nameColor)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(preview)
+                    .font(.system(size: 13))
+                    .foregroundStyle(bodyColor)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(panelFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
 private struct GroupMessageBubble: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(LocalizationManager.self) private var l10n
@@ -712,7 +923,11 @@ private struct GroupMessageBubble: View {
     /// True when this message is the group's currently pinned (群公告) message — the
     /// menu then offers "Unpin" instead of "Pin".
     var isPinned: Bool = false
+    var quotedSender: String? = nil
+    var quotedPreview: String? = nil
+    var onReply: (() -> Void)? = nil
     var onForward: (() -> Void)? = nil
+    var onSelect: (() -> Void)? = nil
     var onFavorite: (() -> Void)? = nil
     var onPin: (() -> Void)? = nil
     var onUnpin: (() -> Void)? = nil
@@ -734,12 +949,22 @@ private struct GroupMessageBubble: View {
         return Date().timeIntervalSince(createdAt) <= 120
     }
 
+    /// The bubble with its quoted-reply preview stacked above (when a reply).
+    private var bubbleContent: some View {
+        VStack(alignment: isMe ? .trailing : .leading, spacing: 3) {
+            if let quotedSender, let quotedPreview {
+                GroupQuotedReplyPreview(senderName: quotedSender, preview: quotedPreview, isMe: isMe)
+            }
+            content
+        }
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             if isMe {
                 Spacer(minLength: 50)
                 timestamp
-                content
+                bubbleContent
             } else {
                 avatarColumn
                 VStack(alignment: .leading, spacing: 3) {
@@ -750,7 +975,7 @@ private struct GroupMessageBubble: View {
                             .padding(.leading, 2)
                     }
                     HStack(alignment: .bottom, spacing: 6) {
-                        content
+                        bubbleContent
                         timestamp
                     }
                 }
@@ -758,8 +983,14 @@ private struct GroupMessageBubble: View {
             }
         }
         .contextMenu {
+            Button { onReply?() } label: {
+                Label(l10n.t(.chatReply), systemImage: "arrowshape.turn.up.left")
+            }
             Button { onForward?() } label: {
                 Label(l10n.t(.chatForward), systemImage: "arrowshape.turn.up.right")
+            }
+            Button { onSelect?() } label: {
+                Label(l10n.t(.chatSelect), systemImage: "checkmark.circle")
             }
             if message.kind == .text {
                 Button {
