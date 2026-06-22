@@ -2,9 +2,10 @@
 //  AuthManager.swift
 //  WeConnect
 //
-//  Native Supabase Auth — invite-only sign-in.
-//  Accounts are created by an admin invite (see AdminUsersView + the
-//  invite-user / activate-invite edge functions). There is no public sign-up.
+//  Native Supabase Auth — public sign-up + sign-in.
+//  Anyone can self-register with email + password (signUp, with email confirmation).
+//  Admins can additionally invite users (see AdminUsersView + the invite-user /
+//  activate-invite edge functions).
 //
 
 import SwiftUI
