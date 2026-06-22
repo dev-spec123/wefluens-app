@@ -122,12 +122,11 @@ create index if not exists support_tickets_user_id_idx on public.support_tickets
 
 alter table public.support_tickets enable row level security;
 
+-- Users read their own tickets. Support staff read all via the dashboard /
+-- service role (which bypasses RLS), so no admin clause is needed here.
 drop policy if exists support_tickets_select_own on public.support_tickets;
 create policy support_tickets_select_own on public.support_tickets
-  for select using (
-    auth.uid() = user_id
-    or exists (select 1 from public.profiles p where p.id = auth.uid() and p.is_admin)
-  );
+  for select using (auth.uid() = user_id);
 
 drop policy if exists support_tickets_insert_own on public.support_tickets;
 create policy support_tickets_insert_own on public.support_tickets
