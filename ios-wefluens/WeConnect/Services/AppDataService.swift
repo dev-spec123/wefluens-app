@@ -42,11 +42,11 @@ final class AppDataService {
     /// the contact list / detail immediately.
     var remarks: [String: String] = [:]
 
-    /// Local-only favorites (收藏) of chat messages, persisted on-device. Held here
-    /// so every screen that already has the `AppDataService` in scope (chats, group
-    /// chats, profile) can read/write favorites without a separate environment
-    /// object. It's @Observable, so list views observing `data.favorites` refresh
-    /// the moment a favorite is added or removed.
+    /// Cloud-synced favorites (收藏) of chat messages (Supabase `favorites` table).
+    /// Held here so every screen that already has the `AppDataService` in scope
+    /// (chats, group chats, profile) can read/write favorites without a separate
+    /// environment object. It's @Observable, so list views observing `data.favorites`
+    /// refresh the moment a favorite is added or removed.
     let favorites = FavoritesStore()
 
     /// Local-only pinned group messages (群公告), one per group, persisted on-device.
@@ -74,6 +74,7 @@ final class AppDataService {
         self.pinnedIds = Self.loadIdSet(forKey: Self.pinnedKey)
         self.mutedIds = Self.loadIdSet(forKey: Self.mutedKey)
         self.remarks = Self.loadStringMap(forKey: Self.remarksKey)
+        self.favorites.configure(userId: userId)
     }
 
     // MARK: - Friend Remarks (备注)
@@ -185,7 +186,10 @@ final class AppDataService {
                     engagement: row.engagement ?? "0%",
                     deals: row.deals ?? "0",
                     isAdmin: row.isAdmin ?? false,
-                    avatarUrl: row.avatarUrl
+                    avatarUrl: row.avatarUrl,
+                    notificationsEnabled: row.notificationsEnabled ?? true,
+                    activityStatus: row.activityStatus ?? true,
+                    dataSharing: row.dataSharing ?? true
                 )
             } else {
                 // Profile row missing — create via upsert, then return fallback
@@ -235,11 +239,91 @@ final class AppDataService {
                     engagement: row.engagement ?? "0%",
                     deals: row.deals ?? "0",
                     isAdmin: row.isAdmin ?? false,
-                    avatarUrl: row.avatarUrl
+                    avatarUrl: row.avatarUrl,
+                    notificationsEnabled: row.notificationsEnabled ?? true,
+                    activityStatus: row.activityStatus ?? true,
+                    dataSharing: row.dataSharing ?? true
                 )
             }
         } catch {
             print("⚠️ Profile refresh failed: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Preferences (notifications / activity / data sharing)
+
+    /// Persists the Push Notifications opt-in to the profile and updates the local
+    /// copy. The send path (send-push) only delivers to users with this flag true.
+    @MainActor
+    func setNotificationsEnabled(_ on: Bool) async {
+        guard let uid = userId else { return }
+        profile?.notificationsEnabled = on
+        do {
+            try await supabase.from("profiles")
+                .update(NotificationsPrefUpdate(notifications_enabled: on))
+                .eq("id", value: uid.uuidString)
+                .execute()
+        } catch {
+            print("⚠️ setNotificationsEnabled failed: \(error)")
+        }
+    }
+
+    /// Persists the Activity Status preference (whether the online dot is visible).
+    @MainActor
+    func setActivityStatus(_ on: Bool) async {
+        guard let uid = userId else { return }
+        profile?.activityStatus = on
+        do {
+            try await supabase.from("profiles")
+                .update(ActivityStatusUpdate(activity_status: on))
+                .eq("id", value: uid.uuidString)
+                .execute()
+        } catch {
+            print("⚠️ setActivityStatus failed: \(error)")
+        }
+    }
+
+    /// Persists the Data Sharing preference (whether the user appears in the Top
+    /// Talent directory).
+    @MainActor
+    func setDataSharing(_ on: Bool) async {
+        guard let uid = userId else { return }
+        profile?.dataSharing = on
+        do {
+            try await supabase.from("profiles")
+                .update(DataSharingUpdate(data_sharing: on))
+                .eq("id", value: uid.uuidString)
+                .execute()
+        } catch {
+            print("⚠️ setDataSharing failed: \(error)")
+        }
+    }
+
+    /// Submits an in-app support ticket via the `submit-support-ticket` edge
+    /// function (records it in support_tickets and emails support@ via Resend).
+    /// Returns true on success.
+    @MainActor
+    func submitSupportTicket(subject: String, body: String) async throws -> Bool {
+        let resp: SupportTicketResponse = try await supabase.functions.invoke(
+            "submit-support-ticket",
+            options: .init(body: SupportTicketRequest(subject: subject, body: body))
+        )
+        return resp.ok == true
+    }
+
+    /// Registers (upserts) this device's APNs token for the signed-in user. Called
+    /// after the OS grants notification permission. The actual push send path is
+    /// stubbed server-side (see backend send-push); this just records the token.
+    @MainActor
+    func registerDeviceToken(_ token: String) async {
+        guard let uid = userId else { return }
+        do {
+            try await supabase.from("device_tokens")
+                .upsert(DeviceTokenUpsert(user_id: uid.uuidString, token: token, platform: "ios"),
+                        onConflict: "token")
+                .execute()
+        } catch {
+            print("⚠️ registerDeviceToken failed: \(error)")
         }
     }
 
@@ -593,6 +677,19 @@ final class AppDataService {
             .execute()
             .value
         // Don't surface users I've blocked in search.
+        return results.filter { !blockedUserIds.contains($0.id) }
+    }
+
+    /// Loads the "Top Talent" creator directory via the `browse_top_talent`
+    /// security function. Returns the same SearchUserResult shape as searchUsers
+    /// (so the directory reuses the same row + add-friend actions), ranked by
+    /// follower count. Excludes me, anyone with Data Sharing off, and blocks.
+    @MainActor
+    func loadTopTalent(limit: Int = 50) async throws -> [SearchUserResult] {
+        let results: [SearchUserResult] = try await supabase
+            .rpc("browse_top_talent", params: BrowseTopTalentParams(limit_count: limit))
+            .execute()
+            .value
         return results.filter { !blockedUserIds.contains($0.id) }
     }
 

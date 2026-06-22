@@ -72,6 +72,7 @@ enum L10n: String {
     // Contacts
     case contactsTitle, contactsSubtitle, contactsSearch, contactsInvite, contactsTopTalent, contactsBrands
     case contactsNewFriends, contactsFriendRequests, contactsAddFriend
+    case talentEmpty, brandsEmpty, brandsNoCampaigns, brandsSearch, brandsNoMatches
     case contactsRemark, contactsSetRemark
 
     // Add Friend (search + request)
@@ -122,6 +123,9 @@ enum L10n: String {
     case profilePreferences, profileNotifications, profilePrivacy, profileLanguage
     case profileSupport, profileHelp, profileContact, profileRate
     case profileSignOut
+    case faqTitle
+    case supportFormTitle, supportSubjectField, supportMessageField
+    case supportSendButton, supportSentMsg, supportErrorMsg, supportEmptyMsg
 
     // Settings
     case settingsTitle, settingsLanguage, settingsLanguageFooter, settingsDone
@@ -273,6 +277,11 @@ final class LocalizationManager {
             .contactsInvite: "Invite", .contactsTopTalent: "Top Talent", .contactsBrands: "Brands",
             .contactsNewFriends: "New Friends", .contactsFriendRequests: "Friend Request",
             .contactsAddFriend: "Add Friend",
+            .talentEmpty: "No creators to show yet. Check back soon.",
+            .brandsEmpty: "No brands available yet.",
+            .brandsNoCampaigns: "No open campaigns from this brand right now.",
+            .brandsSearch: "Search brands",
+            .brandsNoMatches: "No brands match your search.",
             .contactsRemark: "Remark", .contactsSetRemark: "Set remark",
             .addFriendSearchPlaceholder: "Search by email or @handle",
             .addFriendHint: "Find people by their email or username, then send a friend request.",
@@ -327,7 +336,15 @@ final class LocalizationManager {
             .profileOpenDeals: "Open to new deals", .profileOpenDealsSub: "Brands can see you're available",
             .profilePreferences: "Preferences", .profileNotifications: "Push Notifications",
             .profilePrivacy: "Privacy & Security", .profileLanguage: "Language",
-            .profileSupport: "Support", .profileHelp: "Contact Support", .profileContact: "Contact Wefluens", .profileRate: "Rate the App",
+            .profileSupport: "Support", .profileHelp: "Help & FAQ", .profileContact: "Contact Support", .profileRate: "Rate the App",
+            .faqTitle: "Help & FAQ",
+            .supportFormTitle: "Contact Support",
+            .supportSubjectField: "Subject",
+            .supportMessageField: "How can we help?",
+            .supportSendButton: "Send",
+            .supportSentMsg: "Thanks — we got your message and will get back to you by email.",
+            .supportErrorMsg: "Couldn't send your message. Please try again.",
+            .supportEmptyMsg: "Please add a subject and a message.",
             .profileSignOut: "Sign Out",
             .settingsTitle: "Settings", .settingsLanguage: "Language",
             .settingsLanguageFooter: "Choose your preferred language. It applies across the whole app.",
@@ -509,6 +526,11 @@ final class LocalizationManager {
             .contactsInvite: "邀请", .contactsTopTalent: "顶尖网红", .contactsBrands: "品牌",
             .contactsNewFriends: "新的朋友", .contactsFriendRequests: "好友申请",
             .contactsAddFriend: "添加好友",
+            .talentEmpty: "暂时没有可显示的创作者，请稍后再来。",
+            .brandsEmpty: "暂时没有可用的品牌。",
+            .brandsNoCampaigns: "该品牌目前没有开放的活动。",
+            .brandsSearch: "搜索品牌",
+            .brandsNoMatches: "没有匹配的品牌。",
             .contactsRemark: "备注", .contactsSetRemark: "设置备注",
             .addFriendSearchPlaceholder: "搜索邮箱或用户名",
             .addFriendHint: "通过邮箱或用户名找到对方，然后发送好友申请。",
@@ -563,7 +585,15 @@ final class LocalizationManager {
             .profileOpenDeals: "接受新合作", .profileOpenDealsSub: "品牌可以看到你的空档",
             .profilePreferences: "偏好设置", .profileNotifications: "推送通知",
             .profilePrivacy: "隐私与安全", .profileLanguage: "语言",
-            .profileSupport: "支持", .profileHelp: "联系客服", .profileContact: "联系 Wefluens", .profileRate: "给应用评分",
+            .profileSupport: "支持", .profileHelp: "帮助与常见问题", .profileContact: "联系客服", .profileRate: "给应用评分",
+            .faqTitle: "帮助与常见问题",
+            .supportFormTitle: "联系客服",
+            .supportSubjectField: "主题",
+            .supportMessageField: "我们能帮您什么？",
+            .supportSendButton: "发送",
+            .supportSentMsg: "谢谢——我们已收到您的消息，会通过邮件回复您。",
+            .supportErrorMsg: "消息发送失败，请重试。",
+            .supportEmptyMsg: "请填写主题和消息内容。",
             .profileSignOut: "退出登录",
             .settingsTitle: "设置", .settingsLanguage: "语言",
             .settingsLanguageFooter: "选择你偏好的语言，将应用于整个 App。",
@@ -745,6 +775,11 @@ final class LocalizationManager {
             .contactsInvite: "Invitar", .contactsTopTalent: "Top Talento", .contactsBrands: "Marcas",
             .contactsNewFriends: "Nuevos Amigos", .contactsFriendRequests: "Solicitud de Amistad",
             .contactsAddFriend: "Agregar amigo",
+            .talentEmpty: "Aún no hay creadores para mostrar. Vuelve pronto.",
+            .brandsEmpty: "Todavía no hay marcas disponibles.",
+            .brandsNoCampaigns: "Esta marca no tiene campañas abiertas por ahora.",
+            .brandsSearch: "Buscar marcas",
+            .brandsNoMatches: "Ninguna marca coincide con tu búsqueda.",
             .contactsRemark: "Nota", .contactsSetRemark: "Poner nota",
             .addFriendSearchPlaceholder: "Busca por correo o @usuario",
             .addFriendHint: "Encuentra personas por su correo o usuario y envía una solicitud de amistad.",
@@ -799,7 +834,15 @@ final class LocalizationManager {
             .profileOpenDeals: "Abierto a nuevos tratos", .profileOpenDealsSub: "Las marcas ven que estás disponible",
             .profilePreferences: "Preferencias", .profileNotifications: "Notificaciones",
             .profilePrivacy: "Privacidad y Seguridad", .profileLanguage: "Idioma",
-            .profileSupport: "Soporte", .profileHelp: "Contactar soporte", .profileContact: "Contactar a Wefluens", .profileRate: "Valorar la App",
+            .profileSupport: "Soporte", .profileHelp: "Ayuda y FAQ", .profileContact: "Contactar soporte", .profileRate: "Valorar la App",
+            .faqTitle: "Ayuda y FAQ",
+            .supportFormTitle: "Contactar soporte",
+            .supportSubjectField: "Asunto",
+            .supportMessageField: "¿Cómo podemos ayudarte?",
+            .supportSendButton: "Enviar",
+            .supportSentMsg: "Gracias: recibimos tu mensaje y te responderemos por correo.",
+            .supportErrorMsg: "No se pudo enviar tu mensaje. Inténtalo de nuevo.",
+            .supportEmptyMsg: "Añade un asunto y un mensaje.",
             .profileSignOut: "Cerrar Sesión",
             .settingsTitle: "Ajustes", .settingsLanguage: "Idioma",
             .settingsLanguageFooter: "Elige tu idioma preferido. Se aplica en toda la app.",

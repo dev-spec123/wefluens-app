@@ -376,4 +376,8 @@ struct UserProfile {
     var deals: String
     var isAdmin: Bool
     var avatarUrl: String?
+    /// Preferences (default true; defaulted so existing initializers keep working).
+    var notificationsEnabled: Bool = true
+    var activityStatus: Bool = true
+    var dataSharing: Bool = true
 }

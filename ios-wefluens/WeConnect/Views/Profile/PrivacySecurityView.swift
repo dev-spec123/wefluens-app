@@ -7,10 +7,11 @@ import SwiftUI
 
 struct PrivacySecurityView: View {
     @Environment(LocalizationManager.self) private var l10n
+    @Environment(AppDataService.self) private var data
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     @State private var showActivity: Bool = true
-    @State private var dataSharing: Bool = false
+    @State private var dataSharing: Bool = true
     @State private var showChangePassword: Bool = false
 
     var body: some View {
@@ -44,6 +45,9 @@ struct PrivacySecurityView: View {
                         subtitle: l10n.t(.privacyActivityStatusSub),
                         isOn: $showActivity
                     )
+                    .onChange(of: showActivity) { _, newValue in
+                        Task { await data.setActivityStatus(newValue) }
+                    }
                     Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 64)
                     toggleRow(
                         icon: "arrow.triangle.branch",
@@ -51,6 +55,9 @@ struct PrivacySecurityView: View {
                         subtitle: l10n.t(.privacyDataSharingSub),
                         isOn: $dataSharing
                     )
+                    .onChange(of: dataSharing) { _, newValue in
+                        Task { await data.setDataSharing(newValue) }
+                    }
                 }
                 .padding(.vertical, 4)
                 .cardStyle()
@@ -91,6 +98,12 @@ struct PrivacySecurityView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showChangePassword) {
             ForcePasswordChangeView(forced: false)
+        }
+        .task {
+            // Seed toggles from the stored profile without triggering a write-back:
+            // onChange only fires on a real change, and these match the source.
+            showActivity = data.profile?.activityStatus ?? true
+            dataSharing = data.profile?.dataSharing ?? true
         }
     }
 

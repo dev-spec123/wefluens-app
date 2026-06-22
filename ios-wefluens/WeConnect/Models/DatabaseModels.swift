@@ -26,6 +26,13 @@ nonisolated struct ProfileRow: Codable, Identifiable, Sendable {
     /// Server-controlled access flag — true unlocks all features beyond the free
     /// 1:1 chat + add-friends tier. The client only ever READS this.
     let isFullAccess: Bool?
+    /// Me-tab "Push Notifications" toggle. Optional so older rows (column absent)
+    /// decode; treated as true when missing.
+    let notificationsEnabled: Bool?
+    /// When false, this user's online dot is hidden from others.
+    let activityStatus: Bool?
+    /// When false, the user is excluded from the Top Talent directory.
+    let dataSharing: Bool?
     let createdAt: Date?
     let updatedAt: Date?
 
@@ -34,9 +41,65 @@ nonisolated struct ProfileRow: Codable, Identifiable, Sendable {
         case avatarUrl = "avatar_url"
         case isAdmin = "is_admin"
         case isFullAccess = "is_full_access"
+        case notificationsEnabled = "notifications_enabled"
+        case activityStatus = "activity_status"
+        case dataSharing = "data_sharing"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
+}
+
+// Per-flag preference updates (one column each so a nil never overwrites a sibling).
+nonisolated struct NotificationsPrefUpdate: Encodable, Sendable {
+    let notifications_enabled: Bool
+}
+nonisolated struct ActivityStatusUpdate: Encodable, Sendable {
+    let activity_status: Bool
+}
+nonisolated struct DataSharingUpdate: Encodable, Sendable {
+    let data_sharing: Bool
+}
+
+// Insert payload for an APNs device token (upserted on `token`).
+nonisolated struct DeviceTokenUpsert: Encodable, Sendable {
+    let user_id: String
+    let token: String
+    let platform: String
+}
+
+// Cloud-synced favorite (收藏). message_id is the original chat message id.
+nonisolated struct FavoriteRow: Codable, Sendable {
+    let messageId: UUID
+    let text: String
+    let kind: String
+    let sender: String
+    let source: String
+    let savedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case text, kind, sender, source
+        case messageId = "message_id"
+        case savedAt = "saved_at"
+    }
+}
+
+nonisolated struct FavoriteUpsert: Encodable, Sendable {
+    let user_id: String
+    let message_id: String
+    let text: String
+    let kind: String
+    let sender: String
+    let source: String
+}
+
+// In-app support ticket → submit-support-ticket edge function.
+nonisolated struct SupportTicketRequest: Encodable, Sendable {
+    let subject: String
+    let body: String
+}
+nonisolated struct SupportTicketResponse: Decodable, Sendable {
+    let ok: Bool?
+    let error: String?
 }
 
 // MARK: - Blocks & Reports
@@ -298,6 +361,10 @@ nonisolated struct SearchUserResult: Codable, Identifiable, Sendable {
 
 nonisolated struct SearchUsersParams: Encodable, Sendable {
     let search_query: String
+}
+
+nonisolated struct BrowseTopTalentParams: Encodable, Sendable {
+    let limit_count: Int
 }
 
 nonisolated struct SendFriendRequestParams: Encodable, Sendable {
