@@ -2,8 +2,8 @@
 //  AuthView.swift
 //  WeConnect
 //
-//  Invite-only sign-in screen. Accounts are created by an admin invite, so there
-//  is no public sign-up — just email + password.
+//  Sign-in / sign-up screen. Anyone can self-register with an email + password
+//  (public sign-up, with email confirmation). Admins can additionally invite users.
 //
 
 import SwiftUI
