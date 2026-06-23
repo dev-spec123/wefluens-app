@@ -780,7 +780,7 @@ private struct MessageBubble: View {
                         Button { onSelect?() } label: {
                             Label(l10n.t(.chatSelect), systemImage: "checkmark.circle")
                         }
-                        if message.kind == .text {
+                        if !message.isRecalled && !message.text.isEmpty {
                             Button {
                                 UIPasteboard.general.string = message.text
                             } label: {
