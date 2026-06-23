@@ -11,7 +11,7 @@ struct PrivacySecurityView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     @State private var showActivity: Bool = true
-    @State private var dataSharing: Bool = true
+    @State private var dataSharing: Bool = false   // opt-in: off until the user turns it on
     @State private var showChangePassword: Bool = false
 
     var body: some View {
@@ -103,7 +103,7 @@ struct PrivacySecurityView: View {
             // Seed toggles from the stored profile without triggering a write-back:
             // onChange only fires on a real change, and these match the source.
             showActivity = data.profile?.activityStatus ?? true
-            dataSharing = data.profile?.dataSharing ?? true
+            dataSharing = data.profile?.dataSharing ?? false
         }
     }
 

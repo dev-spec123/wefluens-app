@@ -18,16 +18,17 @@ begin;
 --   send path (send-push) only delivers to users whose flag is true.
 -- activity_status       — when false, this user's online/isOnline dot is hidden
 --   from others (gates what `is_online` other clients are allowed to show).
--- data_sharing          — when false, the user is excluded from the Top Talent
---   directory (browse_top_talent). Direct handle/email search is unaffected: if
---   someone already knows your exact handle they can still send a request.
+-- data_sharing          — OPT-IN to the Top Talent directory (browse_top_talent).
+--   Defaults false: a user is not listed until they turn it on. Direct handle/
+--   email search is unaffected: if someone knows your exact handle they can still
+--   find you. (See migration-top-talent-optin.sql for the rationale.)
 -- ─────────────────────────────────────────────────────────────────────────────
 alter table public.profiles
   add column if not exists notifications_enabled boolean not null default true;
 alter table public.profiles
   add column if not exists activity_status boolean not null default true;
 alter table public.profiles
-  add column if not exists data_sharing boolean not null default true;
+  add column if not exists data_sharing boolean not null default false;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. device_tokens — one row per (user, device) APNs token
@@ -214,7 +215,7 @@ as $$
     ) as incoming_request_id
   from public.profiles p
   where p.id <> auth.uid()
-    and coalesce(p.data_sharing, true) = true
+    and coalesce(p.data_sharing, false) = true
     and not exists (
       select 1 from public.blocks b
       where (b.blocker_id = auth.uid() and b.blocked_id = p.id)

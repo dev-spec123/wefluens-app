@@ -2,10 +2,13 @@
 //  TopTalentView.swift
 //  WeConnect
 //
-//  The "Top Talent" creator directory — pushed from the Contacts tab. Browses
-//  real profiles ranked by follower count via the `browse_top_talent` RPC (which
-//  excludes me, anyone with Data Sharing off, and blocked users). Each row offers
-//  the same Add Friend / Pending / Friends actions as AddFriendView.
+//  The "Top Talent" creator directory — pushed from the Contacts tab.
+//
+//  Empty search field → the opt-in directory via `browse_top_talent` (ranked by
+//  followers; only users who turned on "Discoverable"). Typing a query → a live
+//  search across all users via `search_users` (same as Add Friend), so you can
+//  still find someone by handle/name even if they haven't opted into the directory.
+//  Each row offers the same Add Friend / Pending / Friends actions as AddFriendView.
 //
 
 import SwiftUI
@@ -15,9 +18,14 @@ struct TopTalentView: View {
     @Environment(LocalizationManager.self) private var l10n
     @Environment(\.colorScheme) private var colorScheme
 
-    @State private var people: [SearchUserResult] = []
+    @State private var people: [SearchUserResult] = []        // the directory
     @State private var isLoading = true
     @State private var loadFailed = false
+
+    @State private var searchText = ""
+    @State private var searchResults: [SearchUserResult] = []
+    @State private var isSearching = false
+    @State private var searchTask: Task<Void, Never>? = nil
 
     /// Relationship overrides applied immediately after an action (optimistic UI).
     @State private var localRelationship: [UUID: String] = [:]
@@ -25,31 +33,26 @@ struct TopTalentView: View {
     @State private var toast: String? = nil
     @State private var toastTask: Task<Void, Never>? = nil
 
+    private var trimmedQuery: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    private var isSearchActive: Bool { trimmedQuery.count >= 2 }
+    private var displayed: [SearchUserResult] { isSearchActive ? searchResults : people }
+
     var body: some View {
         ZStack {
             Theme.paper(for: colorScheme).ignoresSafeArea()
 
             if isLoading {
                 ProgressView().tint(Theme.coral).scaleEffect(1.1)
-            } else if people.isEmpty {
-                emptyState
             } else {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(Array(people.enumerated()), id: \.element.id) { index, user in
-                            row(user)
-                            if index < people.count - 1 {
-                                Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 76)
-                            }
-                        }
-                    }
-                    .padding(.vertical, 6)
-                    .cardStyle()
-                    .padding(.horizontal, 18)
-                    .padding(.top, 12)
-                    .padding(.bottom, 24)
+                VStack(spacing: 0) {
+                    searchBar
+                        .padding(.horizontal, 18)
+                        .padding(.top, 12)
+                        .padding(.bottom, 6)
+                    content
                 }
-                .refreshable { await load() }
             }
 
             if let toast { toastView(toast) }
@@ -59,20 +62,97 @@ struct TopTalentView: View {
         .task { if isLoading { await load() } }
     }
 
+    // MARK: - Search bar
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+            TextField(l10n.t(.talentSearch), text: $searchText)
+                .font(.system(size: 16))
+                .foregroundStyle(Theme.ink(for: colorScheme))
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .submitLabel(.search)
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                    searchResults = []
+                    searchTask?.cancel()
+                    isSearching = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+        .background(Theme.card(for: colorScheme))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
+        .onChange(of: searchText) { _, newValue in scheduleSearch(newValue) }
+    }
+
+    // MARK: - Content
+
+    @ViewBuilder
+    private var content: some View {
+        if isSearchActive && isSearching && searchResults.isEmpty {
+            VStack(spacing: 14) {
+                ProgressView().tint(Theme.coral).scaleEffect(1.1)
+                Text(l10n.t(.addFriendSearching))
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if displayed.isEmpty {
+            emptyState
+        } else {
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(displayed.enumerated()), id: \.element.id) { index, user in
+                        row(user)
+                        if index < displayed.count - 1 {
+                            Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 76)
+                        }
+                    }
+                }
+                .padding(.vertical, 6)
+                .cardStyle()
+                .padding(.horizontal, 18)
+                .padding(.top, 6)
+                .padding(.bottom, 24)
+            }
+            .refreshable { if !isSearchActive { await load() } }
+        }
+    }
+
     private var emptyState: some View {
         VStack(spacing: 14) {
-            Image(systemName: loadFailed ? "wifi.slash" : "person.2.fill")
+            Image(systemName: loadFailed ? "wifi.slash" : (isSearchActive ? "magnifyingglass" : "person.2.fill"))
                 .font(.system(size: 34, weight: .semibold))
                 .foregroundStyle(Theme.coral.opacity(0.85))
                 .frame(width: 76, height: 76)
                 .background(Theme.coral.opacity(0.1))
                 .clipShape(Circle())
-            Text(loadFailed ? l10n.t(.addFriendError) : l10n.t(.talentEmpty))
+            Text(loadFailed ? l10n.t(.addFriendError) : (isSearchActive ? l10n.t(.addFriendNoResults) : l10n.t(.talentEmpty)))
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Theme.inkSecondary(for: colorScheme))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
+            // When the directory is empty (not searching, not an error), nudge the
+            // user toward the opt-in switch.
+            if !loadFailed && !isSearchActive {
+                Text(l10n.t(.talentOptInHint))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 36)
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Row
@@ -175,7 +255,7 @@ struct TopTalentView: View {
         return result.isEmpty ? "?" : result
     }
 
-    // MARK: - Load & actions
+    // MARK: - Load (directory) & search
 
     @MainActor
     private func load() async {
@@ -189,6 +269,38 @@ struct TopTalentView: View {
         }
         isLoading = false
     }
+
+    private func scheduleSearch(_ raw: String) {
+        searchTask?.cancel()
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 else {
+            searchResults = []
+            isSearching = false
+            return
+        }
+        searchTask = Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            if Task.isCancelled { return }
+            await performSearch(trimmed)
+        }
+    }
+
+    @MainActor
+    private func performSearch(_ q: String) async {
+        isSearching = true
+        defer { isSearching = false }
+        do {
+            let res = try await data.searchUsers(query: q)
+            if Task.isCancelled { return }
+            searchResults = res
+        } catch {
+            if Task.isCancelled { return }
+            print("⚠️ Top Talent search failed: \(error)")
+            searchResults = []
+        }
+    }
+
+    // MARK: - Actions
 
     private func addFriend(_ user: SearchUserResult) {
         guard !actioning.contains(user.id) else { return }
