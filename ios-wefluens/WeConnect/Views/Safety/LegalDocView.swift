@@ -35,6 +35,10 @@ struct LegalDocView: View {
     @Environment(\.dismiss) private var dismiss
 
     let kind: LegalDocKind
+    /// True only when this view is presented modally (a sheet), where it needs its
+    /// own dismiss control. When pushed onto a navigation stack the back chevron
+    /// already handles dismissal, so the Done button would be redundant.
+    var showsDoneButton: Bool = false
 
     var body: some View {
         ScrollView {
@@ -68,9 +72,11 @@ struct LegalDocView: View {
         .navigationTitle(l10n.t(kind.titleKey))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button(l10n.t(.settingsDone)) { dismiss() }
-                    .foregroundStyle(Theme.coral)
+            if showsDoneButton {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(l10n.t(.settingsDone)) { dismiss() }
+                        .foregroundStyle(Theme.coral)
+                }
             }
         }
     }

@@ -52,6 +52,15 @@ struct ContentView: View {
                             await ds.loadConversations()
                             await ds.loadContacts()
                             await ds.loadDiscover()
+                            await ds.favorites.loadFromCloud()
+                            // Push: upload any APNs token to this user's device_tokens,
+                            // and (without prompting) refresh it if they're opted in.
+                            PushService.shared.onToken = { token in
+                                Task { await ds.registerDeviceToken(token) }
+                            }
+                            if ds.profile?.notificationsEnabled == true {
+                                await PushService.shared.registerIfAuthorized()
+                            }
                             withAnimation(.easeInOut(duration: 0.3)) {
                                 dataService = ds
                             }

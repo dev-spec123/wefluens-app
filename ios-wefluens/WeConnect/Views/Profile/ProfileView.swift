@@ -14,10 +14,10 @@ struct ProfileView: View {
     @Environment(LocalizationManager.self) private var l10n
     @Environment(AppDataService.self) private var data
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.openURL) private var openURL
     @State private var notificationsOn: Bool = true
     @State private var availableForDeals: Bool = true
     @State private var showDeleteConfirm = false
+    @State private var showContactSupport = false
 
     private var user: UserProfile {
         data.profile ?? UserProfile(
@@ -49,6 +49,7 @@ struct ProfileView: View {
                     stats
                     availabilityCard
                     qrCodeBanner
+                    favoritesRow
                     settingsGroup
                     if auth.isAdmin {
                         adminGroup
@@ -78,8 +79,12 @@ struct ProfileView: View {
             } message: {
                 Text(l10n.t(.profileDeleteMessage))
             }
+            .sheet(isPresented: $showContactSupport) {
+                SupportContactView()
+            }
             .task {
                 await data.refreshProfile()
+                notificationsOn = data.profile?.notificationsEnabled ?? true
             }
             .refreshable {
                 await data.refreshProfile()
@@ -262,18 +267,54 @@ struct ProfileView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Favorites (promoted out of Preferences to a primary Me-tab row)
+
+    private var favoritesRow: some View {
+        NavigationLink {
+            FavoritesView()
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(.white)
+                    .frame(width: 46, height: 46)
+                    .background(Theme.sunset)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(l10n.t(.favoritesTitle))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.ink(for: colorScheme))
+                    Text(favoritesSubtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+            }
+            .padding(16)
+            .cardStyle()
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var favoritesSubtitle: String {
+        let count = data.favorites.list().count
+        return count == 0 ? l10n.t(.favoritesEmpty) : "\(count)"
+    }
+
     private var settingsGroup: some View {
         VStack(alignment: .leading, spacing: 10) {
             groupTitle(l10n.t(.profilePreferences))
             VStack(spacing: 0) {
-                NavigationLink {
-                    FavoritesView()
-                } label: {
-                    settingRowContent(icon: "star.fill", title: l10n.t(.favoritesTitle))
-                }
-                .buttonStyle(.plain)
-                rowDivider
-                toggleRow(icon: "bell.fill", title: l10n.t(.profileNotifications), isOn: $notificationsOn)
+                toggleRow(icon: "bell.fill", title: l10n.t(.profileNotifications), isOn: Binding(
+                    get: { notificationsOn },
+                    set: { newValue in
+                        notificationsOn = newValue
+                        Task { await handleNotificationsToggle(newValue) }
+                    }
+                ))
                 rowDivider
                 NavigationLink {
                     SettingsView()
@@ -328,12 +369,15 @@ struct ProfileView: View {
         VStack(alignment: .leading, spacing: 10) {
             groupTitle(l10n.t(.profileSupport))
             VStack(spacing: 0) {
-                actionRow(icon: "questionmark.circle.fill", title: l10n.t(.profileHelp)) {
-                    openSupportMail()
+                NavigationLink {
+                    FAQView()
+                } label: {
+                    settingRowContent(icon: "questionmark.circle.fill", title: l10n.t(.profileHelp))
                 }
+                .buttonStyle(.plain)
                 rowDivider
                 actionRow(icon: "envelope.fill", title: l10n.t(.profileContact)) {
-                    openSupportMail()
+                    showContactSupport = true
                 }
                 rowDivider
                 actionRow(icon: "star.fill", title: l10n.t(.profileRate)) {
@@ -396,13 +440,26 @@ struct ProfileView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Support actions
+    // MARK: - Notifications
 
-    private func openSupportMail() {
-        if let url = URL(string: "mailto:support@wefluens.com") {
-            openURL(url)
+    /// Handles a user tap on the Push Notifications toggle. Turning it on prompts
+    /// for OS permission (first time) and registers the device; if the OS denies,
+    /// the toggle reverts. The preference is persisted to the profile either way.
+    private func handleNotificationsToggle(_ on: Bool) async {
+        if on {
+            let granted = await PushService.shared.requestAuthorizationAndRegister()
+            if granted {
+                await data.setNotificationsEnabled(true)
+            } else {
+                notificationsOn = false
+                await data.setNotificationsEnabled(false)
+            }
+        } else {
+            await data.setNotificationsEnabled(false)
         }
     }
+
+    // MARK: - Support actions
 
     private func requestAppReview() {
         guard let scene = UIApplication.shared.connectedScenes

@@ -202,8 +202,18 @@ struct ContactsView: View {
                 quickAction(icon: "person.badge.plus", title: l10n.t(.contactsAddFriend))
             }
             .buttonStyle(.plain)
-            quickAction(icon: "star.fill", title: l10n.t(.contactsTopTalent))
-            quickAction(icon: "building.2.fill", title: l10n.t(.contactsBrands))
+            NavigationLink {
+                TopTalentView()
+            } label: {
+                quickAction(icon: "star.fill", title: l10n.t(.contactsTopTalent))
+            }
+            .buttonStyle(.plain)
+            NavigationLink {
+                BrandsDirectoryView()
+            } label: {
+                quickAction(icon: "building.2.fill", title: l10n.t(.contactsBrands))
+            }
+            .buttonStyle(.plain)
         }
     }
 
