@@ -10,6 +10,7 @@ struct PrivacySecurityView: View {
     @Environment(AppDataService.self) private var data
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
+    @State private var profileVisible: Bool = true
     @State private var showActivity: Bool = true
     @State private var dataSharing: Bool = false   // opt-in: off until the user turns it on
     @State private var showChangePassword: Bool = false
@@ -38,6 +39,13 @@ struct PrivacySecurityView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 64)
+                    toggleRow(
+                        icon: "eye.fill",
+                        title: l10n.t(.privacyVisibility),
+                        subtitle: l10n.t(.privacyVisibilitySub),
+                        isOn: $profileVisible
+                    )
                     Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 64)
                     toggleRow(
                         icon: "bolt.fill",

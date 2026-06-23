@@ -15,7 +15,9 @@ struct ProfileView: View {
     @Environment(AppDataService.self) private var data
     @Environment(\.colorScheme) private var colorScheme
     @State private var notificationsOn: Bool = true
-    @State private var availableForDeals: Bool = true
+    /// Persisted locally (same key as the RN app's AsyncStorage) so the toggle
+    /// survives relaunches instead of resetting to true every launch.
+    @AppStorage("wefluens.openToDeals") private var availableForDeals: Bool = true
     @State private var showDeleteConfirm = false
     @State private var showContactSupport = false
 

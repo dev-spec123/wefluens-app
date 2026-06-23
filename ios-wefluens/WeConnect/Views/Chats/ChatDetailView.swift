@@ -39,6 +39,8 @@ struct ChatDetailView: View {
     @State private var showBlockConfirm: Bool = false
     @State private var isBlocking: Bool = false
     @State private var showBlockError: Bool = false
+    /// Set when tapping the chat header (avatar/name) to view the other user's profile.
+    @State private var profileContact: Contact?
     // Voice messages
     @State private var recorder = VoiceRecorder()
     @State private var showMicPermissionAlert = false
@@ -122,6 +124,9 @@ struct ChatDetailView: View {
         }
         .sheet(item: $reportTarget) { target in
             ReportSheet(target: target)
+        }
+        .sheet(item: $profileContact) { contact in
+            NavigationStack { ContactDetailView(contact: contact) }
         }
         .alert(l10n.t(.chatRecallFailed), isPresented: recallErrorBinding) {
             Button(l10n.t(.authVerificationSentOk), role: .cancel) { vm?.recallError = nil }
@@ -254,6 +259,26 @@ struct ChatDetailView: View {
         .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.hairline(for: colorScheme)), alignment: .top)
     }
 
+    /// Opens the other user's profile from the chat header. Reuses their Contact
+    /// when we're already friends; otherwise builds a lightweight one from the route.
+    private func openProfile() {
+        if let existing = data.contacts.first(where: { $0.id == route.otherUserId }) {
+            profileContact = existing
+        } else {
+            profileContact = Contact(
+                id: route.otherUserId,
+                name: route.title,
+                handle: "",
+                role: "",
+                platform: "",
+                followers: "0",
+                avatarColors: route.avatarColors,
+                isOnline: route.isOnline,
+                avatarUrl: route.avatarURL
+            )
+        }
+    }
+
     private var navBar: some View {
         HStack(spacing: 12) {
             Button { dismiss() } label: {
@@ -266,16 +291,21 @@ struct ChatDetailView: View {
                     .overlay(Circle().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
             }
 
-            Avatar(colors: route.avatarColors, initials: route.initials, imageURL: route.avatarURL, size: 40, isOnline: route.isOnline)
+            Button { openProfile() } label: {
+                HStack(spacing: 12) {
+                    Avatar(colors: route.avatarColors, initials: route.initials, imageURL: route.avatarURL, size: 40, isOnline: route.isOnline)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(route.title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Theme.ink(for: colorScheme))
-                Text(route.isOnline ? l10n.t(.chatDetailActiveNow) : l10n.t(.chatDetailOffline))
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(route.isOnline ? Color(hex: 0x2AD17E) : Theme.inkSecondary(for: colorScheme))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(route.title)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Theme.ink(for: colorScheme))
+                        Text(route.isOnline ? l10n.t(.chatDetailActiveNow) : l10n.t(.chatDetailOffline))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(route.isOnline ? Color(hex: 0x2AD17E) : Theme.inkSecondary(for: colorScheme))
+                    }
+                }
             }
+            .buttonStyle(.plain)
 
             Spacer()
 
@@ -780,7 +810,7 @@ private struct MessageBubble: View {
                         Button { onSelect?() } label: {
                             Label(l10n.t(.chatSelect), systemImage: "checkmark.circle")
                         }
-                        if message.kind == .text {
+                        if !message.isRecalled && !message.text.isEmpty {
                             Button {
                                 UIPasteboard.general.string = message.text
                             } label: {

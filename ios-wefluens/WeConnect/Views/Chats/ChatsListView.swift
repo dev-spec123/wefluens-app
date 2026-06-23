@@ -10,6 +10,7 @@ struct ChatsListView: View {
     @Environment(AppDataService.self) private var data
     @Environment(\.colorScheme) private var colorScheme
     @State private var searchText: String = ""
+    @State private var showSearch: Bool = false
     @State private var showCreateGroup: Bool = false
     @State private var showAddFriend: Bool = false
     @State private var showScan: Bool = false
@@ -29,6 +30,10 @@ struct ChatsListView: View {
         filtered.filter { !data.isPinned($0.id) }
     }
 
+    /// Single continuous stream with pinned items floated to the top (no section
+    /// headers) — matches the RN app's flat list feel.
+    private var ordered: [Conversation] { pinned + recent }
+
     private var filtered: [Conversation] {
         guard !searchText.isEmpty else { return conversations }
         return conversations.filter {
@@ -46,17 +51,12 @@ struct ChatsListView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     header
-                    searchBar
+                    if showSearch { searchBar }
 
-                    if !pinned.isEmpty {
-                        section(title: l10n.t(.chatsPinned), items: pinned)
-                    }
-                    if !recent.isEmpty {
-                        section(title: l10n.t(.chatsMessages), items: recent)
-                    }
-
-                    if filtered.isEmpty {
+                    if ordered.isEmpty {
                         emptyState
+                    } else {
+                        conversationList(items: ordered)
                     }
                 }
                 .padding(.horizontal, 18)
@@ -172,6 +172,20 @@ struct ChatsListView: View {
             }
             Spacer()
             HStack(spacing: 10) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showSearch.toggle()
+                        if !showSearch { searchText = "" }
+                    }
+                } label: {
+                    Image(systemName: showSearch ? "xmark" : "magnifyingglass")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Theme.coral)
+                        .frame(width: 44, height: 44)
+                        .background(Theme.card(for: colorScheme))
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
+                }
                 Menu {
                     Button {
                         showCreateGroup = true
@@ -223,46 +237,40 @@ struct ChatsListView: View {
         .overlay(Capsule().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
     }
 
-    private func section(title: String, items: [Conversation]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title.uppercased())
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Theme.inkTertiary(for: colorScheme))
-                .tracking(1)
-                .padding(.leading, 4)
-
-            VStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, convo in
-                    SwipeableRow(
-                        conversation: convo,
-                        onDelete: {
-                            conversationToDelete = convo
-                            showDeleteConfirm = true
-                        },
-                        content: {
-                            Group {
-                                if convo.isGroup {
-                                    NavigationLink(value: groupRoute(for: convo)) {
-                                        ConversationRow(conversation: convo, isPinned: data.isPinned(convo.id), isMuted: data.isMuted(convo.id))
-                                    }
-                                } else {
-                                    NavigationLink(value: route(for: convo)) {
-                                        ConversationRow(conversation: convo, isPinned: data.isPinned(convo.id), isMuted: data.isMuted(convo.id))
-                                    }
+    /// One continuous card of conversation rows (no section title) — pinned items
+    /// are already floated to the top by `ordered`.
+    private func conversationList(items: [Conversation]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, convo in
+                SwipeableRow(
+                    conversation: convo,
+                    onDelete: {
+                        conversationToDelete = convo
+                        showDeleteConfirm = true
+                    },
+                    content: {
+                        Group {
+                            if convo.isGroup {
+                                NavigationLink(value: groupRoute(for: convo)) {
+                                    ConversationRow(conversation: convo, isPinned: data.isPinned(convo.id), isMuted: data.isMuted(convo.id))
+                                }
+                            } else {
+                                NavigationLink(value: route(for: convo)) {
+                                    ConversationRow(conversation: convo, isPinned: data.isPinned(convo.id), isMuted: data.isMuted(convo.id))
                                 }
                             }
                         }
-                    )
-                    .buttonStyle(.plain)
-                    .contextMenu { conversationMenu(for: convo) }
-                    if index < items.count - 1 {
-                        Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 78)
                     }
+                )
+                .buttonStyle(.plain)
+                .contextMenu { conversationMenu(for: convo) }
+                if index < items.count - 1 {
+                    Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 78)
                 }
             }
-            .padding(.vertical, 6)
-            .cardStyle()
         }
+        .padding(.vertical, 6)
+        .cardStyle()
     }
 
     private var emptyState: some View {

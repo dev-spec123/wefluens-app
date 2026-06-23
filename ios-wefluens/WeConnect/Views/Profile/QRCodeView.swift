@@ -39,17 +39,17 @@ struct QRCodeView: View {
                 if let uid = auth.userId {
                     qrCodeCard(for: uid)
                 } else {
-                    Text("Sign in to see your QR code")
+                    Text(l10n.t(.qrSignInPrompt))
                         .font(.system(size: 15))
                         .foregroundStyle(Theme.inkSecondary(for: colorScheme))
                 }
 
                 // Instructions
                 VStack(spacing: 6) {
-                    Text("Scan to Add Friend")
+                    Text(l10n.t(.qrScanToAdd))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Theme.ink(for: colorScheme))
-                    Text("Let others scan this code to send you a friend request.")
+                    Text(l10n.t(.qrScanToAddSub))
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.inkSecondary(for: colorScheme))
                         .multilineTextAlignment(.center)
@@ -63,7 +63,7 @@ struct QRCodeView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "qrcode.viewfinder")
                             .font(.system(size: 18, weight: .semibold))
-                        Text("Scan QR Code")
+                        Text(l10n.t(.qrScanButton))
                             .font(.system(size: 16, weight: .semibold))
                     }
                     .foregroundStyle(.white)
@@ -81,7 +81,7 @@ struct QRCodeView: View {
             .padding(.bottom, 30)
         }
         .background(Theme.paper(for: colorScheme).ignoresSafeArea())
-        .navigationTitle("My QR Code")
+        .navigationTitle(l10n.t(.qrMyCode))
         .navigationBarTitleDisplayMode(.inline)
     }
 

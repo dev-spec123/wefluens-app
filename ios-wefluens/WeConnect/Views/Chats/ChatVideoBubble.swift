@@ -85,6 +85,7 @@ private struct VideoPlayerScreen: View {
     @State private var player: AVPlayer?
     @State private var localURL: URL?
     @State private var failed = false
+    @State private var saved = false
 
     var body: some View {
         ZStack {
@@ -112,13 +113,18 @@ private struct VideoPlayerScreen: View {
                     }
                     Spacer()
                     if let localURL {
-                        ShareLink(item: localURL) {
-                            Image(systemName: "square.and.arrow.down")
+                        Button {
+                            UISaveVideoAtPathToSavedPhotosAlbum(localURL.path, nil, nil, nil)
+                            UINotificationFeedbackGenerator().notificationOccurred(.success)
+                            withAnimation { saved = true }
+                        } label: {
+                            Image(systemName: saved ? "checkmark" : "square.and.arrow.down")
                                 .font(.system(size: 17, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .frame(width: 40, height: 40)
                                 .background(.black.opacity(0.4), in: Circle())
                         }
+                        .disabled(saved)
                     }
                 }
                 .padding(.horizontal, 14)
