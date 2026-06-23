@@ -56,6 +56,8 @@ struct GroupChatDetailView: View {
     @State private var showBlockConfirm: Bool = false
     @State private var pendingBlockId: UUID?
     @State private var showBlockError: Bool = false
+    /// Set when tapping a member's avatar to view their profile.
+    @State private var profileContact: Contact?
     // Voice messages
     @State private var recorder = VoiceRecorder()
     @State private var showMicPermissionAlert = false
@@ -150,6 +152,9 @@ struct GroupChatDetailView: View {
         }
         .sheet(item: $reportTarget) { target in
             ReportSheet(target: target)
+        }
+        .sheet(item: $profileContact) { contact in
+            NavigationStack { ContactDetailView(contact: contact) }
         }
         .sheet(isPresented: $showSettings) {
             NavigationStack {
@@ -428,6 +433,12 @@ struct GroupChatDetailView: View {
                                     onBlock: {
                                         pendingBlockId = row.message.senderId
                                         showBlockConfirm = true
+                                    },
+                                    onTapAvatar: {
+                                        openProfile(memberId: row.message.senderId,
+                                                    name: row.message.senderName,
+                                                    avatarUrl: row.message.senderAvatarUrl,
+                                                    colors: row.message.senderColors)
                                     }
                                 )
                                 .allowsHitTesting(!selectMode)
@@ -795,6 +806,26 @@ struct GroupChatDetailView: View {
     /// Saves a group message to local favorites (收藏). Uses a kind-aware preview so
     /// media reads as e.g. "[Photo]" rather than blank, and shows "You" for my own
     /// messages (otherwise the sender's name).
+    /// Opens a group member's profile (reuses their Contact when we're friends,
+    /// else builds a lightweight one from the message's sender info).
+    private func openProfile(memberId: UUID, name: String, avatarUrl: String?, colors: [UInt]) {
+        if let existing = data.contacts.first(where: { $0.id == memberId }) {
+            profileContact = existing
+        } else {
+            profileContact = Contact(
+                id: memberId,
+                name: name,
+                handle: "",
+                role: "",
+                platform: "",
+                followers: "0",
+                avatarColors: colors,
+                isOnline: false,
+                avatarUrl: avatarUrl
+            )
+        }
+    }
+
     private func favorite(_ message: GroupChatMessage) {
         data.favorites.add(Favorite(
             id: message.id,
@@ -935,6 +966,7 @@ private struct GroupMessageBubble: View {
     var onRecall: (() -> Void)? = nil
     var onReport: (() -> Void)? = nil
     var onBlock: (() -> Void)? = nil
+    var onTapAvatar: (() -> Void)? = nil
 
     private var isMe: Bool { message.sender == .me }
 
@@ -1040,12 +1072,15 @@ private struct GroupMessageBubble: View {
     @ViewBuilder
     private var avatarColumn: some View {
         if showSenderHeader {
-            Avatar(
-                colors: message.senderColors,
-                initials: AppDataService.initials(from: message.senderName),
-                imageURL: message.senderAvatarUrl,
-                size: 34
-            )
+            Button { onTapAvatar?() } label: {
+                Avatar(
+                    colors: message.senderColors,
+                    initials: AppDataService.initials(from: message.senderName),
+                    imageURL: message.senderAvatarUrl,
+                    size: 34
+                )
+            }
+            .buttonStyle(.plain)
         } else {
             Color.clear.frame(width: 34, height: 1)
         }
