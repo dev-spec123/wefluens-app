@@ -146,3 +146,41 @@
 - **Main app (4 tabs)** — Same Chats / Contacts / Discover / Me layout you already have, now loading real data from the cloud database
 - **Profile** — Shows your real name and email from your login account. The Edit Profile screen saves changes to the cloud. Sign Out actually works now
 - **Admin Backend** — Admin-only user management dashboard accessible from the Me tab
+
+---
+
+# Full Completion Pass (2026-06)
+
+Closes the gaps where UI implied a feature that did nothing. Everything below is built and the iOS target compiles clean; the only deliberately-unfinished piece is the APNs **send** path (no Apple Developer account), which is left as an obvious, documented stub.
+
+## Backend — apply these (Supabase SQL editor / CLI)
+
+> **Step-by-step runbook for whoever has Supabase access: [`backend/SUPABASE_SETUP.md`](backend/SUPABASE_SETUP.md).**
+
+Run in order:
+1. `backend/functions/migration-full-completion.sql` — adds profile pref columns (`notifications_enabled`, `activity_status`, `data_sharing`), the `device_tokens`, `favorites`, and `support_tickets` tables (all with RLS), and the `browse_top_talent()` directory RPC.
+2. `backend/functions/migration-push-triggers.sql` — friend-request push triggers + the `notify_push()` helper. Inert until push is configured (see below). Message-push triggers are left as a documented skeleton (needs the thread/participant schema).
+
+Deploy these edge functions:
+- `submit-support-ticket` — records a ticket + emails support@ via the existing Resend setup (reuses `app_secrets`). Add optional `RESEND_SUPPORT_TO` to redirect the inbox.
+- `send-push` — **STUB.** Logs what it would deliver and returns `{ stub: true }`.
+
+## Features delivered
+
+- **Top Talent** (Contacts) — real creator directory via `browse_top_talent`, ranked by followers, with Add Friend inline. Respects Data Sharing + blocks.
+- **Brands** (Contacts) — real directory off the `brands` table → drill into a brand's open campaigns.
+- **Favorites** — moved from on-device UserDefaults to the cloud `favorites` table (syncs across devices) and promoted to a primary Me-tab row.
+- **Support** — Help → in-app FAQ screen; Contact → in-app ticket form (was a duplicate mailto).
+- **Privacy toggles now real** — Activity Status (online-dot visibility) and Data Sharing (Top Talent discoverability) persist to the profile.
+- **Notifications toggle** — wired: prompts for OS permission, registers the device token into `device_tokens`, persists the opt-in. (Delivery awaits the APNs send path below.)
+- **Redundant "Done"** — removed from the pushed Terms/Guidelines screens (kept only in the sign-up sheet).
+
+## Push notifications — hand-off for a dev WITH an Apple Developer account
+
+The whole client + DB pipeline is built. To make pushes actually deliver:
+1. **Apple side** — enable the Push Notifications capability on the App ID + the `WeConnect` target; create an APNs Auth Key (`.p8`) and note its Key ID, your Team ID, and the bundle id.
+2. **Secrets** — insert into `app_secrets`: `APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_ENV` (`sandbox`/`production`), plus `PUSH_INTERNAL_SECRET` and `EDGE_BASE_URL` (for the triggers). Run `create extension if not exists pg_net;`.
+3. **Code** — replace the `TODO(APNs)` block in `backend/functions/send-push/index.ts` with an ES256-signed JWT + POST to APNs (instructions are in that file's header).
+4. Optionally complete the message-push triggers at the bottom of `migration-push-triggers.sql`.
+
+No iOS code changes are required after that — the token registration and opt-in are already live.

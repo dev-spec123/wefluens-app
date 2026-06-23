@@ -72,10 +72,10 @@ struct AuthView: View {
             keyboardHeight = 0
         }
         .sheet(isPresented: $showTerms) {
-            NavigationStack { LegalDocView(kind: .terms) }
+            NavigationStack { LegalDocView(kind: .terms, showsDoneButton: true) }
         }
         .sheet(isPresented: $showGuidelines) {
-            NavigationStack { LegalDocView(kind: .guidelines) }
+            NavigationStack { LegalDocView(kind: .guidelines, showsDoneButton: true) }
         }
     }
 

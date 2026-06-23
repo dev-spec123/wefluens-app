@@ -72,6 +72,8 @@ enum L10n: String {
     // Contacts
     case contactsTitle, contactsSubtitle, contactsSearch, contactsInvite, contactsTopTalent, contactsBrands
     case contactsNewFriends, contactsFriendRequests, contactsAddFriend
+    case talentEmpty, brandsEmpty, brandsNoCampaigns, brandsSearch, brandsNoMatches
+    case talentSearch, talentOptInHint
     case contactsRemark, contactsSetRemark
 
     // Add Friend (search + request)
@@ -125,6 +127,9 @@ enum L10n: String {
     case profilePreferences, profileNotifications, profilePrivacy, profileLanguage
     case profileSupport, profileHelp, profileContact, profileRate
     case profileSignOut
+    case faqTitle
+    case supportFormTitle, supportSubjectField, supportMessageField
+    case supportSendButton, supportSentMsg, supportErrorMsg, supportEmptyMsg
 
     // Settings
     case settingsTitle, settingsLanguage, settingsLanguageFooter, settingsDone
@@ -276,6 +281,13 @@ final class LocalizationManager {
             .contactsInvite: "Invite", .contactsTopTalent: "Top Talent", .contactsBrands: "Brands",
             .contactsNewFriends: "New Friends", .contactsFriendRequests: "Friend Request",
             .contactsAddFriend: "Add Friend",
+            .talentEmpty: "No creators here yet.",
+            .brandsEmpty: "No brands available yet.",
+            .brandsNoCampaigns: "No open campaigns from this brand right now.",
+            .brandsSearch: "Search brands",
+            .brandsNoMatches: "No brands match your search.",
+            .talentSearch: "Search creators",
+            .talentOptInHint: "Turn on “Discoverable” in Privacy & Security to appear in this directory.",
             .contactsRemark: "Remark", .contactsSetRemark: "Set remark",
             .addFriendSearchPlaceholder: "Search by email or @handle",
             .addFriendHint: "Find people by their email or username, then send a friend request.",
@@ -325,7 +337,7 @@ final class LocalizationManager {
             .privacyBlockedAccounts: "Blocked Accounts", .privacyBlockedAccountsSub: "Manage accounts you've blocked",
             .privacyVisibility: "Profile Visibility", .privacyVisibilitySub: "Control who can see your profile",
             .privacyActivityStatus: "Activity Status", .privacyActivityStatusSub: "Show when you're active",
-            .privacyDataSharing: "Data Sharing", .privacyDataSharingSub: "Control how your data is used",
+            .privacyDataSharing: "Discoverable", .privacyDataSharingSub: "Appear in the Top Talent directory",
             .qrMyCode: "My QR Code", .qrScanToAdd: "Scan to Add Friend",
             .qrScanToAddSub: "Let others scan this code to send you a friend request.",
             .qrScanButton: "Scan QR Code", .qrSignInPrompt: "Sign in to see your QR code",
@@ -338,7 +350,15 @@ final class LocalizationManager {
             .profileOpenDeals: "Open to new deals", .profileOpenDealsSub: "Brands can see you're available",
             .profilePreferences: "Preferences", .profileNotifications: "Push Notifications",
             .profilePrivacy: "Privacy & Security", .profileLanguage: "Language",
-            .profileSupport: "Support", .profileHelp: "Contact Support", .profileContact: "Contact Wefluens", .profileRate: "Rate the App",
+            .profileSupport: "Support", .profileHelp: "Help & FAQ", .profileContact: "Contact Support", .profileRate: "Rate the App",
+            .faqTitle: "Help & FAQ",
+            .supportFormTitle: "Contact Support",
+            .supportSubjectField: "Subject",
+            .supportMessageField: "How can we help?",
+            .supportSendButton: "Send",
+            .supportSentMsg: "Thanks — we got your message and will get back to you by email.",
+            .supportErrorMsg: "Couldn't send your message. Please try again.",
+            .supportEmptyMsg: "Please add a subject and a message.",
             .profileSignOut: "Sign Out",
             .settingsTitle: "Settings", .settingsLanguage: "Language",
             .settingsLanguageFooter: "Choose your preferred language. It applies across the whole app.",
@@ -520,6 +540,13 @@ final class LocalizationManager {
             .contactsInvite: "邀请", .contactsTopTalent: "顶尖网红", .contactsBrands: "品牌",
             .contactsNewFriends: "新的朋友", .contactsFriendRequests: "好友申请",
             .contactsAddFriend: "添加好友",
+            .talentEmpty: "暂时还没有创作者。",
+            .brandsEmpty: "暂时没有可用的品牌。",
+            .brandsNoCampaigns: "该品牌目前没有开放的活动。",
+            .brandsSearch: "搜索品牌",
+            .brandsNoMatches: "没有匹配的品牌。",
+            .talentSearch: "搜索创作者",
+            .talentOptInHint: "在「隐私与安全」中开启「可被发现」即可显示在此目录中。",
             .contactsRemark: "备注", .contactsSetRemark: "设置备注",
             .addFriendSearchPlaceholder: "搜索邮箱或用户名",
             .addFriendHint: "通过邮箱或用户名找到对方，然后发送好友申请。",
@@ -569,7 +596,7 @@ final class LocalizationManager {
             .privacyBlockedAccounts: "已屏蔽账户", .privacyBlockedAccountsSub: "管理你屏蔽的账户",
             .privacyVisibility: "资料可见性", .privacyVisibilitySub: "控制谁可以查看你的资料",
             .privacyActivityStatus: "活动状态", .privacyActivityStatusSub: "显示你的在线状态",
-            .privacyDataSharing: "数据共享", .privacyDataSharingSub: "管理你的数据使用方式",
+            .privacyDataSharing: "可被发现", .privacyDataSharingSub: "在「顶尖网红」目录中显示",
             .qrMyCode: "我的二维码", .qrScanToAdd: "扫码加好友",
             .qrScanToAddSub: "让别人扫描这个二维码，向你发送好友请求。",
             .qrScanButton: "扫描二维码", .qrSignInPrompt: "登录后查看你的二维码",
@@ -582,7 +609,15 @@ final class LocalizationManager {
             .profileOpenDeals: "接受新合作", .profileOpenDealsSub: "品牌可以看到你的空档",
             .profilePreferences: "偏好设置", .profileNotifications: "推送通知",
             .profilePrivacy: "隐私与安全", .profileLanguage: "语言",
-            .profileSupport: "支持", .profileHelp: "联系客服", .profileContact: "联系 Wefluens", .profileRate: "给应用评分",
+            .profileSupport: "支持", .profileHelp: "帮助与常见问题", .profileContact: "联系客服", .profileRate: "给应用评分",
+            .faqTitle: "帮助与常见问题",
+            .supportFormTitle: "联系客服",
+            .supportSubjectField: "主题",
+            .supportMessageField: "我们能帮您什么？",
+            .supportSendButton: "发送",
+            .supportSentMsg: "谢谢——我们已收到您的消息，会通过邮件回复您。",
+            .supportErrorMsg: "消息发送失败，请重试。",
+            .supportEmptyMsg: "请填写主题和消息内容。",
             .profileSignOut: "退出登录",
             .settingsTitle: "设置", .settingsLanguage: "语言",
             .settingsLanguageFooter: "选择你偏好的语言，将应用于整个 App。",
@@ -764,6 +799,13 @@ final class LocalizationManager {
             .contactsInvite: "Invitar", .contactsTopTalent: "Top Talento", .contactsBrands: "Marcas",
             .contactsNewFriends: "Nuevos Amigos", .contactsFriendRequests: "Solicitud de Amistad",
             .contactsAddFriend: "Agregar amigo",
+            .talentEmpty: "Todavía no hay creadores aquí.",
+            .brandsEmpty: "Todavía no hay marcas disponibles.",
+            .brandsNoCampaigns: "Esta marca no tiene campañas abiertas por ahora.",
+            .brandsSearch: "Buscar marcas",
+            .brandsNoMatches: "Ninguna marca coincide con tu búsqueda.",
+            .talentSearch: "Buscar creadores",
+            .talentOptInHint: "Activa «Visible» en Privacidad y seguridad para aparecer en este directorio.",
             .contactsRemark: "Nota", .contactsSetRemark: "Poner nota",
             .addFriendSearchPlaceholder: "Busca por correo o @usuario",
             .addFriendHint: "Encuentra personas por su correo o usuario y envía una solicitud de amistad.",
@@ -813,7 +855,7 @@ final class LocalizationManager {
             .privacyBlockedAccounts: "Cuentas Bloqueadas", .privacyBlockedAccountsSub: "Gestionar cuentas bloqueadas",
             .privacyVisibility: "Visibilidad del Perfil", .privacyVisibilitySub: "Controlar quién ve tu perfil",
             .privacyActivityStatus: "Estado de Actividad", .privacyActivityStatusSub: "Mostrar cuando estás activo",
-            .privacyDataSharing: "Compartir Datos", .privacyDataSharingSub: "Controlar cómo se usan tus datos",
+            .privacyDataSharing: "Visible", .privacyDataSharingSub: "Aparecer en el directorio Top Talento",
             .qrMyCode: "Mi código QR", .qrScanToAdd: "Escanea para agregar",
             .qrScanToAddSub: "Deja que otros escaneen este código para enviarte una solicitud de amistad.",
             .qrScanButton: "Escanear código QR", .qrSignInPrompt: "Inicia sesión para ver tu código QR",
@@ -826,7 +868,15 @@ final class LocalizationManager {
             .profileOpenDeals: "Abierto a nuevos tratos", .profileOpenDealsSub: "Las marcas ven que estás disponible",
             .profilePreferences: "Preferencias", .profileNotifications: "Notificaciones",
             .profilePrivacy: "Privacidad y Seguridad", .profileLanguage: "Idioma",
-            .profileSupport: "Soporte", .profileHelp: "Contactar soporte", .profileContact: "Contactar a Wefluens", .profileRate: "Valorar la App",
+            .profileSupport: "Soporte", .profileHelp: "Ayuda y FAQ", .profileContact: "Contactar soporte", .profileRate: "Valorar la App",
+            .faqTitle: "Ayuda y FAQ",
+            .supportFormTitle: "Contactar soporte",
+            .supportSubjectField: "Asunto",
+            .supportMessageField: "¿Cómo podemos ayudarte?",
+            .supportSendButton: "Enviar",
+            .supportSentMsg: "Gracias: recibimos tu mensaje y te responderemos por correo.",
+            .supportErrorMsg: "No se pudo enviar tu mensaje. Inténtalo de nuevo.",
+            .supportEmptyMsg: "Añade un asunto y un mensaje.",
             .profileSignOut: "Cerrar Sesión",
             .settingsTitle: "Ajustes", .settingsLanguage: "Idioma",
             .settingsLanguageFooter: "Elige tu idioma preferido. Se aplica en toda la app.",
