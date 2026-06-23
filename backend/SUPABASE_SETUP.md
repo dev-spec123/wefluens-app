@@ -13,6 +13,29 @@ Project ref: `zlyufsfbzssjseprkuvd`
 
 ---
 
+## 0. Make `profiles` app-compatible  *(REQUIRED, run first)*
+
+The live `profiles` table was built with a different column set than the iOS app
+and its SQL functions expect (the app wants `name`/`handle`/`avatar_url`/
+`followers`/`is_banned`/etc.; the table has `full_name`/`creator_handle`/
+`display_name`/`is_super_admin`/`disabled`/...). This breaks `search_users`
+(Add Friend), profile display, and profile *creation* — and `browse_top_talent`
+in step 1 needs these columns too.
+
+SQL Editor → paste **`backend/functions/migration-profiles-app-compat.sql`** → Run.
+It adds the app's columns, backfills `name`/`handle` from your existing columns,
+and gives the other columns safe defaults so the app can create profile rows.
+
+**Verify** (should now succeed, where it errored before):
+```sql
+select * from public.search_users('a');
+```
+
+After this, have any already-signed-up users relaunch the app once — that creates
+their now-missing `profiles` row.
+
+---
+
 ## 1. Run the schema migration  *(required)*
 
 Dashboard → **SQL Editor** → New query → paste the full contents of
