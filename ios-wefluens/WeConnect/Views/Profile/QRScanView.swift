@@ -60,7 +60,7 @@ struct QRScanView: View {
                     .padding(.bottom, 40)
 
                 // Instructions
-                Text("Point your camera at a WeConnect QR code")
+                Text(l10n.t(.qrScanHint))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.white.opacity(0.9))
                     .padding(.bottom, 80)
@@ -115,7 +115,7 @@ struct QRScanView: View {
 
                     if requestStatus == .sending {
                         ProgressView().tint(.white)
-                        Text("Sending friend request...")
+                        Text(l10n.t(.qrSending))
                             .font(.system(size: 14))
                             .foregroundStyle(.white.opacity(0.7))
                     } else {
@@ -124,7 +124,7 @@ struct QRScanView: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "person.badge.plus")
-                                Text("Send Friend Request")
+                                Text(l10n.t(.qrSendRequest))
                             }
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.white)
@@ -138,7 +138,7 @@ struct QRScanView: View {
                         Button {
                             resetScan()
                         } label: {
-                            Text("Cancel")
+                            Text(l10n.t(.adminCancel))
                                 .font(.system(size: 15))
                                 .foregroundStyle(.white.opacity(0.7))
                         }
@@ -150,10 +150,10 @@ struct QRScanView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 56))
                         .foregroundStyle(Color(hex: 0x2AD17E))
-                    Text("Friend Request Sent!")
+                    Text(l10n.t(.qrSentTitle))
                         .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(.white)
-                    Text("They'll see your request in their Contacts tab.")
+                    Text(l10n.t(.qrSentSub))
                         .font(.system(size: 14))
                         .foregroundStyle(.white.opacity(0.7))
                         .multilineTextAlignment(.center)
@@ -161,7 +161,7 @@ struct QRScanView: View {
                     Button {
                         dismiss()
                     } label: {
-                        Text("Done")
+                        Text(l10n.t(.qrDone))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
@@ -177,10 +177,10 @@ struct QRScanView: View {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 56))
                         .foregroundStyle(Color.red)
-                    Text("Failed")
+                    Text(l10n.t(.qrFailedTitle))
                         .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(.white)
-                    Text(errorMessage ?? "Could not send friend request.")
+                    Text(errorMessage ?? l10n.t(.qrFailedSub))
                         .font(.system(size: 14))
                         .foregroundStyle(.white.opacity(0.7))
                         .multilineTextAlignment(.center)
@@ -188,7 +188,7 @@ struct QRScanView: View {
                     Button {
                         resetScan()
                     } label: {
-                        Text("Try Again")
+                        Text(l10n.t(.qrTryAgain))
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
@@ -223,7 +223,7 @@ struct QRScanView: View {
         guard let targetId = scannedUserId else { return }
         guard let myId = auth.userId else {
             requestStatus = .failed
-            errorMessage = "Not signed in."
+            errorMessage = l10n.t(.qrNotSignedIn)
             return
         }
         requestStatus = .sending

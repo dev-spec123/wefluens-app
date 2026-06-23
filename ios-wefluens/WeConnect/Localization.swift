@@ -115,6 +115,9 @@ enum L10n: String {
     case privacyVisibility, privacyVisibilitySub
     case privacyActivityStatus, privacyActivityStatusSub
     case privacyDataSharing, privacyDataSharingSub
+    case qrMyCode, qrScanToAdd, qrScanToAddSub, qrScanButton, qrSignInPrompt
+    case qrScanHint, qrSending, qrSendRequest, qrSentTitle, qrSentSub
+    case qrDone, qrFailedTitle, qrFailedSub, qrTryAgain, qrNotSignedIn
 
     // Profile
     case profileEdit, profileReach, profileEngagement, profileDeals
@@ -323,6 +326,14 @@ final class LocalizationManager {
             .privacyVisibility: "Profile Visibility", .privacyVisibilitySub: "Control who can see your profile",
             .privacyActivityStatus: "Activity Status", .privacyActivityStatusSub: "Show when you're active",
             .privacyDataSharing: "Data Sharing", .privacyDataSharingSub: "Control how your data is used",
+            .qrMyCode: "My QR Code", .qrScanToAdd: "Scan to Add Friend",
+            .qrScanToAddSub: "Let others scan this code to send you a friend request.",
+            .qrScanButton: "Scan QR Code", .qrSignInPrompt: "Sign in to see your QR code",
+            .qrScanHint: "Point your camera at a WeConnect QR code",
+            .qrSending: "Sending friend request...", .qrSendRequest: "Send Friend Request",
+            .qrSentTitle: "Friend Request Sent!", .qrSentSub: "They'll see your request in their Contacts tab.",
+            .qrDone: "Done", .qrFailedTitle: "Failed", .qrFailedSub: "Could not send friend request.",
+            .qrTryAgain: "Try Again", .qrNotSignedIn: "Not signed in.",
             .profileEdit: "Edit Profile", .profileReach: "Reach", .profileEngagement: "Engagement", .profileDeals: "Deals closed",
             .profileOpenDeals: "Open to new deals", .profileOpenDealsSub: "Brands can see you're available",
             .profilePreferences: "Preferences", .profileNotifications: "Push Notifications",
@@ -559,6 +570,14 @@ final class LocalizationManager {
             .privacyVisibility: "资料可见性", .privacyVisibilitySub: "控制谁可以查看你的资料",
             .privacyActivityStatus: "活动状态", .privacyActivityStatusSub: "显示你的在线状态",
             .privacyDataSharing: "数据共享", .privacyDataSharingSub: "管理你的数据使用方式",
+            .qrMyCode: "我的二维码", .qrScanToAdd: "扫码加好友",
+            .qrScanToAddSub: "让别人扫描这个二维码，向你发送好友请求。",
+            .qrScanButton: "扫描二维码", .qrSignInPrompt: "登录后查看你的二维码",
+            .qrScanHint: "将摄像头对准 WeConnect 二维码",
+            .qrSending: "正在发送好友请求…", .qrSendRequest: "发送好友请求",
+            .qrSentTitle: "好友请求已发送！", .qrSentSub: "对方会在“联系人”里看到你的请求。",
+            .qrDone: "完成", .qrFailedTitle: "失败", .qrFailedSub: "无法发送好友请求。",
+            .qrTryAgain: "重试", .qrNotSignedIn: "未登录。",
             .profileEdit: "编辑资料", .profileReach: "触达", .profileEngagement: "互动率", .profileDeals: "已成交",
             .profileOpenDeals: "接受新合作", .profileOpenDealsSub: "品牌可以看到你的空档",
             .profilePreferences: "偏好设置", .profileNotifications: "推送通知",
@@ -795,6 +814,14 @@ final class LocalizationManager {
             .privacyVisibility: "Visibilidad del Perfil", .privacyVisibilitySub: "Controlar quién ve tu perfil",
             .privacyActivityStatus: "Estado de Actividad", .privacyActivityStatusSub: "Mostrar cuando estás activo",
             .privacyDataSharing: "Compartir Datos", .privacyDataSharingSub: "Controlar cómo se usan tus datos",
+            .qrMyCode: "Mi código QR", .qrScanToAdd: "Escanea para agregar",
+            .qrScanToAddSub: "Deja que otros escaneen este código para enviarte una solicitud de amistad.",
+            .qrScanButton: "Escanear código QR", .qrSignInPrompt: "Inicia sesión para ver tu código QR",
+            .qrScanHint: "Apunta tu cámara a un código QR de WeConnect",
+            .qrSending: "Enviando solicitud de amistad…", .qrSendRequest: "Enviar solicitud de amistad",
+            .qrSentTitle: "¡Solicitud enviada!", .qrSentSub: "Verán tu solicitud en su pestaña de Contactos.",
+            .qrDone: "Listo", .qrFailedTitle: "Error", .qrFailedSub: "No se pudo enviar la solicitud.",
+            .qrTryAgain: "Intentar de nuevo", .qrNotSignedIn: "No has iniciado sesión.",
             .profileEdit: "Editar Perfil", .profileReach: "Alcance", .profileEngagement: "Interacción", .profileDeals: "Tratos cerrados",
             .profileOpenDeals: "Abierto a nuevos tratos", .profileOpenDealsSub: "Las marcas ven que estás disponible",
             .profilePreferences: "Preferencias", .profileNotifications: "Notificaciones",
