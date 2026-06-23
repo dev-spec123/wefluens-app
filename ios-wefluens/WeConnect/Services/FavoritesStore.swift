@@ -24,6 +24,12 @@ struct Favorite: Identifiable, Codable, Equatable {
     let sender: String
     let source: String
     let date: Date
+    /// Storage path of the favorited media (image / video / audio / file), so the
+    /// favorite can be re-opened or played from the list. nil for text favorites.
+    /// Optional with a default → old persisted favorites still decode (key absent → nil).
+    var imagePath: String? = nil
+    var fileName: String? = nil
+    var fileMime: String? = nil
 }
 
 /// On-device favorites store. Persisted as a JSON array under one UserDefaults key.

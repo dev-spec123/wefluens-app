@@ -645,7 +645,10 @@ struct ChatDetailView: View {
             kind: kindLabel(for: message.kind),
             sender: quotedSenderName(for: message),
             source: "dm",
-            date: message.createdAt ?? Date()
+            date: message.createdAt ?? Date(),
+            imagePath: message.imagePath,
+            fileName: message.fileName,
+            fileMime: message.fileMime
         ))
         UINotificationFeedbackGenerator().notificationOccurred(.success)
     }

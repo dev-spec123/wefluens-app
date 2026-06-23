@@ -802,7 +802,10 @@ struct GroupChatDetailView: View {
             kind: kindLabel(for: message.kind),
             sender: message.sender == .me ? l10n.t(.chatYou) : message.senderName,
             source: "group",
-            date: message.createdAt ?? Date()
+            date: message.createdAt ?? Date(),
+            imagePath: message.imagePath,
+            fileName: message.fileName,
+            fileMime: message.fileMime
         ))
         UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
