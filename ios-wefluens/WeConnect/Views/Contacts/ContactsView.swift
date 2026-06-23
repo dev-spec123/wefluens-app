@@ -5,6 +5,8 @@
 
 import SwiftUI
 
+private enum ContactFilter { case all, topTalent, brands }
+
 struct ContactsView: View {
     @Environment(LocalizationManager.self) private var l10n
     @Environment(AppDataService.self) private var data
@@ -12,14 +14,21 @@ struct ContactsView: View {
     @State private var searchText: String = ""
     @State private var showRequestDetail: UUID? = nil
     @State private var showAddFriend: Bool = false
+    @State private var filterMode: ContactFilter = .all
 
     private var contacts: [Contact] { data.contacts }
     private var requests: [FriendRequest] { data.friendRequests }
 
     private var filtered: [Contact] {
+        var list = contacts
+        switch filterMode {
+        case .all: break
+        case .brands: list = list.filter { $0.role.localizedCaseInsensitiveContains("brand") }
+        case .topTalent: list = list.filter { !$0.role.localizedCaseInsensitiveContains("brand") }
+        }
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return contacts }
-        return contacts.filter { contact in
+        guard !trimmed.isEmpty else { return list }
+        return list.filter { contact in
             let remark = data.remark(for: contact.id) ?? ""
             return contact.name.localizedCaseInsensitiveContains(trimmed) ||
                 remark.localizedCaseInsensitiveContains(trimmed) ||
@@ -153,12 +162,7 @@ struct ContactsView: View {
 
                 VStack(spacing: 0) {
                     ForEach(Array(requests.enumerated()), id: \.element.id) { index, req in
-                        NavigationLink {
-                            FriendRequestDetailView(request: req)
-                        } label: {
-                            FriendRequestRow(request: req)
-                        }
-                        .buttonStyle(.plain)
+                        FriendRequestRow(request: req)
                         if index < requests.count - 1 {
                             Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 76)
                         }
@@ -199,25 +203,35 @@ struct ContactsView: View {
             Button {
                 showAddFriend = true
             } label: {
-                quickAction(icon: "person.badge.plus", title: l10n.t(.contactsAddFriend))
+                quickAction(icon: "person.badge.plus", title: l10n.t(.contactsAddFriend), active: false)
             }
             .buttonStyle(.plain)
-            quickAction(icon: "star.fill", title: l10n.t(.contactsTopTalent))
-            quickAction(icon: "building.2.fill", title: l10n.t(.contactsBrands))
+            Button {
+                filterMode = (filterMode == .topTalent) ? .all : .topTalent
+            } label: {
+                quickAction(icon: "star.fill", title: l10n.t(.contactsTopTalent), active: filterMode == .topTalent)
+            }
+            .buttonStyle(.plain)
+            Button {
+                filterMode = (filterMode == .brands) ? .all : .brands
+            } label: {
+                quickAction(icon: "building.2.fill", title: l10n.t(.contactsBrands), active: filterMode == .brands)
+            }
+            .buttonStyle(.plain)
         }
     }
 
-    private func quickAction(icon: String, title: String) -> some View {
+    private func quickAction(icon: String, title: String, active: Bool) -> some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Theme.coral)
+                .foregroundStyle(active ? .white : Theme.coral)
                 .frame(width: 48, height: 48)
-                .background(Theme.coral.opacity(0.1))
+                .background(active ? AnyShapeStyle(Theme.sunset) : AnyShapeStyle(Theme.coral.opacity(0.1)))
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             Text(title)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                .foregroundStyle(active ? Theme.coral : Theme.inkSecondary(for: colorScheme))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
@@ -228,34 +242,75 @@ struct ContactsView: View {
 // MARK: - Friend Request Row
 
 private struct FriendRequestRow: View {
+    @Environment(LocalizationManager.self) private var l10n
+    @Environment(AppDataService.self) private var data
     @Environment(\.colorScheme) private var colorScheme
     let request: FriendRequest
+    @State private var busy = false
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             Avatar(colors: request.avatarColors, initials: request.initials, size: 50)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(request.name)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Theme.ink(for: colorScheme))
+                    .lineLimit(1)
                 Text(request.requestMessage)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.inkSecondary(for: colorScheme))
                     .lineLimit(1)
             }
 
-            Spacer()
+            Spacer(minLength: 6)
 
-            ZStack {
-                Circle()
-                    .fill(Theme.coral)
-                    .frame(width: 8, height: 8)
+            if busy {
+                ProgressView().tint(Theme.coral)
+            } else {
+                HStack(spacing: 8) {
+                    Button { respond(accept: false) } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                            .frame(width: 36, height: 36)
+                            .background(Theme.card(for: colorScheme))
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    Button { respond(accept: true) } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(Theme.sunset)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
         .contentShape(Rectangle())
+    }
+
+    /// Accept/decline directly from the row (no drill-in), matching the RN flow.
+    /// On success the request disappears once contacts reload.
+    private func respond(accept: Bool) {
+        guard !busy else { return }
+        busy = true
+        Task {
+            do {
+                try await data.respondToFriendRequest(requestId: request.id, accept: accept)
+                if accept { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+                await data.loadContacts()
+            } catch {
+                print("⚠️ respond_friend_request failed: \(error)")
+            }
+            busy = false
+        }
     }
 }
 
