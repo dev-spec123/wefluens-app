@@ -221,23 +221,11 @@ struct QRScanView: View {
     @MainActor
     private func sendFriendRequest() async {
         guard let targetId = scannedUserId else { return }
-        guard let myId = auth.userId else {
-            requestStatus = .failed
-            errorMessage = l10n.t(.qrNotSignedIn)
-            return
-        }
         requestStatus = .sending
-
         do {
-            let insert = FriendRequestInsert(
-                fromUserId: myId,
-                toUserId: targetId,
-                name: data.profile?.name ?? auth.userEmail ?? "User",
-                handle: data.profile?.handle ?? "",
-                role: data.profile?.role ?? "",
-                requestMessage: "Hi! I'd like to add you as a friend."
-            )
-            try await supabase.from("friend_requests").insert(insert).execute()
+            // Use the same RLS-safe RPC as AddFriendView and the RN app. A direct
+            // insert into friend_requests is blocked by RLS — that was the bug.
+            _ = try await data.sendFriendRequest(to: targetId, message: l10n.t(.friendRequestMessage))
             requestStatus = .sent
         } catch {
             requestStatus = .failed
