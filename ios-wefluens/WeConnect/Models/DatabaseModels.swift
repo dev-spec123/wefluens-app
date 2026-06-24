@@ -827,3 +827,26 @@ nonisolated struct CampaignRow: Codable, Identifiable, Sendable {
         case createdAt = "created_at"
     }
 }
+
+// MARK: - Admin campaign curation RPC params
+//
+// Property names match the `admin_upsert_campaign` / `admin_delete_campaign` SQL
+// named params EXACTLY (the Supabase client sends them as the JSON arg keys). Nil
+// args are omitted by the encoder, which is why every optional defaults server-side.
+
+nonisolated struct UpsertCampaignParams: Encodable, Sendable {
+    let campaign_id: String?
+    let p_title: String
+    let p_brand: String?
+    let p_budget: String?
+    let p_tags: [String]?
+    let p_deadline: String?
+    let p_symbol: String?
+    let p_color_a: String?
+    let p_color_b: String?
+    let p_spots_left: Int?
+}
+
+nonisolated struct DeleteCampaignParams: Encodable, Sendable {
+    let target: String
+}

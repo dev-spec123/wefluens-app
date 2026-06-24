@@ -25,6 +25,9 @@ struct DeveloperPanelView: View {
                     rowDivider
                     navRow(icon: "building.2.crop.circle", title: "Manage Brands",
                            subtitle: "Create, edit, feature brands") { ManageBrandsView() }
+                    rowDivider
+                    navRow(icon: "megaphone.fill", title: "Manage Campaigns",
+                           subtitle: "Publish, edit, delete open campaigns") { ManageCampaignsView() }
                 }
             }
             .padding(.horizontal, 18)
