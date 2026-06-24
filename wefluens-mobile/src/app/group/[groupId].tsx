@@ -546,6 +546,20 @@ export default function GroupChat() {
                   else if (item.message.kind === 'video' && item.message.imagePath) openVideo(item.message);
                 }}
                 onJumpToReply={item.message.replyTo ? () => jumpToMessage(item.message.replyTo!) : undefined}
+                onPressAvatar={
+                  item.message.sender === 'them'
+                    ? () =>
+                        router.push({
+                          pathname: '/contact/[id]',
+                          params: {
+                            id: item.message.senderId,
+                            name: item.message.senderName,
+                            handle: '',
+                            avatarUrl: item.message.senderAvatarUrl ?? '',
+                          },
+                        })
+                    : undefined
+                }
               />
             )}
             contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 10 }}
@@ -675,7 +689,7 @@ export default function GroupChat() {
 // ─────────────────────────── Bubble ───────────────────────────
 
 function Bubble({
-  row, myName, selectMode, selected, highlighted, repliedTo, onLongPress, onPress, onJumpToReply,
+  row, myName, selectMode, selected, highlighted, repliedTo, onLongPress, onPress, onJumpToReply, onPressAvatar,
 }: {
   row: GroupRow;
   myName: string;
@@ -686,6 +700,7 @@ function Bubble({
   onLongPress: () => void;
   onPress: () => void;
   onJumpToReply?: () => void;
+  onPressAvatar?: () => void;
 }) {
   const c = useTheme();
   const { t } = useI18n();
@@ -831,7 +846,9 @@ function Bubble({
   ) : (
     <View style={styles.rowLeft}>
       {showSenderHeader ? (
-        <Avatar colors={avatarGradient(m.senderId)} name={m.senderName} imageUrl={m.senderAvatarUrl} size={34} />
+        <Pressable onPress={onPressAvatar} disabled={selectMode || !onPressAvatar} hitSlop={4}>
+          <Avatar colors={avatarGradient(m.senderId)} name={m.senderName} imageUrl={m.senderAvatarUrl} size={34} />
+        </Pressable>
       ) : (
         <View style={{ width: 34 }} />
       )}
