@@ -85,6 +85,10 @@ struct DiscoverView: View {
                     CampaignDetailView(campaign: campaign)
                 }
             }
+            // Refresh on each appearance (e.g. returning from the admin curation
+            // panel) so featured-brand changes show without an app restart.
+            .onAppear { Task { await data.loadDiscover() } }
+            .refreshable { await data.loadDiscover() }
         }
     }
 
