@@ -13,7 +13,7 @@ import {
   useAudioPlayerStatus, useAudioRecorder, useAudioRecorderState,
 } from 'expo-audio';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import * as api from '@/lib/api';
 import { notify } from '@/lib/dialog';
@@ -103,31 +103,46 @@ export function VoiceRecordButton({
 
   const recording = state.isRecording;
   const disabled = sending || busy;
+  const elapsed = formatTime((state.durationMillis ?? 0) / 1000);
 
   return (
-    <Pressable
-      onPressIn={startRecording}
-      onPressOut={stopRecording}
-      disabled={disabled}
-      hitSlop={8}
-      style={[
-        recording ? styles.micBtnRecording : styles.micBtn,
-        recording && { backgroundColor: c.coral + '22' },
-      ]}
-    >
-      {busy ? (
-        <ActivityIndicator color={c.coral} />
-      ) : recording ? (
-        <View style={styles.recordingInline}>
-          <Ionicons name="mic" size={20} color={c.coral} />
-          <Text style={{ color: c.coral, fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] }}>
-            {formatTime((state.durationMillis ?? 0) / 1000)}
-          </Text>
+    <>
+      <Pressable
+        onPressIn={startRecording}
+        onPressOut={stopRecording}
+        disabled={disabled}
+        hitSlop={8}
+        style={[
+          recording ? styles.micBtnRecording : styles.micBtn,
+          recording && { backgroundColor: c.coral + '22' },
+        ]}
+      >
+        {busy ? (
+          <ActivityIndicator color={c.coral} />
+        ) : recording ? (
+          <View style={styles.recordingInline}>
+            <Ionicons name="mic" size={20} color={c.coral} />
+            <Text style={{ color: c.coral, fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] }}>
+              {elapsed}
+            </Text>
+          </View>
+        ) : (
+          <Ionicons name="mic-outline" size={24} color={c.inkSecondary} />
+        )}
+      </Pressable>
+
+      {/* Full-screen recording HUD while the mic is held (mirrors Swift's
+          recordingOverlay): dimmed backdrop, big waveform glyph, label, timer. */}
+      <Modal visible={recording} transparent animationType="fade" statusBarTranslucent>
+        <View style={styles.hudBackdrop} pointerEvents="none">
+          <View style={[styles.hudCard, { backgroundColor: c.coral }]}>
+            <Ionicons name="mic" size={40} color="#fff" />
+            <Text style={styles.hudLabel}>{t('chatRecording')}</Text>
+            <Text style={styles.hudTimer}>{elapsed}</Text>
+          </View>
         </View>
-      ) : (
-        <Ionicons name="mic-outline" size={24} color={c.inkSecondary} />
-      )}
-    </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -249,6 +264,16 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   recordingInline: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  hudBackdrop: {
+    flex: 1, alignItems: 'center', justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.18)', paddingBottom: 120,
+  },
+  hudCard: {
+    alignItems: 'center', gap: 12, borderRadius: 24,
+    paddingHorizontal: 36, paddingVertical: 28,
+  },
+  hudLabel: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  hudTimer: { color: '#fff', fontSize: 22, fontWeight: '700', fontVariant: ['tabular-nums'] },
   mineWrap: { borderRadius: 20, overflow: 'hidden' },
   theirsWrap: { borderRadius: 20, overflow: 'hidden' },
   audioBubble: { paddingHorizontal: 12, paddingVertical: 10 },

@@ -29,6 +29,8 @@ interface AuthContextValue {
   sendPasswordReset: (email: string) => Promise<void>;
   changePassword: (newPassword: string) => Promise<void>;
   finishRecovery: (newPassword: string) => Promise<void>;
+  updateRecoveredPassword: (newPassword: string) => Promise<void>;
+  dismissRecovery: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -147,6 +149,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   }, []);
 
+  // Two-step recovery (mirrors Swift): update the password but KEEP the session so
+  // a success screen can show, then sign out when the user taps "Back to sign in".
+  const updateRecoveredPassword = useCallback(async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+  }, []);
+
+  const dismissRecovery = useCallback(async () => {
+    setPasswordRecoveryActive(false);
+    await supabase.auth.signOut();
+  }, []);
+
   const signOut = useCallback(async () => {
     await clearMessageCache();
     await supabase.auth.signOut();
@@ -160,9 +174,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AuthContextValue>(() => ({
     loading, session, userId, email, profile, isAdmin, mustChangePassword, passwordRecoveryActive,
-    signIn, signUp, sendPasswordReset, changePassword, finishRecovery, signOut, refreshProfile,
+    signIn, signUp, sendPasswordReset, changePassword, finishRecovery, updateRecoveredPassword, dismissRecovery, signOut, refreshProfile,
   }), [loading, session, userId, email, profile, isAdmin, mustChangePassword, passwordRecoveryActive,
-    signIn, signUp, sendPasswordReset, changePassword, finishRecovery, signOut, refreshProfile]);
+    signIn, signUp, sendPasswordReset, changePassword, finishRecovery, updateRecoveredPassword, dismissRecovery, signOut, refreshProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

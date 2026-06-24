@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Switch, Text, Vibration, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, Divider, GradientButton, NavBar } from '@/components/ui';
@@ -51,6 +51,8 @@ export default function Report() {
         reason: selected,
       });
       if (alsoBlock && blockable) await block(blockable).catch(() => {});
+      // Match Swift's UINotificationFeedbackGenerator(.success) on submit.
+      Vibration.vibrate(40);
       setDone(true);
     } catch {
       Alert.alert(t('reportError'));
@@ -83,7 +85,7 @@ export default function Report() {
         <Card>
           {REASONS.map((r, i) => (
             <View key={r.key}>
-              <Pressable onPress={() => setSelected(r.key)} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 13, gap: 14 }}>
+              <Pressable onPress={() => { Vibration.vibrate(10); setSelected(r.key); }} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 13, gap: 14 }}>
                 <Ionicons name={r.icon} size={18} color={c.coral} style={{ width: 26 }} />
                 <Text style={{ flex: 1, color: c.ink, fontSize: 15, fontWeight: '500' }}>{t(r.labelKey)}</Text>
                 <Ionicons name={selected === r.key ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={selected === r.key ? c.coral : c.inkTertiary} />

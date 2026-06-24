@@ -4,9 +4,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, Vibration, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -19,6 +19,14 @@ import { gradients, radius, useTheme } from '@/lib/theme';
 
 // Handles are public identifiers: 3–20 of [a–z 0–9 _].
 const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
+
+// The locate button's visual feedback states — mirrors Swift's LocationStatus.
+// idle → tap-to-locate · locating → spinner · resolved → green check ·
+// denied → permission off · unavailable → location services off · error → failed.
+type LocateStatus = 'idle' | 'locating' | 'resolved' | 'denied' | 'unavailable' | 'error';
+
+const LOCATE_GREEN = '#2AD17E';
+const LOCATE_AMBER = '#FF9500';
 
 // Shorten long country names so "City, Country" stays compact.
 const COUNTRY_SHORT: Record<string, string> = {
@@ -68,8 +76,26 @@ export default function EditProfile() {
 
   // --- save / locate state ---
   const [saving, setSaving] = useState(false);
-  const [locating, setLocating] = useState(false);
+  const [locateStatus, setLocateStatus] = useState<LocateStatus>('idle');
   const [showSuccess, setShowSuccess] = useState(false);
+  const locating = locateStatus === 'locating';
+
+  // Auto-reset the transient locate states back to idle (like Swift's
+  // asyncAfter), and clear any pending timer when the screen unmounts.
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (resetTimer.current) clearTimeout(resetTimer.current);
+  }, []);
+
+  function setLocateStatusAutoReset(status: LocateStatus) {
+    if (resetTimer.current) clearTimeout(resetTimer.current);
+    setLocateStatus(status);
+    // resolved settles after 2s, the failure states after 3s — matching Swift.
+    const delay = status === 'resolved' ? 2000 : 3000;
+    if (status === 'resolved' || status === 'denied' || status === 'unavailable' || status === 'error') {
+      resetTimer.current = setTimeout(() => setLocateStatus('idle'), delay);
+    }
+  }
 
   // Prefill from the loaded cloud profile.
   useEffect(() => {
@@ -112,11 +138,19 @@ export default function EditProfile() {
   // a reader in another language can't understand.
   async function locate() {
     if (locating) return;
-    setLocating(true);
+    if (resetTimer.current) clearTimeout(resetTimer.current);
+    setLocateStatus('locating');
     try {
+      // Location services off device-wide → dedicated 'unavailable' state.
+      if (!(await Location.hasServicesEnabledAsync())) {
+        notify(t('editProfileLocateUnavailable'));
+        setLocateStatusAutoReset('unavailable');
+        return;
+      }
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         notify(t('editProfileLocateDenied'));
+        setLocateStatusAutoReset('denied');
         return;
       }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -128,12 +162,17 @@ export default function EditProfile() {
       const city = j.city || j.locality || j.principalSubdivision || '';
       const country = shortCountry(j.countryName || '', j.countryCode);
       const formatted = [city, country].filter(Boolean).join(', ');
-      if (formatted) setLocation(formatted);
-      else notify(t('editProfileLocateError'));
+      if (formatted) {
+        setLocation(formatted);
+        Vibration.vibrate(10); // brief tactile confirmation
+        setLocateStatusAutoReset('resolved');
+      } else {
+        notify(t('editProfileLocateError'));
+        setLocateStatusAutoReset('error');
+      }
     } catch {
       notify(t('editProfileLocateError'));
-    } finally {
-      setLocating(false);
+      setLocateStatusAutoReset('error');
     }
   }
 
@@ -251,15 +290,7 @@ export default function EditProfile() {
             value={location}
             editable={false}
             hint={t('editProfileLocate')}
-            trailing={
-              <Pressable onPress={locate} disabled={locating} hitSlop={8} style={styles.locateBtn}>
-                {locating ? (
-                  <ActivityIndicator color={c.coral} size="small" />
-                ) : (
-                  <Ionicons name="locate" size={18} color={c.coral} />
-                )}
-              </Pressable>
-            }
+            trailing={<LocateButton status={locateStatus} onPress={locate} />}
           />
           {locating ? (
             <Text style={[styles.locatingNote, { color: c.inkTertiary }]}>{t('editProfileLocating')}</Text>
@@ -293,6 +324,56 @@ export default function EditProfile() {
         </View>
       )}
     </SafeAreaView>
+  );
+}
+
+/**
+ * The locate button's six visual feedback states — mirrors Swift's locateButton
+ * switch over LocationStatus. Only idle is tappable; the rest are status glyphs.
+ */
+function LocateButton({ status, onPress }: { status: LocateStatus; onPress: () => void }) {
+  const c = useTheme();
+
+  if (status === 'locating') {
+    return (
+      <View style={styles.locateBtn}>
+        <ActivityIndicator color={c.coral} size="small" />
+      </View>
+    );
+  }
+  if (status === 'resolved') {
+    return (
+      <View style={styles.locateBtn}>
+        <Ionicons name="checkmark-circle" size={20} color={LOCATE_GREEN} />
+      </View>
+    );
+  }
+  if (status === 'denied') {
+    return (
+      <View style={styles.locateBtn}>
+        <Ionicons name="location-outline" size={20} color={c.inkTertiary} />
+      </View>
+    );
+  }
+  if (status === 'unavailable') {
+    return (
+      <View style={styles.locateBtn}>
+        <Ionicons name="navigate-outline" size={20} color={c.inkTertiary} />
+      </View>
+    );
+  }
+  if (status === 'error') {
+    return (
+      <View style={styles.locateBtn}>
+        <Ionicons name="warning" size={18} color={LOCATE_AMBER} />
+      </View>
+    );
+  }
+  // idle — the only interactive state.
+  return (
+    <Pressable onPress={onPress} hitSlop={8} style={styles.locateBtn}>
+      <Ionicons name="locate" size={18} color={c.coral} />
+    </Pressable>
   );
 }
 

@@ -68,6 +68,10 @@ export interface Conversation {
   lastMessageRecalled: boolean;
   /** True when the latest unread group message @-mentions me (or @everyone). */
   mentioned: boolean;
+  /** True when the other user is online (DM presence dot); groups are always false. */
+  isOnline: boolean;
+  /** True for official / verified accounts — shows a verified badge. */
+  isOfficial: boolean;
 }
 
 /** A 1:1 message in a thread. */

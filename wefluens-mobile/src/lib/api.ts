@@ -202,6 +202,8 @@ async function loadDMThreads(uid: string): Promise<Conversation[]> {
       lastMessageType: row.last_message_type ?? 'text',
       lastMessageRecalled: row.last_message_recalled ?? false,
       mentioned: false,
+      isOnline: false,
+      isOfficial: false,
     } as Conversation;
   });
 }
@@ -284,11 +286,19 @@ async function loadGroupThreads(uid: string, myName = ''): Promise<Conversation[
       lastMessageType: row.last_message_type ?? 'text',
       lastMessageRecalled: recalled,
       mentioned,
+      isOnline: false,
+      isOfficial: false,
     } as Conversation;
   });
 }
 
 // ─────────────────────────── Contacts / Friends ───────────────────────────
+
+/** Display name for a single profile id (QR-scan confirmation preview). Null if not found. */
+export async function getProfileName(id: string): Promise<string | null> {
+  const { data } = await supabase.from('profiles').select('name').eq('id', id).maybeSingle();
+  return (data?.name as string | undefined) ?? null;
+}
 
 function mapContact(p: ProfileRow): Contact {
   return {

@@ -3,8 +3,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput,
+  Vibration, View,
 } from 'react-native';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, Card, Divider, NavBar } from '@/components/ui';
@@ -31,6 +33,7 @@ export default function TopTalent() {
   const [directory, setDirectory] = useState<SearchUserResult[]>([]);
   const [loadingDir, setLoadingDir] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchUserResult[]>([]);
@@ -40,8 +43,26 @@ export default function TopTalent() {
   const [overrides, setOverrides] = useState<Record<string, Relationship>>({});
   const [acting, setActing] = useState<Set<string>>(new Set());
 
+  // Non-blocking toast that slides up from the bottom (mirrors Swift's toastView).
+  const [toast, setToast] = useState<string | null>(null);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reqIdRef = useRef(0);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // RN's built-in Vibration stands in for Swift's UINotificationFeedbackGenerator
+  // (expo-haptics isn't a dependency; Vibration needs no native add).
+  function haptic() {
+    if (Platform.OS !== 'web') Vibration.vibrate(10);
+  }
+
+  const showToast = useCallback((message: string) => {
+    setToast(message);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2600);
+  }, []);
+
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
   const loadDirectory = useCallback(async () => {
     setLoadFailed(false);
@@ -56,6 +77,13 @@ export default function TopTalent() {
   }, [blockedIds]);
 
   useEffect(() => { void loadDirectory(); }, [loadDirectory]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try { setDirectory(await api.loadTopTalent(blockedIds)); setLoadFailed(false); }
+    catch { setLoadFailed(true); }
+    finally { setRefreshing(false); }
+  }, [blockedIds]);
 
   const runSearch = useCallback(async (raw: string) => {
     const trimmed = raw.trim();
@@ -105,15 +133,15 @@ export default function TopTalent() {
     try {
       const status = await api.sendFriendRequest(user.id, t('friendRequestMessage'));
       switch (status) {
-        case 'sent': setOverride(user.id, 'request_sent'); Alert.alert(t('addFriendSent')); break;
+        case 'sent': setOverride(user.id, 'request_sent'); haptic(); showToast(t('addFriendSent')); break;
         case 'already_sent': setOverride(user.id, 'request_sent'); break;
-        case 'already_friends': setOverride(user.id, 'friends'); break;
-        case 'incoming_exists': setOverride(user.id, 'request_received'); break;
+        case 'already_friends': setOverride(user.id, 'friends'); showToast(t('addFriendAlreadyFriends')); break;
+        case 'incoming_exists': setOverride(user.id, 'request_received'); showToast(t('addFriendIncoming')); break;
         default: setOverride(user.id, 'request_sent'); break;
       }
       await refreshContacts().catch(() => {});
     } catch {
-      Alert.alert(t('addFriendError'));
+      showToast(t('addFriendError'));
     } finally {
       stopActing(user.id);
     }
@@ -124,10 +152,14 @@ export default function TopTalent() {
     startActing(user.id);
     try {
       const status = await api.respondFriendRequest(user.incoming_request_id, true);
-      if (status === 'accepted') setOverride(user.id, 'friends');
+      if (status === 'accepted') {
+        setOverride(user.id, 'friends');
+        haptic();
+        showToast(t('friendRequestAdded'));
+      }
       await refreshContacts().catch(() => {});
     } catch {
-      Alert.alert(t('addFriendError'));
+      showToast(t('addFriendError'));
     } finally {
       stopActing(user.id);
     }
@@ -197,7 +229,15 @@ export default function TopTalent() {
             subtitle={!loadFailed && !isSearchActive ? t('talentOptInHint') : undefined}
           />
         ) : (
-          <ScrollView contentContainerStyle={{ paddingTop: 16, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            contentContainerStyle={{ paddingTop: 16, paddingBottom: 24 }}
+            keyboardShouldPersistTaps="handled"
+            refreshControl={
+              isSearchActive ? undefined : (
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.coral} />
+              )
+            }
+          >
             <Card style={{ paddingVertical: 6 }}>
               {displayed.map((user, index) => (
                 <View key={user.id}>
@@ -218,6 +258,19 @@ export default function TopTalent() {
           </ScrollView>
         )}
       </View>
+
+      {toast ? (
+        <Animated.View
+          entering={FadeIn.duration(250)}
+          exiting={FadeOut.duration(250)}
+          pointerEvents="none"
+          style={styles.toastWrap}
+        >
+          <View style={[styles.toast, { backgroundColor: c.ink }]}>
+            <Text style={styles.toastText} numberOfLines={2}>{toast}</Text>
+          </View>
+        </Animated.View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -304,4 +357,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   pillText: { fontSize: 13, fontWeight: '600' },
+  toastWrap: { position: 'absolute', left: 0, right: 0, bottom: 30, alignItems: 'center' },
+  toast: {
+    maxWidth: '88%',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: radius.pill,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  toastText: { color: '#fff', fontSize: 14, fontWeight: '600', textAlign: 'center' },
 });

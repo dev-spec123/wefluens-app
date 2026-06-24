@@ -147,6 +147,7 @@ export default function ChatsScreen() {
             name={item.name}
             imageUrl={item.avatarUrl}
             size={54}
+            online={item.isOnline}
             symbol={item.isGroup ? 'people' : undefined}
           />
           <View style={styles.rowBody}>
@@ -154,6 +155,9 @@ export default function ChatsScreen() {
               <Text style={[styles.rowName, { color: c.ink }]} numberOfLines={1}>
                 {item.name}
               </Text>
+              {item.isOfficial ? (
+                <Ionicons name="checkmark-circle" size={13} color={c.coral} style={{ marginLeft: 6 }} />
+              ) : null}
               {item.isGroup ? (
                 <Ionicons name="people" size={12} color={c.inkSecondary} style={{ marginLeft: 6 }} />
               ) : null}
@@ -196,7 +200,7 @@ export default function ChatsScreen() {
         <View style={{ flex: 1 }}>
           <Text style={[styles.title, { color: c.ink }]}>{t('chatsTitle')}</Text>
           <Text style={[styles.subtitle, { color: c.inkSecondary }]}>
-            {unreadTotal > 0 ? `${unreadTotal} ${t('chatsCaughtUp')}` : t('chatsCaughtUp')}
+            {unreadTotal > 0 ? `${unreadTotal} ${t('chatsUnread')}` : t('chatsCaughtUp')}
           </Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>

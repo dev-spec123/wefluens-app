@@ -10,7 +10,8 @@ import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, Vibration, View } from 'react-native';
+import Animated, { FadeOut, LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ImageViewer } from '@/components/ImageViewer';
@@ -56,6 +57,10 @@ export default function Favorites() {
   }, []);
 
   async function onRemove(id: string) {
+    // Tactile confirmation on delete, mirroring the Swift selection haptic.
+    // expo-haptics isn't a dependency; RN's built-in Vibration needs no native add.
+    if (Platform.OS !== 'web') Vibration.vibrate(10);
+    // The row's exit + the list's layout shift are animated via Animated.View below.
     setItems((prev) => prev.filter((f) => f.id !== id));
     await removeFavorite(id);
   }
@@ -91,7 +96,11 @@ export default function Favorites() {
         <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 14, paddingBottom: 30 }}>
           <Card>
             {items.map((item, i) => (
-              <View key={item.id}>
+              <Animated.View
+                key={item.id}
+                exiting={FadeOut.duration(200)}
+                layout={LinearTransition.duration(200)}
+              >
                 <FavRow
                   item={item}
                   onRemove={onRemove}
@@ -100,7 +109,7 @@ export default function Favorites() {
                   onOpenFile={openFile}
                 />
                 {i < items.length - 1 && <Divider inset={14} />}
-              </View>
+              </Animated.View>
             ))}
           </Card>
         </ScrollView>
@@ -245,9 +254,13 @@ function FavRow({
     );
   }
 
-  // Text.
+  // Text — leading coral icon badge (mirrors Swift's text.bubble badge on every row).
+  // Media rows above already lead with a richer 52x52 thumbnail.
   return (
     <View style={styles.row}>
+      <View style={[styles.badge, { backgroundColor: c.coral + '1A' }]}>
+        <Ionicons name="chatbubble-ellipses" size={18} color={c.coral} />
+      </View>
       <View style={{ flex: 1, marginRight: 12 }}>
         <Text style={[styles.text, { color: c.ink }]} numberOfLines={3}>{item.text}</Text>
         {meta}
@@ -267,5 +280,9 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
   },
   thumbImg: { width: 52, height: 52 },
+  badge: {
+    width: 36, height: 36, borderRadius: 11, marginRight: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
   deleteBtn: { width: 36, height: 36, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
 });

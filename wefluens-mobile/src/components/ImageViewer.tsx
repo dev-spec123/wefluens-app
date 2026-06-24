@@ -5,6 +5,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 // The default expo-media-library save/permission methods are deprecated in SDK 56
 // and THROW at runtime — the /legacy entrypoint keeps the working implementations.
 import * as MediaLibrary from 'expo-media-library/legacy';
+import * as Sharing from 'expo-sharing';
 import { useState } from 'react';
 import {
   ActivityIndicator, Modal, Platform, Pressable, StyleSheet, View, useWindowDimensions,
@@ -33,6 +34,7 @@ export function ImageViewer({
   const { t } = useI18n();
   const { width, height } = useWindowDimensions();
   const [saving, setSaving] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
@@ -127,6 +129,30 @@ export function ImageViewer({
     }
   }
 
+  // Opens the system share sheet (mirrors the Swift FullscreenImageView ShareLink).
+  // Downloads a local copy first, since shareAsync needs a file:// URL.
+  async function share() {
+    if (!uri || sharing) return;
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') window.open(uri, '_blank');
+      return;
+    }
+    setSharing(true);
+    try {
+      if (!(await Sharing.isAvailableAsync())) {
+        notify(t('chatShareUnavailable'));
+        return;
+      }
+      const fileUri = `${FileSystem.cacheDirectory}wefluens-share-${Date.now()}.jpg`;
+      const { uri: localUri } = await FileSystem.downloadAsync(uri, fileUri);
+      await Sharing.shareAsync(localUri, { mimeType: 'image/jpeg' });
+    } catch (e) {
+      console.warn('share image failed', e);
+    } finally {
+      setSharing(false);
+    }
+  }
+
   function handleClose() {
     resetZoom();
     onClose();
@@ -159,13 +185,22 @@ export function ImageViewer({
             <Pressable onPress={handleClose} hitSlop={12} style={styles.ctrlBtn}>
               <Ionicons name="close" size={26} color="#fff" />
             </Pressable>
-            <Pressable onPress={save} hitSlop={12} style={styles.ctrlBtn} disabled={saving}>
-              {saving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Ionicons name="download-outline" size={24} color="#fff" />
-              )}
-            </Pressable>
+            <View style={styles.ctrlGroup}>
+              <Pressable onPress={save} hitSlop={12} style={styles.ctrlBtn} disabled={saving}>
+                {saving ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Ionicons name="download-outline" size={24} color="#fff" />
+                )}
+              </Pressable>
+              <Pressable onPress={share} hitSlop={12} style={styles.ctrlBtn} disabled={sharing}>
+                {sharing ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Ionicons name="share-outline" size={24} color="#fff" />
+                )}
+              </Pressable>
+            </View>
           </SafeAreaView>
         </View>
       </GestureHandlerRootView>
@@ -178,8 +213,10 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
   controls: {
     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
-    flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 12, paddingTop: 6,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 12, paddingTop: 6,
   },
+  ctrlGroup: { flexDirection: 'row', alignItems: 'center' },
   ctrlBtn: {
     width: 44, height: 44, borderRadius: 22, margin: 6,
     alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.4)',

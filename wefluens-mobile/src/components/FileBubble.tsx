@@ -23,6 +23,37 @@ function humanSize(bytes: number | null): string {
   return `${n.toFixed(n >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
+/** Lowercase file extension (no dot) from a file name, or '' when absent. */
+function fileExtension(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot >= 0 ? name.slice(dot + 1).toLowerCase() : '';
+}
+
+/** Type-specific icon by extension — mirrors the Swift ChatFileBubble symbols. */
+function iconForExt(ext: string): keyof typeof Ionicons.glyphMap {
+  switch (ext) {
+    case 'pdf': return 'document-text';
+    case 'doc': case 'docx': case 'pages': return 'document';
+    case 'xls': case 'xlsx': case 'csv': case 'numbers': return 'grid';
+    case 'ppt': case 'pptx': case 'key': return 'easel';
+    case 'zip': case 'rar': case '7z': return 'archive';
+    case 'txt': case 'rtf': return 'document-outline';
+    default: return 'document';
+  }
+}
+
+/** Type-specific accent color by extension — mirrors the Swift ChatFileBubble palette. */
+function colorForExt(ext: string): string {
+  switch (ext) {
+    case 'pdf': return '#FF5A5F';
+    case 'doc': case 'docx': case 'pages': return '#2B7CD3';
+    case 'xls': case 'xlsx': case 'csv': case 'numbers': return '#1FA463';
+    case 'ppt': case 'pptx': case 'key': return '#E8703A';
+    case 'zip': case 'rar': case '7z': return '#9B7BD4';
+    default: return '#8A8A8E';
+  }
+}
+
 export function FileBubble({
   message, isMe, onLongPress, onPress, selectMode,
 }: {
@@ -58,6 +89,9 @@ export function FileBubble({
 
   const name = message.fileName ?? 'File';
   const size = humanSize(message.fileSize ?? null);
+  const ext = fileExtension(name);
+  const typeIcon = iconForExt(ext);
+  const typeColor = colorForExt(ext);
 
   return (
     <Pressable
@@ -66,11 +100,12 @@ export function FileBubble({
       delayLongPress={350}
       style={[styles.wrap, { backgroundColor: isMe ? c.coral : c.cardSubtle, borderColor: c.hairline }]}
     >
-      <View style={[styles.iconBox, { backgroundColor: isMe ? 'rgba(255,255,255,0.2)' : c.card }]}>
+      {/* White tile holds a type-specific icon (PDF red, Word blue, Excel green…). */}
+      <View style={[styles.iconBox, { backgroundColor: '#fff' }]}>
         {loading ? (
-          <ActivityIndicator color={isMe ? '#fff' : c.coral} />
+          <ActivityIndicator color={typeColor} />
         ) : (
-          <Ionicons name="document-text" size={22} color={isMe ? '#fff' : c.coral} />
+          <Ionicons name={typeIcon} size={22} color={typeColor} />
         )}
       </View>
       <View style={{ flexShrink: 1 }}>

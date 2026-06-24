@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView,
-  StyleSheet, Text, TextInput, View,
+  StyleSheet, Text, TextInput, Vibration, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -19,7 +19,7 @@ export default function ContactDetail() {
   const c = useTheme();
   const { t } = useI18n();
   const router = useRouter();
-  const { block, refreshContacts } = useAppData();
+  const { block, refreshContacts, contacts } = useAppData();
   const params = useLocalSearchParams<{
     id: string; name?: string; handle?: string; role?: string; followers?: string; avatarUrl?: string;
   }>();
@@ -31,6 +31,13 @@ export default function ContactDetail() {
   const followers = params.followers ?? '0';
   const avatarUrl = params.avatarUrl ?? null;
   const colors = avatarGradient(id);
+
+  // Live contact record (when this friend is in the loaded list) so platform /
+  // online presence reflect the real values, mirroring Swift's Contact.platform
+  // / Contact.isOnline. Route params carry only the lightweight summary fields.
+  const contact = contacts.find((ct) => ct.id === id);
+  const platform = contact?.platform ?? '';
+  const isOnline = contact?.isOnline ?? false;
 
   const [opening, setOpening] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -86,6 +93,7 @@ export default function ContactDetail() {
     setRemoving(true);
     try {
       await api.removeFriend(id);
+      Vibration.vibrate(40);
       await refreshContacts();
       router.back();
     } catch {
@@ -103,6 +111,7 @@ export default function ContactDetail() {
         onPress: async () => {
           try {
             await block(id);
+            Vibration.vibrate(40);
             router.back();
           } catch {
             Alert.alert(t('blockError'));
@@ -154,7 +163,7 @@ export default function ContactDetail() {
             end={{ x: 1, y: 1 }}
             style={styles.hero}
           >
-            <Avatar colors={colors} name={name} imageUrl={avatarUrl} size={96} />
+            <Avatar colors={colors} name={name} imageUrl={avatarUrl} size={96} online={isOnline} />
             <View style={{ alignItems: 'center', marginTop: 14, gap: 4 }}>
               <Text style={styles.heroName} numberOfLines={1}>{remark || name}</Text>
               {remark ? (
@@ -171,9 +180,9 @@ export default function ContactDetail() {
           <View style={styles.statsRow}>
             {statItem(followers, t('contactDetailFollowers'))}
             <View style={[styles.statDivider, { backgroundColor: c.hairline }]} />
-            {statItem('', t('contactDetailPlatform'))}
+            {statItem(platform, t('contactDetailPlatform'))}
             <View style={[styles.statDivider, { backgroundColor: c.hairline }]} />
-            {statItem(t('contactDetailAway'), t('contactDetailStatus'))}
+            {statItem(isOnline ? t('contactDetailOnline') : t('contactDetailAway'), t('contactDetailStatus'))}
           </View>
         </Card>
 
@@ -223,7 +232,7 @@ export default function ContactDetail() {
           <View style={{ gap: 16, marginTop: 16 }}>
             {infoRow('at', t('contactDetailHandle'), handle)}
             {infoRow('person-circle', t('contactDetailRole'), role)}
-            {infoRow('bar-chart', t('contactDetailFollowers'), followers)}
+            {infoRow('bar-chart', t('contactDetailAudience'), platform ? `${followers} ${t('contactDetailAudienceOn')} ${platform}` : followers)}
           </View>
         </Card>
 
