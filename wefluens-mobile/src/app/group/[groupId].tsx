@@ -140,6 +140,22 @@ export default function GroupChat() {
     return () => { alive = false; };
   }, [groupId]);
 
+  // Load the roster on mount so we know whether the current user is the owner
+  // (owners may recall any message at any time; see menuActions below).
+  useEffect(() => {
+    if (!groupId) return;
+    let alive = true;
+    api.listGroupMembers(groupId)
+      .then((roster) => { if (alive) setMembers(roster); })
+      .catch(() => { /* keep empty — non-owner rules still apply */ });
+    return () => { alive = false; };
+  }, [groupId]);
+
+  const isGroupOwner = useMemo(
+    () => !!userId && (members.find((m) => m.id === userId)?.isOwner ?? false),
+    [members, userId],
+  );
+
   // Realtime — any change to this group's messages reloads the thread.
   useEffect(() => {
     if (!groupId) return;
@@ -436,7 +452,12 @@ export default function GroupChat() {
       );
     }
     acts.push({ label: t('chatSelect'), icon: 'checkmark-circle', onPress: () => enterSelect(m) });
-    if (m.sender === 'me' && !m.isRecalled && withinRecallWindow(m)) {
+    // The group owner may recall ANY message at ANY time (bypassing both the
+    // own-message and 2-minute-window checks); everyone else keeps the rule:
+    // own message + within the recall window. The backend enforces the real
+    // permission either way.
+    const isOwn = m.sender === 'me';
+    if (!m.isRecalled && ((isOwn && withinRecallWindow(m)) || isGroupOwner)) {
       acts.push({ label: t('chatRecall'), icon: 'refresh', onPress: () => void recall(m) });
     }
     acts.push({ label: t('chatDelete'), icon: 'trash', destructive: true, onPress: () => void deleteOne(m) });
@@ -455,7 +476,7 @@ export default function GroupChat() {
     }
     return acts;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [menuMsg, pinned, t]);
+  }, [menuMsg, pinned, isGroupOwner, t]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.paper }} edges={['top']}>

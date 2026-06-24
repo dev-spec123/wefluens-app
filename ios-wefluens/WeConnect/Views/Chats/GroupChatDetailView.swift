@@ -182,6 +182,7 @@ struct GroupChatDetailView: View {
             guard vm == nil else { return }
             let model = GroupChatViewModel(route: route, data: data)
             vm = model
+            await loadMembersIfNeeded()
             await model.start()
         }
         .onDisappear {
@@ -436,6 +437,7 @@ struct GroupChatDetailView: View {
                                     message: row.message,
                                     showSenderHeader: row.showSenderHeader,
                                     isPinned: data.pinnedMessages.isPinned(row.message.id, in: route.groupId),
+                                    isGroupOwner: isGroupOwner,
                                     myName: data.profile?.name ?? "",
                                     quotedSender: row.quoted.map { quotedSenderName(for: $0) },
                                     quotedPreview: row.quoted.map { quotedPreviewText(for: $0) },
@@ -707,6 +709,26 @@ struct GroupChatDetailView: View {
         members.filter { $0.id != data.userId }
     }
 
+    /// True when the current user is this group's owner (server-stamped owner flag
+    /// on their member row). Drives the group-owner recall override: the owner may
+    /// recall any message at any time. Depends on `members` being loaded; we load
+    /// the roster eagerly in `.task` so this is known without a manual refresh.
+    private var isGroupOwner: Bool {
+        guard let uid = data.userId else { return false }
+        return members.first(where: { $0.id == uid })?.isOwner ?? false
+    }
+
+    /// Loads the group roster once and caches it on `members`. Used both eagerly in
+    /// `.task` (so `isGroupOwner` is known up front) and lazily by the "@" picker.
+    private func loadMembersIfNeeded() async {
+        guard members.isEmpty else { return }
+        do {
+            members = try await data.listGroupMembers(groupId: route.groupId)
+        } catch {
+            print("⚠️ load group members failed: \(error)")
+        }
+    }
+
     /// Loads the roster (reusing the cache once populated) then opens the picker.
     private func loadMembersAndPresentPicker() {
         if !members.isEmpty {
@@ -714,11 +736,7 @@ struct GroupChatDetailView: View {
             return
         }
         Task {
-            do {
-                members = try await data.listGroupMembers(groupId: route.groupId)
-            } catch {
-                print("⚠️ load group members failed: \(error)")
-            }
+            await loadMembersIfNeeded()
             if !mentionableMembers.isEmpty {
                 showMentionPicker = true
             }
@@ -1024,6 +1042,10 @@ private struct GroupMessageBubble: View {
     /// True when this message is the group's currently pinned (群公告) message — the
     /// menu then offers "Unpin" instead of "Pin".
     var isPinned: Bool = false
+    /// True when the current user owns this group. The owner may recall ANY message
+    /// at any time, bypassing both the own-message check and the 2-minute window
+    /// (the server enforces the real permission).
+    var isGroupOwner: Bool = false
     /// My display name, used to detect incoming bubbles that @-mention me.
     var myName: String = ""
     var quotedSender: String? = nil
@@ -1069,6 +1091,16 @@ private struct GroupMessageBubble: View {
         guard isMe, !message.isRecalled else { return false }
         guard let createdAt = message.createdAt else { return true }
         return Date().timeIntervalSince(createdAt) <= 120
+    }
+
+    /// Whether the Recall action is offered. Non-owners keep the existing rule
+    /// (their own message, within the 2-minute window). The group OWNER may recall
+    /// ANY message at any time — bypassing both the own-message check and the window
+    /// — so long as it isn't already recalled. The server enforces real permission.
+    private var canRecall: Bool {
+        if message.isRecalled { return false }
+        if isGroupOwner { return true }
+        return isWithinRecallWindow
     }
 
     /// The bubble with its quoted-reply preview stacked above (when a reply).
@@ -1146,7 +1178,7 @@ private struct GroupMessageBubble: View {
                 }
             }
             Divider()
-            if isWithinRecallWindow {
+            if canRecall {
                 Button(role: .destructive) { onRecall?() } label: {
                     Label(l10n.t(.chatRecall), systemImage: "arrow.uturn.backward")
                 }
