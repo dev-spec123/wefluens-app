@@ -446,7 +446,9 @@ struct ProfileView: View {
 
     /// Handles a user tap on the Push Notifications toggle. Turning it on prompts
     /// for OS permission (first time) and registers the device; if the OS denies,
-    /// the toggle reverts. The preference is persisted to the profile either way.
+    /// the toggle reverts AND we deep-link to the system notification settings so
+    /// the user can flip it back on (mirrors the RN app's `Linking.openSettings`).
+    /// The preference is persisted to the profile either way.
     private func handleNotificationsToggle(_ on: Bool) async {
         if on {
             let granted = await PushService.shared.requestAuthorizationAndRegister()
@@ -455,10 +457,20 @@ struct ProfileView: View {
             } else {
                 notificationsOn = false
                 await data.setNotificationsEnabled(false)
+                openNotificationSettings()
             }
         } else {
             await data.setNotificationsEnabled(false)
         }
+    }
+
+    /// Opens this app's page in the system Settings app, where the user can grant
+    /// notification permission. Equivalent to RN's `Linking.openSettings()`.
+    private func openNotificationSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString),
+              UIApplication.shared.canOpenURL(url)
+        else { return }
+        UIApplication.shared.open(url)
     }
 
     // MARK: - Support actions

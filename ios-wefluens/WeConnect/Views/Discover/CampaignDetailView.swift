@@ -11,6 +11,7 @@ struct CampaignDetailView: View {
     let campaign: Campaign
     @Environment(\.dismiss) private var dismiss
     @State private var applied = false
+    @State private var showWithdrawConfirm = false
 
     var body: some View {
         ScrollView {
@@ -41,6 +42,28 @@ struct CampaignDetailView: View {
         .safeAreaInset(edge: .bottom) {
             applyBar
         }
+        .confirmationDialog(
+            l10n.t(.campaignCancelConfirm),
+            isPresented: $showWithdrawConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(l10n.t(.campaignCancelApplication), role: .destructive) { withdraw() }
+            Button(l10n.t(.adminCancel), role: .cancel) { }
+        }
+    }
+
+    private func apply() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            applied = true
+        }
+        Self.setCampaignApplied(campaign.id.uuidString, true)
+    }
+
+    private func withdraw() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            applied = false
+        }
+        Self.setCampaignApplied(campaign.id.uuidString, false)
     }
 
     private var hero: some View {
@@ -155,23 +178,39 @@ struct CampaignDetailView: View {
                     .foregroundStyle(Theme.inkSecondary(for: colorScheme))
             }
             Spacer()
-            Button {
-                // Tap to apply; tap again to withdraw. Persisted so it survives
-                // leaving and re-opening the campaign.
-                let next = !applied
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    applied = next
+            if applied {
+                // Distinct "Applied" state: outlined coral pill with a checkmark.
+                // Tapping asks to confirm before withdrawing. Persisted so it
+                // survives leaving and re-opening the campaign.
+                Button {
+                    showWithdrawConfirm = true
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 18))
+                        Text(l10n.t(.campaignDetailApplied))
+                            .font(.system(size: 16, weight: .bold))
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(Theme.coral)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 13)
+                    .background(Theme.coral.opacity(0.08), in: Capsule())
+                    .overlay(Capsule().strokeBorder(Theme.coral, lineWidth: 1.5))
                 }
-                Self.setCampaignApplied(campaign.id.uuidString, next)
-            } label: {
-                Text(l10n.t(applied ? .campaignDetailApplied : .campaignDetailApply))
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 32)
-                    .padding(.vertical, 15)
-                    .background(applied ? AnyShapeStyle(Theme.inkSecondary(for: colorScheme)) : AnyShapeStyle(Theme.sunset))
-                    .clipShape(Capsule())
-                    .shadow(color: Theme.coral.opacity(applied ? 0 : 0.4), radius: 12, y: 6)
+            } else {
+                Button {
+                    apply()
+                } label: {
+                    Text(l10n.t(.campaignDetailApply))
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 32)
+                        .padding(.vertical, 15)
+                        .background(Theme.sunset)
+                        .clipShape(Capsule())
+                        .shadow(color: Theme.coral.opacity(0.4), radius: 12, y: 6)
+                }
             }
         }
         .padding(.horizontal, 20)

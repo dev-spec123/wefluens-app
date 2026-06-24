@@ -73,7 +73,7 @@ struct DiscoverView: View {
 
                     featured
                     filterBar
-                    if !featuredBrands.isEmpty { brandsSection }
+                    brandsSection
                     campaignsSection
                 }
                 .padding(.bottom, 24)
@@ -158,20 +158,28 @@ struct DiscoverView: View {
     private var brandsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle(l10n.t(.discoverTopBrands))
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
-                    ForEach(featuredBrands) { brand in
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedBrand = (selectedBrand == brand.name) ? nil : brand.name
+            if featuredBrands.isEmpty {
+                Text(l10n.t(.discoverNoBrands))
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 8)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 14) {
+                        ForEach(featuredBrands) { brand in
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    selectedBrand = (selectedBrand == brand.name) ? nil : brand.name
+                                }
+                            } label: {
+                                BrandCard(brand: brand)
                             }
-                        } label: {
-                            BrandCard(brand: brand)
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
+                    .padding(.horizontal, 18)
                 }
-                .padding(.horizontal, 18)
             }
         }
     }
@@ -197,16 +205,34 @@ struct DiscoverView: View {
                 .buttonStyle(.plain)
                 .padding(.horizontal, 18)
             }
-            VStack(spacing: 14) {
-                ForEach(visibleCampaigns) { campaign in
-                    NavigationLink(value: campaign.id) {
-                        CampaignCard(campaign: campaign)
+            if visibleCampaigns.isEmpty {
+                campaignsEmptyState
+            } else {
+                VStack(spacing: 14) {
+                    ForEach(visibleCampaigns) { campaign in
+                        NavigationLink(value: campaign.id) {
+                            CampaignCard(campaign: campaign)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 18)
             }
-            .padding(.horizontal, 18)
         }
+    }
+
+    private var campaignsEmptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "megaphone")
+                .font(.system(size: 40))
+                .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+            Text(l10n.t(.discoverNoCampaigns))
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 40)
+        .padding(.horizontal, 18)
     }
 
     private func sectionTitle(_ text: String) -> some View {
@@ -296,6 +322,15 @@ private struct CampaignCard: View {
                         .foregroundStyle(campaign.spotsLeft <= 2 ? Theme.coral : Theme.inkSecondary(for: colorScheme))
                 }
                 .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+
+                if !campaign.tags.isEmpty {
+                    HStack(spacing: 8) {
+                        ForEach(campaign.tags, id: \.self) { tag in
+                            TagChip(text: tag)
+                        }
+                    }
+                    .padding(.top, 2)
+                }
             }
 
             Spacer()

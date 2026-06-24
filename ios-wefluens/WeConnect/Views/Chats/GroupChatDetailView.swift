@@ -66,6 +66,12 @@ struct GroupChatDetailView: View {
     @State private var members: [GroupMember] = []
     /// Drives the member picker for inserting an @mention (false = closed).
     @State private var showMentionPicker = false
+    /// When set, the matching message bubble flashes a highlight (after a
+    /// tap-to-jump from a quote or the pinned banner). Cleared after ~1.6s.
+    @State private var highlightId: UUID?
+    /// Captured scroll proxy so the pinned banner / a quoted reply can scroll the
+    /// thread to a target message from outside the `ScrollViewReader` closure.
+    @State private var scrollProxy: ScrollViewProxy?
     @FocusState private var inputFocused: Bool
 
     private var messages: [GroupChatMessage] { vm?.messages ?? [] }
@@ -144,7 +150,11 @@ struct GroupChatDetailView: View {
         .alert(l10n.t(.chatVoicePermissionDenied), isPresented: $showMicPermissionAlert) {
             Button(l10n.t(.authVerificationSentOk), role: .cancel) { }
         }
+        .alert(l10n.t(.chatReplyJumpMissing), isPresented: jumpMissingBinding) {
+            Button(l10n.t(.authVerificationSentOk), role: .cancel) { vm?.jumpMissing = false }
+        }
         .confirmationDialog(l10n.t(.groupSettingsMembers), isPresented: $showMentionPicker, titleVisibility: .visible) {
+            Button(l10n.t(.mentionAll)) { insertEveryoneMention() }
             ForEach(mentionableMembers) { member in
                 Button(member.name) { insertMention(member) }
             }
@@ -184,6 +194,13 @@ struct GroupChatDetailView: View {
         Binding(
             get: { vm?.recallError != nil },
             set: { newValue in if !newValue { vm?.recallError = nil } }
+        )
+    }
+
+    private var jumpMissingBinding: Binding<Bool> {
+        Binding(
+            get: { vm?.jumpMissing ?? false },
+            set: { newValue in vm?.jumpMissing = newValue }
         )
     }
 
@@ -359,18 +376,26 @@ struct GroupChatDetailView: View {
     /// unpin. Tapping ✕ removes the pin (local-only, on-device).
     private func pinnedBanner(_ pin: PinnedMessage) -> some View {
         HStack(spacing: 8) {
-            Text("📌")
-                .font(.system(size: 13))
-            VStack(alignment: .leading, spacing: 1) {
-                Text(l10n.t(.pinnedLabel))
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Theme.coral)
-                Text(pin.text)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.ink(for: colorScheme))
-                    .lineLimit(1)
+            Button {
+                jumpToMessage(pin.id)
+            } label: {
+                HStack(spacing: 8) {
+                    Text("📌")
+                        .font(.system(size: 13))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(l10n.t(.pinnedLabel))
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.coral)
+                        Text(pin.text)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.ink(for: colorScheme))
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
+                }
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 8)
+            .buttonStyle(.plain)
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 data.pinnedMessages.unpin(in: route.groupId)
@@ -411,8 +436,10 @@ struct GroupChatDetailView: View {
                                     message: row.message,
                                     showSenderHeader: row.showSenderHeader,
                                     isPinned: data.pinnedMessages.isPinned(row.message.id, in: route.groupId),
+                                    myName: data.profile?.name ?? "",
                                     quotedSender: row.quoted.map { quotedSenderName(for: $0) },
                                     quotedPreview: row.quoted.map { quotedPreviewText(for: $0) },
+                                    onJumpToReply: row.quoted.map { quoted in { () -> Void in jumpToMessage(quoted.id) } },
                                     onReply: { startReply(to: row.message) },
                                     onForward: { forwardSource = ForwardSource(kind: .group, messageIds: [row.message.id]) },
                                     onSelect: { enterSelect(row.message.id) },
@@ -445,6 +472,13 @@ struct GroupChatDetailView: View {
                             }
                             .contentShape(Rectangle())
                             .onTapGesture { if selectMode { toggleSelect(row.message.id) } }
+                            .padding(.vertical, highlightId == row.message.id ? 4 : 0)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(highlightId == row.message.id
+                                          ? Theme.coral.opacity(0.12)
+                                          : Color.clear)
+                            )
                             .id(row.message.id)
                             .padding(.top, row.startsRun ? 8 : 0)
                         }
@@ -454,13 +488,15 @@ struct GroupChatDetailView: View {
                 }
             }
             .onChange(of: messages.count) { _, _ in
-                if let last = messages.last {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
+                // Skip the auto-scroll-to-latest while jumping to a quoted message so
+                // the highlight stays in view (mirrors the RN `highlightId` guard).
+                guard highlightId == nil, let last = messages.last else { return }
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    proxy.scrollTo(last.id, anchor: .bottom)
                 }
             }
             .onAppear {
+                scrollProxy = proxy
                 if let last = messages.last {
                     proxy.scrollTo(last.id, anchor: .bottom)
                 }
@@ -500,6 +536,27 @@ struct GroupChatDetailView: View {
             let name = message.fileName ?? ""
             return name.isEmpty ? l10n.t(.chatFilePreview) : name
         case .audio: return l10n.t(.chatVoice)
+        }
+    }
+
+    /// Scrolls the thread to `messageId` and flashes a highlight on it. Mirrors the
+    /// RN `jumpToMessage`: if the target isn't in the loaded thread, surface a
+    /// "can't find" notice instead of silently doing nothing.
+    private func jumpToMessage(_ messageId: UUID) {
+        guard messages.contains(where: { $0.id == messageId }) else {
+            vm?.jumpMissing = true
+            return
+        }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            scrollProxy?.scrollTo(messageId, anchor: .center)
+        }
+        withAnimation(.easeInOut(duration: 0.2)) { highlightId = messageId }
+        Task {
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            if highlightId == messageId {
+                withAnimation(.easeInOut(duration: 0.3)) { highlightId = nil }
+            }
         }
     }
 
@@ -671,10 +728,23 @@ struct GroupChatDetailView: View {
     /// Appends `@Name ` to the draft, adding a leading space when the draft is
     /// non-empty and doesn't already end in whitespace.
     private func insertMention(_ member: GroupMember) {
+        appendMention(member.name)
+    }
+
+    /// Appends the localized "@everyone" token (e.g. `@Everyone `) — mirrors the RN
+    /// top "@everyone" picker entry. The bare token is stored literally in the body
+    /// and detected by `messageMentionsEveryone`.
+    private func insertEveryoneMention() {
+        appendMention(l10n.t(.mentionAll))
+    }
+
+    /// Appends `@<token> ` to the draft, adding a leading space when the draft is
+    /// non-empty and doesn't already end in whitespace.
+    private func appendMention(_ token: String) {
         if !draft.isEmpty, let last = draft.last, !last.isWhitespace {
             draft += " "
         }
-        draft += "@\(member.name) "
+        draft += "@\(token) "
         inputFocused = true
     }
 
@@ -954,8 +1024,12 @@ private struct GroupMessageBubble: View {
     /// True when this message is the group's currently pinned (群公告) message — the
     /// menu then offers "Unpin" instead of "Pin".
     var isPinned: Bool = false
+    /// My display name, used to detect incoming bubbles that @-mention me.
+    var myName: String = ""
     var quotedSender: String? = nil
     var quotedPreview: String? = nil
+    /// Tapping the quoted-reply panel jumps to + flashes the original message.
+    var onJumpToReply: (() -> Void)? = nil
     var onReply: (() -> Void)? = nil
     var onForward: (() -> Void)? = nil
     var onSelect: (() -> Void)? = nil
@@ -969,6 +1043,22 @@ private struct GroupMessageBubble: View {
     var onTapAvatar: (() -> Void)? = nil
 
     private var isMe: Bool { message.sender == .me }
+
+    /// The localized "@everyone" tokens across the app's languages. A body
+    /// containing any of these targets every member (mirrors the RN
+    /// `ALL_MENTION_TOKENS`).
+    private static let everyoneTokens = ["@全体成员", "@Everyone", "@Todos"]
+
+    /// True when this is an incoming, non-recalled bubble whose body @-mentions me
+    /// by name or @-mentions everyone — drives the tinted "@me" bubble (mirrors the
+    /// RN `messageMentionsMe`).
+    private var mentionsMe: Bool {
+        guard !isMe, !message.isRecalled else { return false }
+        let body = message.text
+        guard !body.isEmpty else { return false }
+        if Self.everyoneTokens.contains(where: { body.contains($0) }) { return true }
+        return !myName.isEmpty && body.contains("@\(myName)")
+    }
 
     /// The recall window is 2 minutes from when the message was created.
     /// Client-side gate so the button is hidden for expired messages (server also
@@ -985,7 +1075,12 @@ private struct GroupMessageBubble: View {
     private var bubbleContent: some View {
         VStack(alignment: isMe ? .trailing : .leading, spacing: 3) {
             if let quotedSender, let quotedPreview {
-                GroupQuotedReplyPreview(senderName: quotedSender, preview: quotedPreview, isMe: isMe)
+                Button {
+                    onJumpToReply?()
+                } label: {
+                    GroupQuotedReplyPreview(senderName: quotedSender, preview: quotedPreview, isMe: isMe)
+                }
+                .buttonStyle(.plain)
             }
             content
         }
@@ -1158,11 +1253,17 @@ private struct GroupMessageBubble: View {
             .background(Group {
                 if isMe {
                     Theme.sunset
+                } else if mentionsMe {
+                    Theme.coral.opacity(0.15)
                 } else {
                     colorScheme == .dark ? Theme.card(for: .dark) : Color(hex: 0xF0EBE4)
                 }
             })
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Theme.coral, lineWidth: mentionsMe ? 1 : 0)
+            )
             .shadow(color: isMe
                         ? Theme.coral.opacity(0.25)
                         : Color.black.opacity(colorScheme == .dark ? 0.12 : 0.04),

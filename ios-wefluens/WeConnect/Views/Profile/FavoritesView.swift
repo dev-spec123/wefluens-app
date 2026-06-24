@@ -64,7 +64,7 @@ struct FavoritesView: View {
                 Text(favorite.text)
                     .font(.system(size: 15))
                     .foregroundStyle(Theme.ink(for: colorScheme))
-                    .lineLimit(3)
+                    .lineLimit(favorite.kind == "file" ? 1 : 3)
                     .multilineTextAlignment(.leading)
                 Text(AppDataService.relativeTime(from: favorite.date))
                     .font(.system(size: 12))

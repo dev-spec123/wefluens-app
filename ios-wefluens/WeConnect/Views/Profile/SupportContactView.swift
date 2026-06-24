@@ -52,8 +52,14 @@ struct SupportContactView: View {
     private var form: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                Text(l10n.t(.supportIntro))
+                    .font(.system(size: 14))
+                    .lineSpacing(4)
+                    .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                    .fixedSize(horizontal: false, vertical: true)
+
                 field(title: l10n.t(.supportSubjectField)) {
-                    TextField("", text: $subject)
+                    TextField(l10n.t(.supportSubjectPlaceholder), text: $subject)
                         .font(.system(size: 16))
                         .foregroundStyle(Theme.ink(for: colorScheme))
                         .padding(.horizontal, 14)
@@ -74,6 +80,16 @@ struct SupportContactView: View {
                         .background(Theme.card(for: colorScheme))
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
+                        .overlay(alignment: .topLeading) {
+                            if message.isEmpty {
+                                Text(l10n.t(.supportMessagePlaceholder))
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                                    .padding(.horizontal, 15)
+                                    .padding(.vertical, 16)
+                                    .allowsHitTesting(false)
+                            }
+                        }
                 }
 
                 if let errorText {

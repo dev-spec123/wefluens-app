@@ -33,6 +33,9 @@ struct EditProfileView: View {
     @State private var isSaving: Bool = false
     @State private var saveError: String?
     @State private var isInitialLoadDone: Bool = false
+    /// Inline message shown under the Handle field when the handle is rejected
+    /// (bad format or already taken). Mirrors RN's Alert feedback, but inline.
+    @State private var handleError: String?
 
     // --- avatar ---
     @State private var selectedItem: PhotosPickerItem?
@@ -228,9 +231,28 @@ struct EditProfileView: View {
             formField(icon: "person.fill", title: l10n.t(.editProfileName), text: $name)
             Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 56)
 
-            formField(icon: "at", title: "Handle", text: $handle)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+            // Handle: live-sanitized to [a-z0-9_] (≤20 chars) and validated inline.
+            formField(
+                icon: "at",
+                title: "Handle",
+                text: $handle,
+                hint: handleError ?? l10n.t(.editProfileHandleHint),
+                hintIsError: handleError != nil
+            )
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .onChange(of: handle) { _, newValue in
+                let cleaned = sanitizeHandle(newValue)
+                if cleaned != handle { handle = cleaned }
+                // Recompute the inline error as the user types.
+                if cleaned == originalHandle || cleaned.isEmpty {
+                    handleError = nil
+                } else if cleaned.range(of: "^[a-z0-9_]{3,20}$", options: .regularExpression) == nil {
+                    handleError = l10n.t(.editProfileHandleInvalid)
+                } else {
+                    handleError = nil
+                }
+            }
             Divider().background(Theme.hairline(for: colorScheme)).padding(.leading, 56)
 
             formField(icon: "text.alignleft", title: l10n.t(.editProfileBio), text: $bio, axis: .vertical, lineLimit: 2...5)
@@ -242,12 +264,23 @@ struct EditProfileView: View {
         .cardStyle()
     }
 
+    /// Lowercases and strips anything outside [a-z0-9_], capping at 20 chars —
+    /// mirrors RN's `v.toLowerCase().replace(/[^a-z0-9_]/g, '')` + maxLength.
+    private func sanitizeHandle(_ raw: String) -> String {
+        let allowed = raw.lowercased().filter { ch in
+            (ch.isASCII && (ch.isLetter || ch.isNumber)) || ch == "_"
+        }
+        return String(allowed.prefix(20))
+    }
+
     private func formField(
         icon: String,
         title: String,
         text: Binding<String>,
         axis: Axis = .horizontal,
-        lineLimit: ClosedRange<Int> = 1...1
+        lineLimit: ClosedRange<Int> = 1...1,
+        hint: String? = nil,
+        hintIsError: Bool = false
     ) -> some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
@@ -265,6 +298,13 @@ struct EditProfileView: View {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.ink(for: colorScheme))
                     .lineLimit(lineLimit)
+
+                if let hint {
+                    Text(hint)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(hintIsError ? Color(hex: 0xFF3B30) : Theme.inkTertiary(for: colorScheme))
+                        .padding(.top, 2)
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -287,12 +327,19 @@ struct EditProfileView: View {
                     .tracking(0.8)
 
                 HStack(spacing: 8) {
+                    // GPS-only, matching RN (`editable={false}`): the value is filled
+                    // exclusively by tapping the locate pin, never free-typed.
                     TextField(l10n.t(.editProfileLocationPlaceholder), text: $location)
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(Theme.ink(for: colorScheme))
-                        .disabled(locationStatus == .locating)
+                        .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                        .disabled(true)
                     locateButton
                 }
+
+                Text(l10n.t(.editProfileAutoLocate))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                    .padding(.top, 2)
             }
         }
         .padding(.horizontal, 16)
@@ -381,8 +428,26 @@ struct EditProfileView: View {
             saveError = l10n.t(.editProfileSave) + " failed: Not signed in."
             return
         }
+        let handleChanged = handle != originalHandle
+
+        // Validate the handle format before touching the network (RN parity).
+        if handleChanged,
+           handle.range(of: "^[a-z0-9_]{3,20}$", options: .regularExpression) == nil {
+            handleError = l10n.t(.editProfileHandleInvalid)
+            return
+        }
+
         isSaving = true
         defer { isSaving = false }
+
+        // Reject a taken handle up front for a clean message (the DB also guards).
+        if handleChanged {
+            let available = await data.isHandleAvailable(handle: handle, userId: uid)
+            if !available {
+                handleError = l10n.t(.editProfileHandleTaken)
+                return
+            }
+        }
 
         var avatarUrl: String? = data.profile?.avatarUrl
 
@@ -407,7 +472,14 @@ struct EditProfileView: View {
                 avatarUrl: avatarUrl
             )
         } catch {
-            saveError = error.localizedDescription
+            // A unique-handle violation slips past the pre-check (race) — surface it
+            // inline on the Handle field, matching RN's HANDLE_TAKEN mapping.
+            let desc = error.localizedDescription.lowercased()
+            if handleChanged, desc.contains("handle") || desc.contains("duplicate") || desc.contains("unique") {
+                handleError = l10n.t(.editProfileHandleTaken)
+            } else {
+                saveError = error.localizedDescription
+            }
             return
         }
 
@@ -420,6 +492,7 @@ struct EditProfileView: View {
         originalLocation = location
         originalHandle = handle
         photoHasChanged = false
+        handleError = nil
 
         // Step 5: Show success + dismiss
         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
