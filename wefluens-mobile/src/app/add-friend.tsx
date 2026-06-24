@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, Vibration, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -30,8 +30,27 @@ export default function AddFriend() {
   const [overrides, setOverrides] = useState<Record<string, Relationship>>({});
   const [acting, setActing] = useState<Set<string>>(new Set());
 
+  // Non-blocking in-app toast (mirrors Swift's springy capsule that auto-dismisses).
+  const [toast, setToast] = useState<string | null>(null);
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reqIdRef = useRef(0);
+
+  const showToast = useCallback((message: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(message);
+    Animated.spring(toastAnim, { toValue: 1, useNativeDriver: true, friction: 8, tension: 80 }).start();
+    toastTimer.current = setTimeout(() => {
+      Animated.timing(toastAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => setToast(null));
+    }, 2600);
+  }, [toastAnim]);
+
+  // expo-haptics may not be installed — use the built-in RN Vibration API for tactile success feedback.
+  const successHaptic = useCallback(() => { Vibration.vibrate(20); }, []);
+
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
 
   const runSearch = useCallback(async (raw: string) => {
     const trimmed = raw.trim();
@@ -87,16 +106,19 @@ export default function AddFriend() {
       switch (status) {
         case 'sent':
           setOverride(user.id, 'request_sent');
-          Alert.alert(t('addFriendSent'));
+          successHaptic();
+          showToast(t('addFriendSent'));
           break;
         case 'already_sent':
           setOverride(user.id, 'request_sent');
           break;
         case 'already_friends':
           setOverride(user.id, 'friends');
+          showToast(t('addFriendAlreadyFriends'));
           break;
         case 'incoming_exists':
           setOverride(user.id, 'request_received');
+          showToast(t('addFriendIncoming'));
           break;
         default:
           setOverride(user.id, 'request_sent');
@@ -104,7 +126,29 @@ export default function AddFriend() {
       }
       await refreshContacts().catch(() => {});
     } catch {
-      Alert.alert(t('addFriendError'));
+      showToast(t('addFriendError'));
+    } finally {
+      setActing((prev) => {
+        const next = new Set(prev);
+        next.delete(user.id);
+        return next;
+      });
+    }
+  }
+
+  async function acceptIncoming(user: SearchUserResult) {
+    if (!user.incoming_request_id || acting.has(user.id)) return;
+    setActing((prev) => new Set(prev).add(user.id));
+    try {
+      const status = await api.respondFriendRequest(user.incoming_request_id, true);
+      if (status === 'accepted') {
+        setOverride(user.id, 'friends');
+        successHaptic();
+        showToast(t('friendRequestAdded'));
+      }
+      await refreshContacts().catch(() => {});
+    } catch {
+      showToast(t('addFriendError'));
     } finally {
       setActing((prev) => {
         const next = new Set(prev);
@@ -139,7 +183,10 @@ export default function AddFriend() {
     if (rel === 'request_sent') {
       return <Pill text={t('addFriendRequested')} icon="time-outline" filled={false} disabled />;
     }
-    // 'request_received' and 'none' both offer the Add action (mirrors send_friend_request handling).
+    // Incoming request → offer Accept (mirrors top-talent.tsx); otherwise offer Add.
+    if (rel === 'request_received' && user.incoming_request_id) {
+      return <Pill text={t('friendRequestAccept')} icon="checkmark" filled onPress={() => acceptIncoming(user)} />;
+    }
     return (
       <Pill text={t('addFriendAdd')} icon="person-add" filled onPress={() => addFriend(user)} />
     );
@@ -221,6 +268,23 @@ export default function AddFriend() {
           </ScrollView>
         )}
       </View>
+
+      {toast !== null && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.toastWrap,
+            {
+              opacity: toastAnim,
+              transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }],
+            },
+          ]}
+        >
+          <View style={styles.toast}>
+            <Text style={styles.toastText}>{toast}</Text>
+          </View>
+        </Animated.View>
+      )}
     </SafeAreaView>
   );
 }
@@ -301,4 +365,23 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   pillText: { fontSize: 13, fontWeight: '600' },
+  toastWrap: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+    bottom: 30,
+    alignItems: 'center',
+  },
+  toast: {
+    backgroundColor: '#1C141A',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: radius.pill,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  toastText: { color: '#fff', fontSize: 14, fontWeight: '600', textAlign: 'center' },
 });

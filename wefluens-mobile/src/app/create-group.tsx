@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
-  Alert, FlatList, Pressable, StyleSheet, Text, View,
+  Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -11,7 +11,7 @@ import { Avatar, EmptyState, Field, GradientButton, NavBar } from '@/components/
 import { useAppData } from '@/context/AppDataContext';
 import * as api from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { gradients, useTheme } from '@/lib/theme';
+import { gradients, radius, useTheme } from '@/lib/theme';
 import type { Contact } from '@/lib/types';
 
 export default function CreateGroup() {
@@ -76,7 +76,14 @@ export default function CreateGroup() {
   }
 
   const selectedCount = selectedIds.size;
-  const subtitle = selectedCount > 0 ? `${selectedCount} ${t('createGroupSelected')}` : undefined;
+  const subtitle =
+    selectedCount > 0 ? `${selectedCount} ${t('createGroupSelected')}` : t('createGroupSelect');
+
+  // Selected friends, kept in the contacts' stable order, for the chips bar + auto-name.
+  const selectedContacts = useMemo<Contact[]>(
+    () => contacts.filter((c2) => selectedIds.has(c2.id)),
+    [contacts, selectedIds],
+  );
 
   function renderRow({ item, index }: { item: Contact; index: number }) {
     const isSelected = selectedIds.has(item.id);
@@ -126,8 +133,38 @@ export default function CreateGroup() {
     <SafeAreaView style={{ flex: 1, backgroundColor: c.paper }} edges={['top']}>
       <NavBar title={t('createGroupTitle')} subtitle={subtitle} onBack={() => router.back()} />
 
+      {selectedContacts.length > 0 ? (
+        <View style={[styles.selectedBar, { backgroundColor: c.coral + (c.scheme === 'dark' ? '1F' : '0F') }]}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <View style={styles.chipsRow}>
+              {selectedContacts.map((item) => (
+                <Pressable
+                  key={item.id}
+                  onPress={() => toggle(item.id)}
+                  style={({ pressed }) => [
+                    styles.chip,
+                    { backgroundColor: c.card, borderColor: c.hairline },
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  <Avatar colors={item.avatarColors} name={item.name} imageUrl={item.avatarUrl} size={28} />
+                  <Text style={[styles.chipName, { color: c.ink }]} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Ionicons name="close-circle" size={16} color={c.inkTertiary} />
+                </Pressable>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+      ) : null}
+
       {contacts.length === 0 ? (
-        <EmptyState icon="people-outline" title={t('createGroupNoFriends')} />
+        <EmptyState
+          icon="people-outline"
+          title={t('createGroupNoFriends')}
+          subtitle={t('createGroupNoFriendsHint')}
+        />
       ) : (
         <>
           <FlatList
@@ -184,6 +221,14 @@ export default function CreateGroup() {
 }
 
 const styles = StyleSheet.create({
+  selectedBar: { paddingVertical: 12 },
+  chipsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16 },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingLeft: 6, paddingRight: 8, paddingVertical: 6,
+    borderRadius: radius.pill, borderWidth: 1, maxWidth: 180,
+  },
+  chipName: { fontSize: 12, fontWeight: '500', flexShrink: 1 },
   header: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   nameIcon: {

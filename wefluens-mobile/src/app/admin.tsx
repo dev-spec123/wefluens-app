@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -57,6 +58,17 @@ export default function Admin() {
   }, [load]);
 
   async function doBan(user: AdminUser, ban: boolean) {
+    const who = `${user.name} (${user.email})`;
+    const ok = await confirmAsync(
+      ban ? t('adminBan') : t('adminUnban'),
+      `${who} ${ban ? t('adminBanConfirm') : t('adminUnbanConfirm')}`,
+      {
+        confirmLabel: ban ? t('adminBan') : t('adminUnban'),
+        cancelLabel: t('authCancel'),
+        destructive: ban,
+      },
+    );
+    if (!ok) return;
     try {
       await api.adminBanUser(user.id, ban);
       await load();
@@ -177,7 +189,11 @@ export default function Admin() {
       <Modal visible={showInvite} transparent animationType="fade" onRequestClose={() => setShowInvite(false)}>
         <Pressable style={styles.scrim} onPress={() => setShowInvite(false)}>
           <Pressable style={[styles.modalCard, { backgroundColor: c.card }]} onPress={() => {}}>
-            <Text style={[styles.modalTitle, { color: c.ink }]}>{t('adminInvite')}</Text>
+            <View style={[styles.inviteIcon, { backgroundColor: c.coral + '26' }]}>
+              <Ionicons name="paper-plane" size={30} color={c.coral} />
+            </View>
+            <Text style={[styles.modalTitle, { color: c.ink }]}>{t('adminInviteTitle')}</Text>
+            <Text style={[styles.modalSubtitle, { color: c.inkSecondary }]}>{t('adminInviteSubtitle')}</Text>
             <TextInput
               value={inviteEmail}
               onChangeText={setInviteEmail}
@@ -193,7 +209,7 @@ export default function Admin() {
               onPress={doInvite}
               loading={inviting}
               disabled={!inviteEmail.trim()}
-              style={{ marginTop: 12 }}
+              style={{ marginTop: 12, alignSelf: 'stretch' }}
             />
           </Pressable>
         </Pressable>
@@ -211,7 +227,9 @@ const styles = StyleSheet.create({
   inviteBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.sm },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.sm },
   scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  modalCard: { width: '100%', borderRadius: radius.lg, padding: 20 },
-  modalTitle: { fontSize: 17, fontWeight: '700', marginBottom: 14 },
-  modalInput: { borderWidth: 1, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
+  modalCard: { width: '100%', borderRadius: radius.lg, padding: 20, alignItems: 'center' },
+  inviteIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  modalTitle: { fontSize: 20, fontWeight: '700', textAlign: 'center' },
+  modalSubtitle: { fontSize: 13, textAlign: 'center', marginTop: 6, marginBottom: 16, paddingHorizontal: 8, lineHeight: 18 },
+  modalInput: { alignSelf: 'stretch', borderWidth: 1, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
 });

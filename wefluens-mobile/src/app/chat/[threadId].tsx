@@ -17,7 +17,7 @@ import { ImageViewer } from '@/components/ImageViewer';
 import { VideoViewer } from '@/components/VideoViewer';
 import { FileBubble } from '@/components/FileBubble';
 import { AudioBubble, VoiceRecordButton } from '@/components/Voice';
-import { NavBar, RoundIconButton } from '@/components/ui';
+import { Avatar, NavBar, RoundIconButton } from '@/components/ui';
 import { useAppData } from '@/context/AppDataContext';
 import { useAuth } from '@/context/AuthContext';
 import * as api from '@/lib/api';
@@ -27,7 +27,7 @@ import { useI18n } from '@/lib/i18n';
 import { getCachedMessages, getMemCachedMessages, setCachedMessages } from '@/lib/messageCache';
 import { recallErrorKey, withinRecallWindow } from '@/lib/recall';
 import { supabase } from '@/lib/supabase';
-import { gradients, radius, useTheme } from '@/lib/theme';
+import { avatarGradient, gradients, radius, useTheme } from '@/lib/theme';
 import type { ChatMessage } from '@/lib/types';
 
 export default function ChatDetail() {
@@ -127,6 +127,28 @@ export default function ChatDetail() {
     messages.forEach((msg, i) => m.set(msg.id, i));
     return m;
   }, [messages]);
+
+  // The other participant (when we're friends) — drives the header avatar +
+  // live presence dot/status, mirroring Swift's route.isOnline-based header.
+  const otherContact = useMemo(
+    () => contacts.find((ct) => ct.id === otherUserId) ?? null,
+    [contacts, otherUserId],
+  );
+  const isOnline = otherContact?.isOnline ?? false;
+
+  function openProfile() {
+    router.push({
+      pathname: '/contact/[id]',
+      params: {
+        id: otherUserId,
+        name: otherContact?.name ?? title,
+        handle: otherContact?.handle ?? '',
+        role: otherContact?.role ?? '',
+        followers: otherContact?.followers ?? '0',
+        avatarUrl: otherContact?.avatarUrl ?? params.avatarUrl ?? '',
+      },
+    });
+  }
 
   const jumpToMessage = useCallback((id: string) => {
     const idx = indexById.get(id);
@@ -241,6 +263,12 @@ export default function ChatDetail() {
     const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
     if (result.canceled || !result.assets?.length) return;
     const asset = result.assets[0];
+    // Enforce the same 25 MB cap as the Swift app, with a real error (never silent).
+    const MAX_FILE_BYTES = 25 * 1024 * 1024;
+    if ((asset.size ?? 0) > MAX_FILE_BYTES) {
+      notify(t('chatFileTooLarge'));
+      return;
+    }
     setSendingImage(true);
     try {
       await api.sendFileMessage(
@@ -410,26 +438,36 @@ export default function ChatDetail() {
           backIcon="close"
         />
       ) : (
-        <NavBar
-          title={title}
-          subtitle={t('chatDetailOffline')}
-          onBack={() => router.back()}
-          onTitlePress={() => {
-            const ct = contacts.find((c) => c.id === otherUserId);
-            router.push({
-              pathname: '/contact/[id]',
-              params: {
-                id: otherUserId,
-                name: ct?.name ?? title,
-                handle: ct?.handle ?? '',
-                role: ct?.role ?? '',
-                followers: ct?.followers ?? '0',
-                avatarUrl: ct?.avatarUrl ?? params.avatarUrl ?? '',
-              },
-            });
-          }}
-          right={<RoundIconButton icon="ellipsis-horizontal" onPress={openMenu} />}
-        />
+        <View style={styles.header}>
+          <Pressable
+            onPress={() => router.back()}
+            style={[styles.headerBackBtn, { backgroundColor: c.card, borderColor: c.hairline }]}
+          >
+            <Ionicons name="chevron-back" size={20} color={c.ink} />
+          </Pressable>
+
+          {/* Avatar + name + live presence — tap to open the other user's profile. */}
+          <Pressable onPress={openProfile} style={styles.headerIdentity} hitSlop={6}>
+            <Avatar
+              colors={otherContact?.avatarColors ?? avatarGradient(otherUserId)}
+              name={otherContact?.name ?? title}
+              imageUrl={otherContact?.avatarUrl ?? params.avatarUrl ?? null}
+              size={40}
+              online={isOnline}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.headerName, { color: c.ink }]} numberOfLines={1}>{title}</Text>
+              <Text
+                style={[styles.headerStatus, { color: isOnline ? '#2AD17E' : c.inkSecondary }]}
+                numberOfLines={1}
+              >
+                {isOnline ? t('chatDetailActiveNow') : t('chatDetailOffline')}
+              </Text>
+            </View>
+          </Pressable>
+
+          <RoundIconButton icon="ellipsis-horizontal" onPress={openMenu} />
+        </View>
       )}
 
       <KeyboardAvoidingView
@@ -681,16 +719,28 @@ function MessageBubble({
       ) : null}
 
       <View style={{ flex: 1, alignItems: isMe ? 'flex-end' : 'flex-start' }}>
-        {/* Quoted reply preview (tap to jump) */}
+        {/* Quoted reply preview (tap to jump) — gradient accent bar, sender name on
+            its own line, quoted text below, on a subtle panel (mirrors Swift). */}
         {repliedTo ? (
           <Pressable
             onPress={onJumpToReply}
             disabled={selectMode}
-            style={[styles.quote, { backgroundColor: c.cardSubtle, borderColor: c.hairline }]}
+            style={[
+              styles.quote,
+              { backgroundColor: isMe ? c.tangerine + '29' : c.cardSubtle, alignItems: isMe ? 'flex-end' : 'flex-start' },
+            ]}
           >
-            <Text style={{ color: c.inkTertiary, fontSize: 11.5 }} numberOfLines={1}>
-              {repliedTo.sender === 'me' ? t('chatYou') : otherName}: {repliedExcerpt(repliedTo)}
-            </Text>
+            <View style={styles.quoteRow}>
+              <View style={[styles.quoteAccent, { backgroundColor: c.coral }]} />
+              <View style={{ flexShrink: 1 }}>
+                <Text style={{ color: c.inkSecondary, fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
+                  {repliedTo.sender === 'me' ? t('chatYou') : otherName}
+                </Text>
+                <Text style={{ color: c.ink, fontSize: 13, marginTop: 1 }} numberOfLines={1}>
+                  {repliedExcerpt(repliedTo)}
+                </Text>
+              </View>
+            </View>
           </Pressable>
         ) : null}
 
@@ -849,6 +899,14 @@ function VideoBubble() {
 }
 
 const styles = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12, gap: 12 },
+  headerBackBtn: {
+    width: 40, height: 40, borderRadius: 20, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  headerIdentity: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerName: { fontSize: 16, fontWeight: '600' },
+  headerStatus: { fontSize: 12, fontWeight: '500', marginTop: 1 },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 60 },
   row: { flexDirection: 'row', width: '100%' },
   checkCircle: {
@@ -856,8 +914,10 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   quote: {
-    maxWidth: '82%', borderRadius: 10, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 4,
+    maxWidth: '82%', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 7, marginBottom: 4,
   },
+  quoteRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
+  quoteAccent: { width: 4, borderRadius: 2, alignSelf: 'stretch' },
   mineWrap: { borderRadius: 20, overflow: 'hidden' },
   theirsWrap: { borderRadius: 20, overflow: 'hidden' },
   bubble: { paddingHorizontal: 14, paddingVertical: 10 },
