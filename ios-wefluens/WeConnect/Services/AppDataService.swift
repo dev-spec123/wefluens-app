@@ -791,6 +791,45 @@ final class AppDataService {
             .execute()
     }
 
+    /// Loads campaigns straight from the DB with NO SampleData fallback — the admin
+    /// view must only show real, editable rows (the public Discover read keeps its
+    /// SampleData fallback; this curation read does not). Mirrors loadBrandsForAdmin.
+    @MainActor
+    func loadCampaignsForAdmin() async throws -> [Campaign] {
+        let rows: [CampaignRow] = try await supabase
+            .from("campaigns").select().order("created_at", ascending: false).execute().value
+        return rows.map { row in
+            Campaign(id: row.id, title: row.title, brand: row.brand, budget: row.budget ?? "",
+                     tags: row.tags ?? [], deadline: row.deadline ?? "", symbol: row.symbol ?? "sparkles",
+                     colors: parseColors(row.colors), spotsLeft: row.spotsLeft ?? 0)
+        }
+    }
+
+    /// Create (id nil) or update a campaign. Returns the campaign id. Colors are sent
+    /// as two decimal-UInt strings (color_a / color_b); the SQL combines them into the
+    /// JSON `[a,b]` text the row decoder / parseColors expects. Mirrors adminUpsertBrand.
+    @MainActor
+    @discardableResult
+    func adminUpsertCampaign(id: UUID?, title: String, brand: String?, budget: String?,
+                             tags: [String]?, deadline: String?, symbol: String?,
+                             colorA: String?, colorB: String?, spotsLeft: Int?) async throws -> UUID {
+        let newId: UUID = try await supabase
+            .rpc("admin_upsert_campaign", params: UpsertCampaignParams(
+                campaign_id: id?.uuidString, p_title: title, p_brand: brand, p_budget: budget,
+                p_tags: tags, p_deadline: deadline, p_symbol: symbol,
+                p_color_a: colorA, p_color_b: colorB, p_spots_left: spotsLeft))
+            .execute()
+            .value
+        return newId
+    }
+
+    @MainActor
+    func adminDeleteCampaign(id: UUID) async throws {
+        try await supabase
+            .rpc("admin_delete_campaign", params: DeleteCampaignParams(target: id.uuidString))
+            .execute()
+    }
+
     /// Sends a friend request (pure DB, no email). Returns the server status:
     /// "sent", "already_sent", "already_friends", or "incoming_exists".
     @MainActor
