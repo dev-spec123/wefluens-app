@@ -695,6 +695,21 @@ final class AppDataService {
 
     // MARK: - Admin curation (every RPC is is_admin-gated server-side)
 
+    /// Loads brands straight from the DB with NO SampleData fallback — the admin
+    /// view must only show real, editable rows (featuring a sample brand that
+    /// isn't in the table is a no-op).
+    @MainActor
+    func loadBrandsForAdmin() async throws -> [Brand] {
+        let rows: [BrandRow] = try await supabase
+            .from("brands").select().order("name", ascending: true).execute().value
+        return rows.map { row in
+            Brand(id: row.id, name: row.name, category: row.category ?? "",
+                  tagline: row.tagline ?? "", symbol: row.symbol ?? "sparkles",
+                  colors: parseColors(row.colors), activeCampaigns: row.activeCampaigns ?? 0,
+                  featuredRank: row.featuredRank)
+        }
+    }
+
     /// Lists currently-featured creators (with rank) for the curation screen.
     @MainActor
     func adminListFeaturedTalent() async throws -> [FeaturedTalentRow] {

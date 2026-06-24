@@ -16,6 +16,7 @@ struct CurateTalentView: View {
     @State private var featured: [FeaturedTalentRow] = []
     @State private var isLoading = true
     @State private var busy = false
+    @State private var errorText: String?
 
     @State private var query = ""
     @State private var results: [SearchUserResult] = []
@@ -26,6 +27,15 @@ struct CurateTalentView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
+                if let errorText {
+                    Text(errorText)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.red.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
                 featuredSection
                 searchSection
             }
@@ -196,8 +206,8 @@ struct CurateTalentView: View {
 
     @MainActor
     private func loadFeatured() async {
-        do { featured = try await data.adminListFeaturedTalent() }
-        catch { print("⚠️ load featured talent failed: \(error)") }
+        do { featured = try await data.adminListFeaturedTalent(); errorText = nil }
+        catch { errorText = "Couldn't load featured: \(error.localizedDescription)" }
         isLoading = false
     }
 
@@ -210,7 +220,7 @@ struct CurateTalentView: View {
             do {
                 try await data.adminSetFeaturedTalent(userId: user.id, rank: nextRank)
                 await loadFeatured()
-            } catch { print("⚠️ feature failed: \(error)") }
+            } catch { errorText = "Couldn't feature: \(error.localizedDescription)" }
         }
     }
 
@@ -222,7 +232,7 @@ struct CurateTalentView: View {
             do {
                 try await data.adminSetFeaturedTalent(userId: person.id, rank: nil)
                 await loadFeatured()
-            } catch { print("⚠️ unfeature failed: \(error)") }
+            } catch { errorText = "Couldn't unfeature: \(error.localizedDescription)" }
         }
     }
 
@@ -238,7 +248,7 @@ struct CurateTalentView: View {
                 try await data.adminSetFeaturedTalent(userId: a.id, rank: b.featuredRank)
                 try await data.adminSetFeaturedTalent(userId: b.id, rank: a.featuredRank)
                 await loadFeatured()
-            } catch { print("⚠️ reorder failed: \(error)") }
+            } catch { errorText = "Couldn't reorder: \(error.localizedDescription)" }
         }
     }
 

@@ -17,8 +17,10 @@ struct ManageBrandsView: View {
     @State private var busy = false
     @State private var editing: Brand? = nil
     @State private var creatingNew = false
+    @State private var brandList: [Brand] = []
+    @State private var errorText: String?
 
-    private var brands: [Brand] { data.brands }
+    private var brands: [Brand] { brandList }
     private var featured: [Brand] {
         brands.filter { $0.featuredRank != nil }
             .sorted { ($0.featuredRank ?? 0) < ($1.featuredRank ?? 0) }
@@ -42,8 +44,29 @@ struct ManageBrandsView: View {
                 }
                 .buttonStyle(.plain)
 
+                if let errorText {
+                    Text(errorText)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.red.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+
                 if isLoading {
                     ProgressView().tint(Theme.coral).frame(maxWidth: .infinity).padding(.vertical, 20)
+                } else if brandList.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "building.2")
+                            .font(.system(size: 30, weight: .semibold))
+                            .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                        Text("No brands yet. Tap New Brand to create one.")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity).padding(.vertical, 30)
                 } else {
                     if !featured.isEmpty {
                         group("FEATURED (Top Brands, in order)") {
@@ -137,7 +160,8 @@ struct ManageBrandsView: View {
     // MARK: - Actions
 
     @MainActor private func reload() async {
-        await data.loadDiscover()
+        do { brandList = try await data.loadBrandsForAdmin(); errorText = nil }
+        catch { errorText = "Couldn't load brands: \(error.localizedDescription)" }
         isLoading = false
     }
 
@@ -147,7 +171,7 @@ struct ManageBrandsView: View {
         Task {
             defer { busy = false }
             do { try await data.adminSetFeaturedBrand(brandId: brand.id, rank: rank); await reload() }
-            catch { print("⚠️ set featured brand failed: \(error)") }
+            catch { errorText = "Couldn't update brand: \(error.localizedDescription)" }
         }
     }
 
@@ -163,7 +187,7 @@ struct ManageBrandsView: View {
                 try await data.adminSetFeaturedBrand(brandId: a.id, rank: b.featuredRank)
                 try await data.adminSetFeaturedBrand(brandId: b.id, rank: a.featuredRank)
                 await reload()
-            } catch { print("⚠️ reorder brand failed: \(error)") }
+            } catch { errorText = "Couldn't reorder: \(error.localizedDescription)" }
         }
     }
 }
@@ -186,6 +210,7 @@ struct BrandEditView: View {
     @State private var color2 = "FF9A5A"
     @State private var activeCampaigns = ""
     @State private var busy = false
+    @State private var errorText: String?
 
     private var isEditing: Bool { brand != nil }
     private var canSave: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty && !busy }
@@ -204,6 +229,12 @@ struct BrandEditView: View {
                     }
                     field("Active campaigns (number)", $activeCampaigns)
                     preview
+
+                    if let errorText {
+                        Text(errorText)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.red)
+                    }
 
                     if isEditing {
                         Button(role: .destructive) { delete() } label: {
@@ -298,7 +329,7 @@ struct BrandEditView: View {
                 )
                 await onDone()
                 dismiss()
-            } catch { print("⚠️ save brand failed: \(error)") }
+            } catch { errorText = "Couldn't save: \(error.localizedDescription)" }
         }
     }
 
@@ -308,7 +339,7 @@ struct BrandEditView: View {
         Task {
             defer { busy = false }
             do { try await data.adminDeleteBrand(id: brand.id); await onDone(); dismiss() }
-            catch { print("⚠️ delete brand failed: \(error)") }
+            catch { errorText = "Couldn't delete: \(error.localizedDescription)" }
         }
     }
 }
