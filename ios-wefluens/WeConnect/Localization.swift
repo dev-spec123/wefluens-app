@@ -40,6 +40,18 @@ enum L10n: String {
 
     // Chats
     case chatsTitle, chatsUnread, chatsCaughtUp, chatsSearch, chatsPinned, chatsMessages, chatsEmpty
+    // Rule A parity additions (RN → Swift)
+    case editProfileHandleHint, editProfileHandleInvalid, editProfileHandleTaken
+    case qrInvalid, qrSelf, qrPermission, qrPermissionGrant
+    case discoverNoBrands, discoverNoCampaigns
+    case mentionAll
+    case chatReplyJumpMissing, chatDeleteConfirm, chatDeleteSelectedConfirm, chatFriendRemoved
+    case chatImageExpired, chatCopied, chatDeleteConversationWarn
+    case contactsEmptyTitle, contactsEmptySubtitle, contactsNoMatches, contactsRemarkPlaceholder
+    case campaignCancelApplication, campaignCancelConfirm
+    case legalPrivacy
+    case supportIntro, supportSubjectPlaceholder, supportMessagePlaceholder
+    case changePwSuccess
     case chatsNewGroup
 
     // Conversation context menu (pin / mute / delete)
@@ -212,6 +224,27 @@ final class LocalizationManager {
         .english: [
             .tabChats: "Chats", .tabContacts: "Contacts", .tabDiscover: "Discover", .tabMe: "Me",
             .chatsTitle: "Chats", .chatsUnread: "unread messages", .chatsCaughtUp: "You're all caught up",
+            .editProfileHandleHint: "3-20 characters: lowercase letters, numbers, and underscores.",
+            .editProfileHandleInvalid: "Handle must be 3-20 characters: a-z, 0-9, or _.",
+            .editProfileHandleTaken: "That handle is already taken.",
+            .qrInvalid: "Not a Wefluens QR code", .qrSelf: "That's your own code",
+            .qrPermission: "Camera access is needed to scan QR codes.", .qrPermissionGrant: "Allow Camera",
+            .discoverNoBrands: "No brands yet", .discoverNoCampaigns: "No open campaigns",
+            .mentionAll: "Everyone",
+            .chatReplyJumpMissing: "Original message is no longer available",
+            .chatDeleteConfirm: "Delete this message? It will be removed only for you.",
+            .chatDeleteSelectedConfirm: "Delete the selected messages? They will be removed only for you.",
+            .chatFriendRemoved: "You're no longer friends — they may have removed you.",
+            .chatImageExpired: "Image expired", .chatCopied: "Copied",
+            .chatDeleteConversationWarn: "This permanently deletes the entire chat history and cannot be recovered.",
+            .contactsEmptyTitle: "No contacts yet", .contactsEmptySubtitle: "Add friends to start connecting.",
+            .contactsNoMatches: "No contacts found", .contactsRemarkPlaceholder: "Add a remark",
+            .campaignCancelApplication: "Cancel application",
+            .campaignCancelConfirm: "Withdraw your application to this campaign?",
+            .legalPrivacy: "Privacy Policy",
+            .supportIntro: "Tell us what went wrong or what you need help with — we read every message.",
+            .supportSubjectPlaceholder: "Brief summary", .supportMessagePlaceholder: "Describe your issue or question…",
+            .changePwSuccess: "Password changed.",
             .chatsSearch: "Search conversations", .chatsPinned: "Pinned", .chatsMessages: "Messages",
             .chatsEmpty: "No conversations found", .chatsNewGroup: "New Group",
             .convPin: "Pin to top", .convUnpin: "Unpin", .convMute: "Mute",
@@ -471,6 +504,27 @@ final class LocalizationManager {
         .chinese: [
             .tabChats: "聊天", .tabContacts: "通讯录", .tabDiscover: "发现", .tabMe: "我",
             .chatsTitle: "聊天", .chatsUnread: "条未读消息", .chatsCaughtUp: "消息已全部读完",
+            .editProfileHandleHint: "3-20 个字符：小写字母、数字和下划线。",
+            .editProfileHandleInvalid: "用户名需为 3-20 个字符：a-z、0-9 或 _。",
+            .editProfileHandleTaken: "该用户名已被占用。",
+            .qrInvalid: "不是 Wefluens 二维码", .qrSelf: "这是你自己的二维码",
+            .qrPermission: "扫码需要相机权限。", .qrPermissionGrant: "允许使用相机",
+            .discoverNoBrands: "暂无品牌", .discoverNoCampaigns: "暂无开放活动",
+            .mentionAll: "全体成员",
+            .chatReplyJumpMissing: "原消息已不可用",
+            .chatDeleteConfirm: "删除这条消息？仅对你移除。",
+            .chatDeleteSelectedConfirm: "删除选中的消息？仅对你移除。",
+            .chatFriendRemoved: "你们已不是好友 —— 对方可能已将你删除。",
+            .chatImageExpired: "图片已过期", .chatCopied: "已复制",
+            .chatDeleteConversationWarn: "这样会删除全部聊天记录，无法找回。",
+            .contactsEmptyTitle: "还没有联系人", .contactsEmptySubtitle: "添加好友开始建立联系。",
+            .contactsNoMatches: "未找到联系人", .contactsRemarkPlaceholder: "添加备注",
+            .campaignCancelApplication: "取消申请",
+            .campaignCancelConfirm: "撤回对该活动的申请？",
+            .legalPrivacy: "隐私政策",
+            .supportIntro: "告诉我们遇到的问题或需要的帮助——每条消息我们都会看。",
+            .supportSubjectPlaceholder: "简要概括", .supportMessagePlaceholder: "描述你的问题或疑问……",
+            .changePwSuccess: "密码已修改。",
             .chatsSearch: "搜索聊天", .chatsPinned: "置顶", .chatsMessages: "消息",
             .chatsEmpty: "未找到聊天", .chatsNewGroup: "发起群聊",
             .convPin: "置顶", .convUnpin: "取消置顶", .convMute: "消息免打扰",
@@ -730,6 +784,27 @@ final class LocalizationManager {
         .spanish: [
             .tabChats: "Chats", .tabContacts: "Contactos", .tabDiscover: "Descubrir", .tabMe: "Yo",
             .chatsTitle: "Chats", .chatsUnread: "mensajes sin leer", .chatsCaughtUp: "Estás al día",
+            .editProfileHandleHint: "3-20 caracteres: minúsculas, números y guiones bajos.",
+            .editProfileHandleInvalid: "El identificador debe tener 3-20 caracteres: a-z, 0-9 o _.",
+            .editProfileHandleTaken: "Ese identificador ya está en uso.",
+            .qrInvalid: "No es un código Wefluens", .qrSelf: "Ese es tu propio código",
+            .qrPermission: "Se necesita la cámara para escanear códigos QR.", .qrPermissionGrant: "Permitir cámara",
+            .discoverNoBrands: "Aún no hay marcas", .discoverNoCampaigns: "No hay campañas abiertas",
+            .mentionAll: "Todos",
+            .chatReplyJumpMissing: "El mensaje original ya no está disponible",
+            .chatDeleteConfirm: "¿Eliminar este mensaje? Solo se quitará para ti.",
+            .chatDeleteSelectedConfirm: "¿Eliminar los mensajes seleccionados? Solo se quitarán para ti.",
+            .chatFriendRemoved: "Ya no son amigos — es posible que te haya eliminado.",
+            .chatImageExpired: "Imagen caducada", .chatCopied: "Copiado",
+            .chatDeleteConversationWarn: "Esto elimina permanentemente todo el historial del chat y no se puede recuperar.",
+            .contactsEmptyTitle: "Aún no hay contactos", .contactsEmptySubtitle: "Agrega amigos para empezar a conectar.",
+            .contactsNoMatches: "No se encontraron contactos", .contactsRemarkPlaceholder: "Añadir nota",
+            .campaignCancelApplication: "Cancelar solicitud",
+            .campaignCancelConfirm: "¿Retirar tu solicitud a esta campaña?",
+            .legalPrivacy: "Política de Privacidad",
+            .supportIntro: "Cuéntanos qué salió mal o en qué necesitas ayuda — leemos cada mensaje.",
+            .supportSubjectPlaceholder: "Resumen breve", .supportMessagePlaceholder: "Describe tu problema o pregunta…",
+            .changePwSuccess: "Contraseña cambiada.",
             .chatsSearch: "Buscar conversaciones", .chatsPinned: "Fijados", .chatsMessages: "Mensajes",
             .chatsEmpty: "No se encontraron conversaciones", .chatsNewGroup: "Nuevo Grupo",
             .convPin: "Fijar arriba", .convUnpin: "Quitar fijado", .convMute: "Silenciar",

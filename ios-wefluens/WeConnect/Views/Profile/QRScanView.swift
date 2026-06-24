@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UIKit
 import AVFoundation
 import Supabase
 
@@ -23,6 +24,15 @@ struct QRScanView: View {
     @State private var requestStatus: RequestStatus = .idle
     @State private var errorMessage: String?
 
+    // Camera authorization. `.notDetermined` until we ask; mirrors the RN
+    // permission gate (a denied state shows a recovery screen, not a label).
+    @State private var cameraAuthorization = AVCaptureDevice.authorizationStatus(for: .video)
+
+    // Lightweight toast feedback for invalid/self scans and request statuses
+    // (the RN app uses `notify(...)` toasts for these).
+    @State private var toast: String?
+    @State private var toastTask: Task<Void, Never>?
+
     enum RequestStatus {
         case idle
         case sending
@@ -31,6 +41,49 @@ struct QRScanView: View {
     }
 
     var body: some View {
+        ZStack {
+            switch cameraAuthorization {
+            case .authorized:
+                scannerBody
+            case .denied, .restricted:
+                permissionDeniedBody
+            default:
+                // .notDetermined — request access, then re-evaluate.
+                Color.black.ignoresSafeArea()
+            }
+
+            // Toast feedback (invalid code, self-scan, request status).
+            if let toast {
+                VStack {
+                    Spacer()
+                    Text(toast)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(Color.black.opacity(0.85))
+                        .clipShape(Capsule())
+                        .shadow(color: .black.opacity(0.3), radius: 14, y: 6)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 60)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+        }
+        .background(Color.black.ignoresSafeArea())
+        .task {
+            // Prompt for camera access on first appearance when undetermined.
+            if cameraAuthorization == .notDetermined {
+                let granted = await AVCaptureDevice.requestAccess(for: .video)
+                cameraAuthorization = granted ? .authorized : .denied
+            }
+        }
+    }
+
+    // MARK: - Scanner
+
+    private var scannerBody: some View {
         ZStack {
             // Camera preview
             CameraPreview(isScanning: $isScanning, onCodeFound: handleScannedCode)
@@ -71,7 +124,61 @@ struct QRScanView: View {
                 resultOverlay
             }
         }
-        .background(Color.black.ignoresSafeArea())
+    }
+
+    // MARK: - Permission recovery
+
+    // Shown when camera access is denied/restricted. Mirrors the RN screen:
+    // an explanation plus an action button that deep-links to Settings so the
+    // user can re-grant access (iOS won't re-prompt once denied).
+    private var permissionDeniedBody: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 60)
+
+            Spacer()
+
+            VStack(spacing: 18) {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 40))
+                    .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+
+                Text(l10n.t(.qrPermission))
+                    .font(.system(size: 15))
+                    .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 36)
+
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    Text(l10n.t(.qrPermissionGrant))
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 14)
+                        .background(Theme.sunset)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                }
+            }
+
+            Spacer()
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.paper(for: colorScheme).ignoresSafeArea())
     }
 
     // MARK: - Scan frame
@@ -205,13 +312,23 @@ struct QRScanView: View {
     // MARK: - Logic
 
     private func handleScannedCode(_ code: String) {
-        // Expected format: wefluens://user/<uuid>
-        guard code.hasPrefix("wefluens://user/") else { return }
-        let uuidString = String(code.dropFirst("wefluens://user/".count))
-        guard let uid = UUID(uuidString: uuidString) else { return }
+        // A scan/result is already in flight — ignore further reads.
+        guard scannedUserId == nil else { return }
 
-        // Don't add yourself
-        if uid == auth.userId { return }
+        // Expected format: wefluens://user/<uuid> (or a bare uuid).
+        let prefix = "wefluens://user/"
+        let raw = code.hasPrefix(prefix) ? String(code.dropFirst(prefix.count)) : code
+        guard let uid = UUID(uuidString: raw.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            // Not a Wefluens code — tell the user instead of silently ignoring it.
+            showToast(l10n.t(.qrInvalid))
+            return
+        }
+
+        // Don't add yourself.
+        if uid == auth.userId {
+            showToast(l10n.t(.qrSelf))
+            return
+        }
 
         isScanning = false
         scannedUserId = uid
@@ -225,11 +342,32 @@ struct QRScanView: View {
         do {
             // Use the same RLS-safe RPC as AddFriendView and the RN app. A direct
             // insert into friend_requests is blocked by RLS — that was the bug.
-            _ = try await data.sendFriendRequest(to: targetId, message: l10n.t(.friendRequestMessage))
-            requestStatus = .sent
+            // The RPC succeeds with a status string; act on it rather than
+            // treating every non-throwing call as a fresh "sent".
+            let status = try await data.sendFriendRequest(to: targetId, message: l10n.t(.friendRequestMessage))
+            switch status {
+            case "already_friends":
+                showToast(l10n.t(.addFriendAlreadyFriends))
+                dismiss()
+            case "incoming_exists":
+                showToast(l10n.t(.addFriendIncoming))
+                dismiss()
+            default: // "sent" / "already_sent"
+                requestStatus = .sent
+            }
         } catch {
             requestStatus = .failed
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func showToast(_ message: String) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { toast = message }
+        toastTask?.cancel()
+        toastTask = Task {
+            try? await Task.sleep(for: .seconds(2.0))
+            if Task.isCancelled { return }
+            withAnimation(.easeOut(duration: 0.25)) { toast = nil }
         }
     }
 

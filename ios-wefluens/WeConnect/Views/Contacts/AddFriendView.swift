@@ -199,7 +199,7 @@ struct AddFriendView: View {
 
     private func resultRow(_ user: SearchUserResult) -> some View {
         HStack(spacing: 14) {
-            Avatar(colors: AppDataService.avatarPalette(for: user.id), initials: initials(user.name), size: 48)
+            Avatar(colors: AppDataService.avatarPalette(for: user.id), initials: initials(user.name), imageURL: user.avatarUrl, size: 48)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(user.name.isEmpty ? user.handle : user.name)

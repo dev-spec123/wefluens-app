@@ -98,6 +98,13 @@ struct ContactsView: View {
                             .cardStyle()
                         }
                     }
+
+                    // Empty state: when there are no contact rows to show and no
+                    // pending friend requests filling the screen. Mirrors the RN
+                    // ListEmptyComponent — search-no-results vs. no-contacts.
+                    if grouped.isEmpty && requests.isEmpty {
+                        emptyState
+                    }
                 }
                 .padding(.horizontal, 18)
                 .padding(.bottom, 24)
@@ -138,6 +145,36 @@ struct ContactsView: View {
     private var acceptedMessage: String {
         let names = data.friendAcceptedNames.joined(separator: ", ")
         return "\(names) \(l10n.t(.friendAcceptedMessage))"
+    }
+
+    // MARK: - Empty State
+
+    /// True when a non-blank search query is active (matches RN's `query.trim()`).
+    private var isSearchActive: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Shown when there are no contacts to display and no pending friend requests.
+    /// Mirrors RN's two-variant ListEmptyComponent: a search-no-results state
+    /// while searching, otherwise a "no contacts yet" state with a CTA subtitle.
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: isSearchActive ? "magnifyingglass" : "person.2")
+                .font(.system(size: 44))
+                .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+            Text(isSearchActive ? l10n.t(.contactsNoMatches) : l10n.t(.contactsEmptyTitle))
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Theme.ink(for: colorScheme))
+            if !isSearchActive {
+                Text(l10n.t(.contactsEmptySubtitle))
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 60)
     }
 
     // MARK: - Friend Requests Section

@@ -64,6 +64,10 @@ struct SettingsView: View {
             }
         } label: {
             HStack(spacing: 14) {
+                Image(systemName: appearanceIcon(for: mode))
+                    .font(.system(size: 20))
+                    .foregroundStyle(Theme.coral)
+                    .frame(width: 36)
                 Text(l10n.t(mode.labelKey))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Theme.ink(for: colorScheme))
@@ -79,6 +83,16 @@ struct SettingsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// Leading SF Symbol for each appearance option, mirroring the RN icons
+    /// (phone-portrait / sunny / moon).
+    private func appearanceIcon(for mode: ColorSchemeMode) -> String {
+        switch mode {
+        case .system: return "iphone"
+        case .light: return "sun.max.fill"
+        case .dark: return "moon.fill"
+        }
     }
 
     private var languageSection: some View {

@@ -13,11 +13,13 @@ import SwiftUI
 enum LegalDocKind {
     case terms
     case guidelines
+    case privacy
 
     var titleKey: L10n {
         switch self {
         case .terms: return .legalTerms
         case .guidelines: return .legalGuidelines
+        case .privacy: return .legalPrivacy
         }
     }
 }
@@ -82,7 +84,11 @@ struct LegalDocView: View {
     }
 
     private var sections: [LegalSection] {
-        kind == .terms ? Self.termsSections : Self.guidelinesSections
+        switch kind {
+        case .terms: return Self.termsSections
+        case .guidelines: return Self.guidelinesSections
+        case .privacy: return Self.privacySections
+        }
     }
 
     private static let lastUpdated = "Last updated: June 2026"
@@ -143,6 +149,39 @@ struct LegalDocView: View {
         LegalSection(
             heading: "Enforcement",
             body: "Content that violates these guidelines is removed, and users who violate them may be suspended or permanently removed from Wefluens Connect. Serious violations are reported to the appropriate authorities. To reach our safety team, email \(Self.supportEmail)."
+        ),
+    ]
+
+    // MARK: - Privacy Policy
+
+    private static let privacySections: [LegalSection] = [
+        LegalSection(
+            heading: "Information we collect",
+            body: "Your account (email), the profile you provide (name, handle, bio, location, avatar), and the content you send in the app (messages, images, voice, video). We also record basic usage and device information so the service runs reliably."
+        ),
+        LegalSection(
+            heading: "How we use it",
+            body: "Only to provide and maintain the service: signing you in, delivering your messages to recipients, showing your profile, and keeping the community safe through moderation. We do not sell your personal information."
+        ),
+        LegalSection(
+            heading: "Storage and security",
+            body: "Data is stored with our backend provider (Supabase). All traffic is encrypted in transit over HTTPS; chat images and videos are kept in private storage and accessed only through short-lived signed links."
+        ),
+        LegalSection(
+            heading: "Sharing",
+            body: "We do not sell your data. We share it only with service providers as needed to operate the app, or when required by law. Messages you send are shown to their intended recipients."
+        ),
+        LegalSection(
+            heading: "Retention and deletion",
+            body: "You can delete your account anytime from Profile → Privacy & Security, which removes your profile and associated data."
+        ),
+        LegalSection(
+            heading: "Children",
+            body: "The app is intended for users 17 and older. We do not knowingly collect information from minors."
+        ),
+        LegalSection(
+            heading: "Contact",
+            body: "For privacy questions, email \(Self.supportEmail)."
         ),
     ]
 }

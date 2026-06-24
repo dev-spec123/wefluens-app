@@ -23,6 +23,7 @@ struct ForcePasswordChangeView: View {
     @State private var isSaving = false
     @State private var errorText: String?
     @State private var keyboardHeight: CGFloat = 0
+    @State private var showSuccess = false
 
     private let initialPassword = "11111111"
 
@@ -134,6 +135,12 @@ struct ForcePasswordChangeView: View {
                 .padding(.bottom, 44)
             }
         }
+        .overlay(alignment: .top) {
+            if showSuccess {
+                successToast
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notif in
             if let frame = notif.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
                 keyboardHeight = frame.height
@@ -177,6 +184,23 @@ struct ForcePasswordChangeView: View {
         )
     }
 
+    private var successToast: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 18))
+                .foregroundStyle(.white)
+            Text(l10n.t(.changePwSuccess))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(Color(hex: 0x2AD17E))
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(0.15), radius: 16, y: 8)
+        .padding(.top, 60)
+    }
+
     private var canSubmit: Bool {
         newPassword.count >= 8 && confirmPassword.count >= 8
     }
@@ -204,8 +228,13 @@ struct ForcePasswordChangeView: View {
         do {
             try await auth.changePassword(to: newPassword)
             // Forced flow: mustChangePassword flips to false → ContentView swaps in
-            // the main app. Optional flow: dismiss the sheet.
+            // the main app. Optional flow: show a success toast, then dismiss the
+            // sheet (mirrors RN change-password.tsx notify + router.back()).
             if !forced {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                    showSuccess = true
+                }
+                try? await Task.sleep(for: .milliseconds(1200))
                 dismiss()
             }
         } catch {

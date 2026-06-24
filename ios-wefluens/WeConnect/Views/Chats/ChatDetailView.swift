@@ -34,6 +34,12 @@ struct ChatDetailView: View {
     @State private var selectedIds = Set<UUID>()
     /// Confirmation dialog for clearing the chat history.
     @State private var showClearConfirm: Bool = false
+    /// Pending single-message delete awaiting confirmation (nil = no dialog).
+    @State private var pendingDeleteId: UUID?
+    /// Confirmation dialog for batch-deleting the selected messages.
+    @State private var showDeleteSelectedConfirm: Bool = false
+    /// Briefly shown after copying a message's text ("Copied" toast).
+    @State private var showCopiedToast: Bool = false
     // Trust & Safety
     @State private var reportTarget: ReportTarget?
     @State private var showBlockConfirm: Bool = false
@@ -91,11 +97,20 @@ struct ChatDetailView: View {
         .overlay {
             if recorder.isRecording { recordingOverlay }
         }
+        .overlay(alignment: .top) {
+            if showCopiedToast {
+                copiedToast
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
         .animation(.spring(response: 0.32, dampingFraction: 0.85), value: vm?.replyingTo?.id)
         .background(Theme.paper(for: colorScheme).ignoresSafeArea())
         .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
         .alert(l10n.t(.chatSendError), isPresented: sendErrorBinding) {
+            Button(l10n.t(.authVerificationSentOk), role: .cancel) { }
+        }
+        .alert(l10n.t(.chatFriendRemoved), isPresented: friendRemovedBinding) {
             Button(l10n.t(.authVerificationSentOk), role: .cancel) { }
         }
         .alert(fileError ?? "", isPresented: fileErrorBinding) {
@@ -110,6 +125,19 @@ struct ChatDetailView: View {
             Button(l10n.t(.chatClearHistory), role: .destructive) {
                 Task { await vm?.clearHistory() }
             }
+            Button(l10n.t(.adminCancel), role: .cancel) { }
+        }
+        .confirmationDialog(l10n.t(.chatDeleteConfirm), isPresented: deleteOneBinding, titleVisibility: .visible) {
+            Button(l10n.t(.chatDelete), role: .destructive) {
+                if let id = pendingDeleteId {
+                    Task { await vm?.deleteMessage(id) }
+                }
+                pendingDeleteId = nil
+            }
+            Button(l10n.t(.adminCancel), role: .cancel) { pendingDeleteId = nil }
+        }
+        .confirmationDialog(l10n.t(.chatDeleteSelectedConfirm), isPresented: $showDeleteSelectedConfirm, titleVisibility: .visible) {
+            Button(l10n.t(.chatDelete), role: .destructive) { deleteSelected() }
             Button(l10n.t(.adminCancel), role: .cancel) { }
         }
         .confirmationDialog(l10n.t(.blockConfirm), isPresented: $showBlockConfirm, titleVisibility: .visible) {
@@ -162,10 +190,28 @@ struct ChatDetailView: View {
         )
     }
 
+    /// Distinct "this person unfriended you" alert, separate from the generic
+    /// send error (the view model sets `sendFriendRemoved` when the failed send
+    /// was because the contact is no longer a friend).
+    private var friendRemovedBinding: Binding<Bool> {
+        Binding(
+            get: { vm?.sendFriendRemoved ?? false },
+            set: { newValue in vm?.sendFriendRemoved = newValue }
+        )
+    }
+
     private var fileErrorBinding: Binding<Bool> {
         Binding(
             get: { fileError != nil },
             set: { newValue in if !newValue { fileError = nil } }
+        )
+    }
+
+    /// Drives the single-message delete confirmation dialog off `pendingDeleteId`.
+    private var deleteOneBinding: Binding<Bool> {
+        Binding(
+            get: { pendingDeleteId != nil },
+            set: { newValue in if !newValue { pendingDeleteId = nil } }
         )
     }
 
@@ -181,6 +227,19 @@ struct ChatDetailView: View {
         ]
         types.append(contentsOf: ids.compactMap { UTType($0) })
         return types
+    }
+
+    /// Flashes a brief "Copied" toast after copying a message's text, then
+    /// auto-dismisses (mirrors the RN app's `notify(t('chatCopied'))`).
+    private func showCopied() {
+        UISelectionFeedbackGenerator().selectionChanged()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            showCopiedToast = true
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            withAnimation(.easeOut(duration: 0.3)) { showCopiedToast = false }
+        }
     }
 
     // MARK: - Multi-select
@@ -243,7 +302,7 @@ struct ChatDetailView: View {
                 .frame(maxWidth: .infinity)
             }
             .disabled(selectedIds.isEmpty)
-            Button { deleteSelected() } label: {
+            Button { showDeleteSelectedConfirm = true } label: {
                 VStack(spacing: 3) {
                     Image(systemName: "trash").font(.system(size: 22))
                     Text(l10n.t(.chatDelete)).font(.system(size: 12))
@@ -384,7 +443,8 @@ struct ChatDetailView: View {
                                     onForward: { forwardSource = ForwardSource(kind: .dm, messageIds: [item.message.id]) },
                                     onSelect: { enterSelect(item.message.id) },
                                     onFavorite: { favorite(item.message) },
-                                    onDelete: { Task { await vm?.deleteMessage(item.message.id) } },
+                                    onCopy: { showCopied() },
+                                    onDelete: { pendingDeleteId = item.message.id },
                                     onRecall: { Task { await vm?.recallMessage(item.message.id) } },
                                     onReport: {
                                         reportTarget = ReportTarget(
@@ -547,6 +607,25 @@ struct ChatDetailView: View {
                         }
                 )
         }
+    }
+
+    /// Brief confirmation pill shown after copying a message's text.
+    private var copiedToast: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 18))
+                .foregroundStyle(.white)
+            Text(l10n.t(.chatCopied))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(Color(hex: 0x2AD17E))
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(0.15), radius: 16, y: 8)
+        .padding(.top, 60)
+        .allowsHitTesting(false)
     }
 
     /// A centered "recording…" indicator shown while the mic is held.
@@ -768,6 +847,7 @@ private struct MessageBubble: View {
     var onForward: (() -> Void)? = nil
     var onSelect: (() -> Void)? = nil
     var onFavorite: (() -> Void)? = nil
+    var onCopy: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
     var onRecall: (() -> Void)? = nil
     var onReport: (() -> Void)? = nil
@@ -813,6 +893,7 @@ private struct MessageBubble: View {
                         if !message.isRecalled && !message.text.isEmpty {
                             Button {
                                 UIPasteboard.general.string = message.text
+                                onCopy?()
                             } label: {
                                 Label(l10n.t(.chatCopy), systemImage: "doc.on.doc")
                             }
@@ -1017,6 +1098,7 @@ private struct QuotedReplyPreview: View {
 /// Internal (not private) so the group chat reuses the exact same image bubble.
 struct ChatImageBubble: View {
     @Environment(AppDataService.self) private var data
+    @Environment(LocalizationManager.self) private var l10n
     @Environment(\.colorScheme) private var colorScheme
     let path: String
     let pixelWidth: Int?
@@ -1104,10 +1186,19 @@ struct ChatImageBubble: View {
             }
     }
 
+    /// Shown when the image can't be loaded (signed URL expired / fetch failed) —
+    /// an icon plus an "image expired" line, mirroring the RN fallback.
     private var placeholderIcon: some View {
-        Image(systemName: "photo")
-            .font(.system(size: 28))
-            .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+        VStack(spacing: 6) {
+            Image(systemName: "photo")
+                .font(.system(size: 26))
+                .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+            Text(l10n.t(.chatImageExpired))
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 12)
     }
 }
 

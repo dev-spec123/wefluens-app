@@ -109,6 +109,28 @@ struct TagChip: View {
     }
 }
 
+/// Pill-shaped secondary button with a tinted background.
+///
+/// Mirrors the RN `SecondaryButton`: an optional `tint` color (defaults to the
+/// brand coral) drives both the text color and a 12%-opacity background fill.
+struct SecondaryButton: View {
+    let title: String
+    var tint: Color = Theme.coral
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(tint)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(tint.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 /// Large screen title used at the top of each tab.
 struct ScreenHeader: View {
     @Environment(\.colorScheme) private var colorScheme

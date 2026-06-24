@@ -92,18 +92,35 @@ struct ChatsListView: View {
                         }
                 }
             }
-            .alert(l10n.t(.chatDeleteConversation), isPresented: $showDeleteConfirm) {
-                Button(l10n.t(.chatDelete), role: .destructive) {
+            .alert(l10n.t(.convDelete), isPresented: $showDeleteConfirm) {
+                Button(l10n.t(.convDelete), role: .destructive) {
                     if let convo = conversationToDelete {
-                        let type = convo.isGroup ? "group" : "dm"
-                        Task { try? await data.hideConversation(conversationId: convo.id, type: type) }
+                        Task { await deleteConversation(convo) }
                     }
                 }
                 Button(l10n.t(.adminCancel), role: .cancel) { }
+            } message: {
+                Text(l10n.t(.chatDeleteConversationWarn))
             }
             .onAppear {
                 Task { await data.loadConversations() }
             }
+        }
+    }
+
+    /// Clears the conversation history (unrecoverable, as warned) then hides it
+    /// from the inbox — mirrors the RN delete flow. Best-effort: failures are
+    /// swallowed so a transient error never leaves the row in a half-deleted state.
+    private func deleteConversation(_ convo: Conversation) async {
+        do {
+            if convo.isGroup {
+                try await data.clearGroupHistory(groupId: convo.id)
+            } else {
+                try await data.clearDMHistory(threadId: convo.id)
+            }
+            try await data.hideConversation(conversationId: convo.id, type: convo.isGroup ? "group" : "dm")
+        } catch {
+            // best effort
         }
     }
 
@@ -138,25 +155,29 @@ struct ChatsListView: View {
         let pinned = data.isPinned(convo.id)
         let muted = data.isMuted(convo.id)
 
-        Button {
-            data.setPinned(convo.id, on: !pinned)
-        } label: {
-            Label(l10n.t(pinned ? .convUnpin : .convPin),
-                  systemImage: pinned ? "pin.slash.fill" : "pin.fill")
-        }
+        // The conversation name renders as a title header above the actions,
+        // matching the RN ActionSheet's `title={menuConv.name}`.
+        Section(convo.name) {
+            Button {
+                data.setPinned(convo.id, on: !pinned)
+            } label: {
+                Label(l10n.t(pinned ? .convUnpin : .convPin),
+                      systemImage: pinned ? "pin.slash.fill" : "pin.fill")
+            }
 
-        Button {
-            data.setMuted(convo.id, on: !muted)
-        } label: {
-            Label(l10n.t(muted ? .convUnmute : .convMute),
-                  systemImage: muted ? "bell.fill" : "bell.slash.fill")
-        }
+            Button {
+                data.setMuted(convo.id, on: !muted)
+            } label: {
+                Label(l10n.t(muted ? .convUnmute : .convMute),
+                      systemImage: muted ? "bell.fill" : "bell.slash.fill")
+            }
 
-        Button(role: .destructive) {
-            conversationToDelete = convo
-            showDeleteConfirm = true
-        } label: {
-            Label(l10n.t(.convDelete), systemImage: "trash.fill")
+            Button(role: .destructive) {
+                conversationToDelete = convo
+                showDeleteConfirm = true
+            } label: {
+                Label(l10n.t(.convDelete), systemImage: "trash.fill")
+            }
         }
     }
 
@@ -384,7 +405,7 @@ private struct ConversationRow: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(conversation.unread > 0 && !isMuted ? Theme.coral : Theme.inkTertiary(for: colorScheme))
                 if conversation.unread > 0 {
-                    Text("\(conversation.unread)")
+                    Text(conversation.unread > 99 ? "99+" : "\(conversation.unread)")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(minWidth: 22, minHeight: 22)

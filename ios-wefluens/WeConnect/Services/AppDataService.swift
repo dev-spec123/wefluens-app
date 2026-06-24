@@ -371,6 +371,28 @@ final class AppDataService {
         return (w, h)
     }
 
+    /// Returns true if `handle` is free (case-insensitively) for someone other than
+    /// `userId`. Mirrors RN's api.isHandleAvailable. On a query failure we return
+    /// true so a transient error never blocks save — the DB unique index still guards.
+    @MainActor
+    func isHandleAvailable(handle: String, userId: UUID) async -> Bool {
+        let trimmed = handle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        do {
+            let rows: [ProfileRow] = try await supabase
+                .from("profiles")
+                .select("id")
+                .ilike("handle", value: trimmed)
+                .neq("id", value: userId.uuidString)
+                .limit(1)
+                .execute()
+                .value
+            return rows.isEmpty
+        } catch {
+            return true
+        }
+    }
+
     /// Persist profile fields to Supabase via upsert — works even if the row
     /// was never created by syncProfile. Throws on failure so the caller can show an error.
     @MainActor

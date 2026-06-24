@@ -18,6 +18,10 @@ final class ChatThreadViewModel {
     var messages: [ChatMessage] = []
     var isLoading = true
     var sendFailed = false
+    /// True when a *text* send failed specifically because the other user is no
+    /// longer in our friends list (they unfriended us) — drives a distinct
+    /// "friend removed" alert instead of the generic send error (Rule A parity).
+    var sendFriendRemoved = false
     /// When non-nil, a recall error alert is shown with this specific localized
     /// message (resolved in the view via `l10n.t(recallError!)`).
     /// Set to nil to dismiss. Replaces the old generic `recallFailed` bool.
@@ -80,7 +84,15 @@ final class ChatThreadViewModel {
             replyingTo = nil
             await reload()
         } catch {
-            sendFailed = true
+            // If they're no longer in our friends list, the send was rejected
+            // because the friendship was removed — surface a specific message
+            // instead of the generic error (mirrors the RN app).
+            let stillFriend = data.contacts.contains { $0.id == route.otherUserId }
+            if stillFriend {
+                sendFailed = true
+            } else {
+                sendFriendRemoved = true
+            }
             print("⚠️ send_dm failed: \(error)")
         }
     }

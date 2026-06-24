@@ -28,6 +28,9 @@ final class GroupChatViewModel {
     var isSendingVoice = false
     /// The message the user is quoting in their next send (nil = normal message).
     var replyingTo: GroupChatMessage?
+    /// Set when a tap-to-jump (quote / pinned banner) targets a message that isn't
+    /// in the currently loaded thread, so the view can surface a "can't find" notice.
+    var jumpMissing = false
 
     private var channel: RealtimeChannelV2?
     private var listenTask: Task<Void, Never>?

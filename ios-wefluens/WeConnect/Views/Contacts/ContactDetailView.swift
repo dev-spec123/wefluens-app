@@ -32,6 +32,7 @@ struct ContactDetailView: View {
                 hero
                 stats
                 actions
+                remarkCard
                 infoCard
                 removeButton
             }
@@ -69,15 +70,11 @@ struct ContactDetailView: View {
         .alert(l10n.t(.blockError), isPresented: $showBlockError) {
             Button(l10n.t(.authVerificationSentOk), role: .cancel) { }
         }
-        .alert(l10n.t(.contactsSetRemark), isPresented: $showRemarkEditor) {
-            TextField(l10n.t(.contactsRemark), text: $remarkDraft)
-            Button(l10n.t(.groupSettingsSave)) {
-                data.setRemark(remarkDraft, for: contact.id)
-            }
-            Button(l10n.t(.adminCancel), role: .cancel) { }
-        }
         .sheet(item: $reportTarget) { target in
             ReportSheet(target: target)
+        }
+        .sheet(isPresented: $showRemarkEditor) {
+            remarkEditor
         }
         .overlay(alignment: .topLeading) {
             Button { dismiss() } label: {
@@ -93,12 +90,6 @@ struct ContactDetailView: View {
         }
         .overlay(alignment: .topTrailing) {
             Menu {
-                Button {
-                    remarkDraft = data.remark(for: contact.id) ?? ""
-                    showRemarkEditor = true
-                } label: {
-                    Label(l10n.t(.contactsSetRemark), systemImage: "square.and.pencil")
-                }
                 Button {
                     reportTarget = ReportTarget(user: contact.id, name: contact.name)
                 } label: {
@@ -248,6 +239,115 @@ struct ContactDetailView: View {
             }
             openingChat = false
         }
+    }
+
+    /// Loads the current remark into the draft and presents the styled editor.
+    private func openRemarkEditor() {
+        remarkDraft = data.remark(for: contact.id) ?? ""
+        showRemarkEditor = true
+    }
+
+    /// Always-visible "Set remark" (备注) card on the profile — mirrors the RN
+    /// row with a pricetag icon, the current value inline, and a chevron.
+    private var remarkCard: some View {
+        Button {
+            openRemarkEditor()
+        } label: {
+            let remark = data.remark(for: contact.id) ?? ""
+            HStack(spacing: 14) {
+                Image(systemName: "tag.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.coral)
+                    .frame(width: 38, height: 38)
+                    .background(Theme.coral.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(l10n.t(.contactsRemark))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                    Text(remark.isEmpty ? l10n.t(.contactsRemarkPlaceholder) : remark)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(remark.isEmpty ? Theme.inkTertiary(for: colorScheme) : Theme.ink(for: colorScheme))
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardStyle()
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Styled remark editor presented as a sheet — TextField with a ~40-char
+    /// limit and Cancel/Save, mirroring the RN modal.
+    private var remarkEditor: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text(l10n.t(.contactsSetRemark))
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(Theme.ink(for: colorScheme))
+
+            TextField(l10n.t(.contactsRemarkPlaceholder), text: $remarkDraft)
+                .font(.system(size: 16))
+                .foregroundStyle(Theme.ink(for: colorScheme))
+                .submitLabel(.done)
+                .onSubmit { saveRemark() }
+                .onChange(of: remarkDraft) { _, newValue in
+                    if newValue.count > 40 {
+                        remarkDraft = String(newValue.prefix(40))
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(Theme.cardSubtle(for: colorScheme))
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Theme.hairline(for: colorScheme), lineWidth: 1)
+                )
+
+            HStack(spacing: 10) {
+                Button {
+                    showRemarkEditor = false
+                } label: {
+                    Text(l10n.t(.adminCancel))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Theme.cardSubtle(for: colorScheme))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    saveRemark()
+                } label: {
+                    Text(l10n.t(.editProfileSave))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Theme.coral)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .presentationDetents([.height(220)])
+        .presentationDragIndicator(.visible)
+        .background(Theme.paper(for: colorScheme))
+    }
+
+    /// Trims and persists the remark, then dismisses the editor.
+    private func saveRemark() {
+        data.setRemark(remarkDraft.trimmingCharacters(in: .whitespacesAndNewlines), for: contact.id)
+        showRemarkEditor = false
     }
 
     private var infoCard: some View {
