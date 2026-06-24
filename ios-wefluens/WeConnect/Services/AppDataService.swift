@@ -1949,52 +1949,41 @@ final class AppDataService {
 
     @MainActor
     func loadDiscover() async {
+        // Brands and campaigns are loaded independently: a failure in one must not
+        // clobber the other (a transient campaigns error used to overwrite real,
+        // freshly-curated brands with SampleData). SampleData is only used as a
+        // fallback when we genuinely have nothing to show.
         do {
             let bRows: [BrandRow] = try await supabase
-                .from("brands")
-                .select()
-                .execute()
-                .value
-
-            brands = bRows.map { row in
+                .from("brands").select().execute().value
+            let mapped = bRows.map { row in
                 Brand(
-                    id: row.id,
-                    name: row.name,
-                    category: row.category ?? "",
-                    tagline: row.tagline ?? "",
-                    symbol: row.symbol ?? "sparkles",
-                    colors: parseColors(row.colors),
-                    activeCampaigns: row.activeCampaigns ?? 0,
+                    id: row.id, name: row.name, category: row.category ?? "",
+                    tagline: row.tagline ?? "", symbol: row.symbol ?? "sparkles",
+                    colors: parseColors(row.colors), activeCampaigns: row.activeCampaigns ?? 0,
                     featuredRank: row.featuredRank
                 )
             }
+            brands = mapped.isEmpty ? SampleData.brands : mapped
+        } catch {
+            print("⚠️ Brands load failed: \(error)")
+            if brands.isEmpty { brands = SampleData.brands }  // keep what we have
+        }
 
+        do {
             let cRows: [CampaignRow] = try await supabase
-                .from("campaigns")
-                .select()
-                .execute()
-                .value
-
-            campaigns = cRows.map { row in
+                .from("campaigns").select().execute().value
+            let mapped = cRows.map { row in
                 Campaign(
-                    id: row.id,
-                    title: row.title,
-                    brand: row.brand,
-                    budget: row.budget ?? "",
-                    tags: row.tags ?? [],
-                    deadline: row.deadline ?? "",
-                    symbol: row.symbol ?? "sparkles",
-                    colors: parseColors(row.colors),
-                    spotsLeft: row.spotsLeft ?? 0
+                    id: row.id, title: row.title, brand: row.brand, budget: row.budget ?? "",
+                    tags: row.tags ?? [], deadline: row.deadline ?? "", symbol: row.symbol ?? "sparkles",
+                    colors: parseColors(row.colors), spotsLeft: row.spotsLeft ?? 0
                 )
             }
-
-            if brands.isEmpty { brands = SampleData.brands }
-            if campaigns.isEmpty { campaigns = SampleData.campaigns }
+            campaigns = mapped.isEmpty ? SampleData.campaigns : mapped
         } catch {
-            print("⚠️ Discover load failed: \(error)")
-            brands = SampleData.brands
-            campaigns = SampleData.campaigns
+            print("⚠️ Campaigns load failed: \(error)")
+            if campaigns.isEmpty { campaigns = SampleData.campaigns }
         }
     }
 }
