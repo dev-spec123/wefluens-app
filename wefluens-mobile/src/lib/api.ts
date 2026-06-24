@@ -844,9 +844,9 @@ export async function report(args: {
 // ─────────────────────────── Admin ───────────────────────────
 
 export async function loadAllUsers(): Promise<AdminUser[]> {
-  const { data } = await supabase.from('profiles').select('id,name,email,is_banned').order('created_at', { ascending: false });
+  const { data } = await supabase.from('profiles').select('id,name,email,is_banned,is_admin').order('created_at', { ascending: false });
   return ((data as any[]) ?? []).map((r) => ({
-    id: r.id, name: r.name ?? r.email ?? 'User', email: r.email ?? '', isActive: true, banned: !!r.is_banned,
+    id: r.id, name: r.name ?? r.email ?? 'User', email: r.email ?? '', isActive: true, banned: !!r.is_banned, isAdmin: r.is_admin ?? false,
   }));
 }
 
@@ -859,6 +859,13 @@ export async function adminBanUser(userId: string, ban: boolean): Promise<void> 
 /** Admin: permanently delete a user (admin_delete_user RPC). */
 export async function adminDeleteUser(userId: string): Promise<void> {
   const { error } = await supabase.rpc('admin_delete_user', { target_id: userId });
+  if (error) throw error;
+}
+
+/** Admin: grant or revoke admin (is_admin) on another user (admin_set_admin RPC).
+ *  Server-side this is is_admin-gated and blocks changing your own admin status. */
+export async function adminSetAdmin(targetId: string, makeAdmin: boolean): Promise<void> {
+  const { error } = await supabase.rpc('admin_set_admin', { target: targetId, make_admin: makeAdmin });
   if (error) throw error;
 }
 

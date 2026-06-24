@@ -193,6 +193,7 @@ export interface AdminUser {
   email: string;
   isActive: boolean;
   banned: boolean;
+  isAdmin: boolean;
 }
 
 // MARK: - Navigation params

@@ -19,7 +19,7 @@ export default function Admin() {
   const c = useTheme();
   const { t } = useI18n();
   const router = useRouter();
-  const { isAdmin } = useAuth();
+  const { isAdmin, userId } = useAuth();
 
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,6 +77,27 @@ export default function Admin() {
     }
   }
 
+  async function doSetAdmin(user: AdminUser, makeAdmin: boolean) {
+    const who = `${user.name} (${user.email})`;
+    const ok = await confirmAsync(
+      makeAdmin ? t('adminMakeAdmin') : t('adminRemoveAdmin'),
+      `${who} ${makeAdmin ? t('adminMakeAdminConfirm') : t('adminRemoveAdminConfirm')}`,
+      {
+        confirmLabel: makeAdmin ? t('adminMakeAdmin') : t('adminRemoveAdmin'),
+        cancelLabel: t('authCancel'),
+        destructive: !makeAdmin,
+      },
+    );
+    if (!ok) return;
+    try {
+      await api.adminSetAdmin(user.id, makeAdmin);
+      await load();
+      notify(makeAdmin ? t('adminMakeAdmin') : t('adminRemoveAdmin'));
+    } catch {
+      notify(t('authErrGeneric'));
+    }
+  }
+
   async function doDelete(user: AdminUser) {
     const ok = await confirmAsync(t('adminDelete'), t('adminDeleteConfirm'), {
       confirmLabel: t('adminDelete'), cancelLabel: t('authCancel'), destructive: true,
@@ -128,6 +149,11 @@ export default function Admin() {
                 {item.email}
               </Text>
             </View>
+            {item.isAdmin ? (
+              <View style={[styles.badge, { backgroundColor: c.coral + '1A' }]}>
+                <Text style={{ color: c.coral, fontSize: 11, fontWeight: '700' }}>{t('adminAdmin')}</Text>
+              </View>
+            ) : null}
             {item.banned ? (
               <View style={[styles.badge, { backgroundColor: c.danger + '1A' }]}>
                 <Text style={{ color: c.danger, fontSize: 11, fontWeight: '700' }}>{t('adminBanned')}</Text>
@@ -178,6 +204,15 @@ export default function Admin() {
           cancelLabel={t('authCancel')}
           onClose={() => setMenuUser(null)}
           actions={[
+            // Hide the role action on the current admin's own row (the server also
+            // rejects self-change). Everyone else can be promoted/demoted.
+            ...(menuUser.id !== userId
+              ? [
+                  menuUser.isAdmin
+                    ? { label: t('adminRemoveAdmin'), icon: 'shield-outline' as const, destructive: true, onPress: () => doSetAdmin(menuUser, false) }
+                    : { label: t('adminMakeAdmin'), icon: 'shield-checkmark' as const, onPress: () => doSetAdmin(menuUser, true) },
+                ]
+              : []),
             menuUser.banned
               ? { label: t('adminUnban'), icon: 'checkmark-circle', onPress: () => doBan(menuUser, false) }
               : { label: t('adminBan'), icon: 'ban', onPress: () => doBan(menuUser, true) },
