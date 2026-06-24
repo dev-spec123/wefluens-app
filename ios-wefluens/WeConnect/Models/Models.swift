@@ -327,8 +327,11 @@ struct Brand: Identifiable {
     let symbol: String
     let colors: [UInt]
     let activeCampaigns: Int
+    /// Admin curation position. Non-nil = featured (shown in Discover's Top Brands,
+    /// sorted ascending); nil = not featured.
+    let featuredRank: Int?
 
-    init(id: UUID = UUID(), name: String, category: String, tagline: String, symbol: String, colors: [UInt], activeCampaigns: Int) {
+    init(id: UUID = UUID(), name: String, category: String, tagline: String, symbol: String, colors: [UInt], activeCampaigns: Int, featuredRank: Int? = nil) {
         self.id = id
         self.name = name
         self.category = category
@@ -336,6 +339,7 @@ struct Brand: Identifiable {
         self.symbol = symbol
         self.colors = colors
         self.activeCampaigns = activeCampaigns
+        self.featuredRank = featuredRank
     }
 }
 

@@ -10,6 +10,7 @@ import SwiftUI
 
 struct AboutView: View {
     @Environment(LocalizationManager.self) private var l10n
+    @Environment(DeveloperMode.self) private var developerMode
     @Environment(\.colorScheme) private var colorScheme
 
     private var version: String {
@@ -31,6 +32,14 @@ struct AboutView: View {
                     Text("\(l10n.t(.aboutVersion)) \(version)")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                        .contentShape(Rectangle())
+                        .onTapGesture { developerMode.registerVersionTap() }
+                    if developerMode.unlocked {
+                        Text("Developer mode unlocked")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Theme.coral)
+                            .padding(.top, 2)
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 28)

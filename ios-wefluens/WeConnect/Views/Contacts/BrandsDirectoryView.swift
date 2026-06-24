@@ -41,7 +41,15 @@ struct BrandsDirectoryView: View {
                 $0.tagline.localizedCaseInsensitiveContains(trimmed)
             }
         }
-        return list
+        // Featured brands first (in rank order), then the rest alphabetically.
+        return list.sorted { a, b in
+            switch (a.featuredRank, b.featuredRank) {
+            case let (ra?, rb?): return ra < rb
+            case (.some, .none): return true
+            case (.none, .some): return false
+            case (.none, .none): return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+            }
+        }
     }
 
     var body: some View {

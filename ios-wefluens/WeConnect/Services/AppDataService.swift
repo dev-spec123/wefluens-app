@@ -693,6 +693,54 @@ final class AppDataService {
         return results.filter { !blockedUserIds.contains($0.id) }
     }
 
+    // MARK: - Admin curation (every RPC is is_admin-gated server-side)
+
+    /// Lists currently-featured creators (with rank) for the curation screen.
+    @MainActor
+    func adminListFeaturedTalent() async throws -> [FeaturedTalentRow] {
+        try await supabase
+            .rpc("admin_list_featured_talent")
+            .execute()
+            .value
+    }
+
+    /// Feature / reorder / unfeature a creator in Top Talent. rank nil = unfeature.
+    @MainActor
+    func adminSetFeaturedTalent(userId: UUID, rank: Int?) async throws {
+        try await supabase
+            .rpc("admin_set_featured_talent", params: SetFeaturedTalentParams(target: userId.uuidString, rank: rank))
+            .execute()
+    }
+
+    /// Feature / reorder / unfeature a brand.
+    @MainActor
+    func adminSetFeaturedBrand(brandId: UUID, rank: Int?) async throws {
+        try await supabase
+            .rpc("admin_set_featured_brand", params: SetFeaturedBrandParams(target: brandId.uuidString, rank: rank))
+            .execute()
+    }
+
+    /// Create (id nil) or update a brand. Returns the brand id.
+    @MainActor
+    @discardableResult
+    func adminUpsertBrand(id: UUID?, name: String, category: String?, tagline: String?,
+                          symbol: String?, colors: String?, activeCampaigns: Int?, featuredRank: Int?) async throws -> UUID {
+        let newId: UUID = try await supabase
+            .rpc("admin_upsert_brand", params: UpsertBrandParams(
+                brand_id: id?.uuidString, p_name: name, p_category: category, p_tagline: tagline,
+                p_symbol: symbol, p_colors: colors, p_active_campaigns: activeCampaigns, p_featured_rank: featuredRank))
+            .execute()
+            .value
+        return newId
+    }
+
+    @MainActor
+    func adminDeleteBrand(id: UUID) async throws {
+        try await supabase
+            .rpc("admin_delete_brand", params: DeleteBrandParams(target: id.uuidString))
+            .execute()
+    }
+
     /// Sends a friend request (pure DB, no email). Returns the server status:
     /// "sent", "already_sent", "already_friends", or "incoming_exists".
     @MainActor
@@ -1888,7 +1936,8 @@ final class AppDataService {
                     tagline: row.tagline ?? "",
                     symbol: row.symbol ?? "sparkles",
                     colors: parseColors(row.colors),
-                    activeCampaigns: row.activeCampaigns ?? 0
+                    activeCampaigns: row.activeCampaigns ?? 0,
+                    featuredRank: row.featuredRank
                 )
             }
 
