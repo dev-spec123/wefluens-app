@@ -6,19 +6,22 @@
  */
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View,
+  Animated, Easing, Keyboard, KeyboardAvoidingView, Platform, Pressable,
+  StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { GradientButton } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/lib/i18n';
-import { gradients, radius, useTheme } from '@/lib/theme';
+import { gradients, palette, radius } from '@/lib/theme';
+
+/** Initial password seeded for invited users; the new one must differ. */
+const INITIAL_PASSWORD = '11111111';
 
 export default function ForcePassword() {
-  const c = useTheme();
   const { t } = useI18n();
   const { changePassword, signOut } = useAuth();
 
@@ -27,12 +30,31 @@ export default function ForcePassword() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Decorative glow floats further up while the keyboard is shown (mirrors the
+  // Swift keyboardWillShow/Hide animation on the sunset circle).
+  const glow = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const animate = (to: number) => Animated.timing(glow, {
+      toValue: to, duration: 400, easing: Easing.out(Easing.ease), useNativeDriver: true,
+    }).start();
+    const showSub = Keyboard.addListener(showEvt, () => animate(1));
+    const hideSub = Keyboard.addListener(hideEvt, () => animate(0));
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, [glow]);
+  const glowTranslate = glow.interpolate({ inputRange: [0, 1], outputRange: [-120, -220] });
+
   const canSubmit = newPassword.length >= 8 && confirmPassword.length >= 8;
 
   async function save() {
     setError(null);
     if (newPassword.length < 8) {
       setError(t('forcePwTooShort'));
+      return;
+    }
+    if (newPassword === INITIAL_PASSWORD) {
+      setError(t('forcePwSameAsInitial'));
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -57,6 +79,10 @@ export default function ForcePassword() {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
+      />
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.glow, { transform: [{ translateY: glowTranslate }] }]}
       />
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <KeyboardAvoidingView
@@ -128,10 +154,16 @@ export default function ForcePassword() {
 }
 
 const styles = StyleSheet.create({
+  glow: {
+    position: 'absolute', alignSelf: 'center', top: '50%',
+    width: 260, height: 260, borderRadius: 130,
+    backgroundColor: 'rgba(255,107,107,0.25)',
+  },
   container: { flex: 1, paddingHorizontal: 32 },
   iconWrap: {
     width: 92, height: 92, borderRadius: 46, alignSelf: 'center',
     backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center',
+    shadowColor: palette.coral, shadowOpacity: 0.4, shadowRadius: 24, shadowOffset: { width: 0, height: 8 },
   },
   title: {
     color: '#fff', fontSize: 26, fontWeight: '700', textAlign: 'center', marginTop: 22,

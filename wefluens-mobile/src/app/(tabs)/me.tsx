@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { type Href, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { type Href, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Linking, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View,
 } from 'react-native';
@@ -13,6 +13,7 @@ import { Avatar, Card } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import * as api from '@/lib/api';
 import { confirmAsync, notify } from '@/lib/dialog';
+import { getFavorites } from '@/lib/favorites';
 import { useI18n } from '@/lib/i18n';
 import { getOpenToDeals, setOpenToDeals } from '@/lib/openToDeals';
 import { registerForPushNotifications } from '@/lib/pushService';
@@ -27,6 +28,7 @@ export default function MeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [openDeals, setOpenDeals] = useState(true);
   const [notifEnabled, setNotifEnabled] = useState(profile?.notificationsEnabled ?? false);
+  const [favCount, setFavCount] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -38,6 +40,15 @@ export default function MeScreen() {
     setOpenDeals(v);
     void setOpenToDeals(v);
   }
+
+  // Favorites count for the banner subtitle (mirrors Swift's favoritesSubtitle).
+  // Refreshes whenever the Me tab regains focus, e.g. after removing favorites.
+  const loadFavCount = useCallback(() => {
+    let active = true;
+    getFavorites().then((list) => { if (active) setFavCount(list.length); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+  useFocusEffect(loadFavCount);
 
   // Keep the toggle in sync with the loaded profile, and refresh the push token
   // on launch when notifications are already enabled.
@@ -73,7 +84,7 @@ export default function MeScreen() {
   async function onRefresh() {
     setRefreshing(true);
     try {
-      await refreshProfile();
+      await Promise.all([refreshProfile(), getFavorites().then((l) => setFavCount(l.length))]);
     } finally {
       setRefreshing(false);
     }
@@ -88,9 +99,16 @@ export default function MeScreen() {
   }
 
   function openHelp() {
-    // '/support' is a new route; cast until expo-router regenerates typed routes.
+    // '/help' is a new route; cast until expo-router regenerates typed routes.
+    router.push('/help' as Href);
+  }
+
+  function openSupport() {
     router.push('/support' as Href);
   }
+
+  // Count when favorites exist, otherwise the "no favorites yet" hint.
+  const favSubtitle = favCount && favCount > 0 ? String(favCount) : t('favoritesEmpty');
 
   // Rating is split per store: Android → Google Play, iOS → App Store. (Apple
   // does NOT require an in-app rate button — this is purely a convenience link.)
@@ -315,10 +333,30 @@ export default function MeScreen() {
           )}
         </Pressable>
 
+        {/* Favorites — promoted to a primary banner card with a live count subtitle */}
+        <Pressable onPress={() => router.push('/favorites')}>
+          {({ pressed }) => (
+            <Card style={[styles.dealCard, pressed && { opacity: 0.7 }]}>
+              <LinearGradient
+                colors={gradients.sunset}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.iconBadge, { borderRadius: 14, width: 44, height: 44 }]}
+              >
+                <Ionicons name="star" size={20} color="#fff" />
+              </LinearGradient>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.dealTitle, { color: c.ink }]}>{t('favoritesTitle')}</Text>
+                <Text style={[styles.dealSub, { color: c.inkSecondary }]} numberOfLines={1}>{favSubtitle}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={c.inkTertiary} />
+            </Card>
+          )}
+        </Pressable>
+
         {/* Preferences */}
         <GroupTitle text={t('profilePreferences')} />
         <Card style={styles.menuCard}>
-          <MenuRow icon="bookmark" title={t('favoritesTitle')} onPress={() => router.push('/favorites')} />
           <ToggleRow icon="notifications" title={t('profileNotifications')} value={notifEnabled} onValueChange={onToggleNotifications} />
           <MenuRow icon="lock-closed" title={t('profilePrivacy')} onPress={() => router.push('/privacy')} />
           <MenuRow icon="settings-outline" title={t('settingsTitle')} onPress={() => router.push('/settings')} last />
@@ -337,7 +375,8 @@ export default function MeScreen() {
         {/* Support */}
         <GroupTitle text={t('profileSupport')} />
         <Card style={styles.menuCard}>
-          <MenuRow icon="mail" title={t('profileHelp')} onPress={openHelp} />
+          <MenuRow icon="help-circle" title={t('faqTitle')} onPress={openHelp} />
+          <MenuRow icon="mail" title={t('profileHelp')} onPress={openSupport} />
           <MenuRow icon="star" title={t('profileRate')} onPress={rateApp} />
           <MenuRow icon="information-circle" title={t('profileAbout')} onPress={() => router.push('/about')} last />
         </Card>

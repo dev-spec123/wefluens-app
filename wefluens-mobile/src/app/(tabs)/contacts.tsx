@@ -3,13 +3,12 @@ import { type Href, useFocusEffect, useRouter } from 'expo-router';
 import { pinyin } from 'pinyin-pro';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Pressable, RefreshControl, SectionList, StyleSheet, Text, TextInput, View,
+  Alert, Pressable, RefreshControl, SectionList, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Avatar, EmptyState, RoundIconButton } from '@/components/ui';
+import { Avatar, EmptyState } from '@/components/ui';
 import { useAppData } from '@/context/AppDataContext';
-import * as api from '@/lib/api';
 import { getRemarks } from '@/lib/friendPrefs';
 import { useI18n } from '@/lib/i18n';
 import { radius, space, useTheme } from '@/lib/theme';
@@ -35,8 +34,6 @@ export default function ContactsScreen() {
     friendAcceptedNames, acknowledgeFriendAccepted,
   } = useAppData();
 
-  // Ids of requests currently being accepted/declined (to disable buttons).
-  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState('');
   const [remarks, setRemarks] = useState<Record<string, string>>({});
 
@@ -65,7 +62,7 @@ export default function ContactsScreen() {
     [remarks],
   );
 
-  // Filter (name / remark / handle) then group into A-Z sections, '#' last.
+  // Filter (name / remark / handle / role) then group into A-Z sections, '#' last.
   const sections = useMemo<ContactSection[]>(() => {
     const q = query.trim().toLowerCase();
     const filtered = q
@@ -73,7 +70,8 @@ export default function ContactsScreen() {
         const remark = remarks[ct.id]?.toLowerCase() ?? '';
         return ct.name.toLowerCase().includes(q)
           || remark.includes(q)
-          || ct.handle.toLowerCase().includes(q);
+          || ct.handle.toLowerCase().includes(q)
+          || ct.role.toLowerCase().includes(q);
       })
       : contacts;
 
@@ -97,21 +95,21 @@ export default function ContactsScreen() {
       }));
   }, [contacts, remarks, query, displayName]);
 
-  async function respond(req: FriendRequest, accept: boolean) {
-    if (busyIds.has(req.id)) return;
-    setBusyIds((prev) => new Set(prev).add(req.id));
-    try {
-      await api.respondFriendRequest(req.id, accept);
-      await refreshContacts();
-    } catch {
-      Alert.alert(t('addFriendError'));
-    } finally {
-      setBusyIds((prev) => {
-        const next = new Set(prev);
-        next.delete(req.id);
-        return next;
-      });
-    }
+  function quickAction(icon: keyof typeof Ionicons.glyphMap, label: string, onPress: () => void) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.quickCard,
+          { backgroundColor: pressed ? c.cardSubtle : c.card, borderColor: c.hairline },
+        ]}
+      >
+        <View style={[styles.quickIcon, { backgroundColor: c.coral + '1A' }]}>
+          <Ionicons name={icon} size={18} color={c.coral} />
+        </View>
+        <Text style={[styles.quickLabel, { color: c.inkSecondary }]} numberOfLines={1}>{label}</Text>
+      </Pressable>
+    );
   }
 
   function openContact(contact: Contact) {
@@ -147,62 +145,65 @@ export default function ContactsScreen() {
             <Text style={[styles.rowName, { color: c.ink }]} numberOfLines={1}>
               {name}
             </Text>
-            {item.handle ? (
+            {item.role ? (
+              <Text style={[styles.rowSub, { color: c.inkSecondary }]} numberOfLines={1}>
+                {item.role}
+              </Text>
+            ) : item.handle ? (
               <Text style={[styles.rowSub, { color: c.inkSecondary }]} numberOfLines={1}>
                 {item.handle}
               </Text>
             ) : null}
-            {item.role ? (
-              <Text style={[styles.rowSub, { color: c.inkTertiary }]} numberOfLines={1}>
-                {item.role}
-              </Text>
-            ) : null}
           </View>
-          <Ionicons name="chevron-forward" size={18} color={c.inkTertiary} />
+          {item.followers || item.platform ? (
+            <View style={styles.rowTrailing}>
+              {item.followers ? (
+                <Text style={[styles.rowFollowers, { color: c.ink }]} numberOfLines={1}>
+                  {item.followers}
+                </Text>
+              ) : null}
+              {item.platform ? (
+                <Text style={[styles.rowPlatform, { color: c.inkTertiary }]} numberOfLines={1}>
+                  {item.platform}
+                </Text>
+              ) : null}
+            </View>
+          ) : (
+            <Ionicons name="chevron-forward" size={18} color={c.inkTertiary} />
+          )}
         </Pressable>
         <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: 78 }} />
       </View>
     );
   }
 
+  function openRequest(req: FriendRequest) {
+    // '/friend-request/[id]' is a new route; cast until typegen runs.
+    router.push({ pathname: '/friend-request/[id]', params: { id: req.id } } as Href);
+  }
+
   function renderRequest(req: FriendRequest, index: number) {
     const isLast = index === friendRequests.length - 1;
-    const busy = busyIds.has(req.id);
     return (
       <View key={req.id} style={[styles.rowWrap, { backgroundColor: c.card, borderColor: c.hairline }]}>
-        <View style={styles.reqRow}>
+        <Pressable
+          onPress={() => openRequest(req)}
+          style={({ pressed }) => [styles.reqRow, { backgroundColor: pressed ? c.cardSubtle : c.card }]}
+        >
           <Avatar colors={req.avatarColors} name={req.name} size={50} />
           <View style={styles.rowBody}>
             <Text style={[styles.rowName, { color: c.ink }]} numberOfLines={1}>
               {req.name}
             </Text>
-            <Text style={[styles.rowSub, { color: c.inkSecondary }]} numberOfLines={2}>
+            <Text style={[styles.rowSub, { color: c.inkSecondary }]} numberOfLines={1}>
               {req.requestMessage}
             </Text>
           </View>
-        </View>
-        <View style={styles.reqActions}>
-          {busy ? (
-            <ActivityIndicator color={c.coral} />
-          ) : (
-            <>
-              <Pressable
-                onPress={() => respond(req, false)}
-                style={[styles.declineBtn, { borderColor: c.hairline, backgroundColor: c.cardSubtle }]}
-              >
-                <Text style={[styles.declineText, { color: c.inkSecondary }]}>{t('friendRequestDecline')}</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => respond(req, true)}
-                style={[styles.acceptBtn, { backgroundColor: c.coral }]}
-              >
-                <Text style={styles.acceptText}>{t('friendRequestAccept')}</Text>
-              </Pressable>
-            </>
-          )}
-        </View>
+          {/* Per-request unread indicator dot (signals it's unseen). */}
+          <View style={[styles.unreadDot, { backgroundColor: c.coral }]} />
+        </Pressable>
         {!isLast ? (
-          <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline }} />
+          <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: 78 }} />
         ) : null}
       </View>
     );
@@ -230,6 +231,14 @@ export default function ContactsScreen() {
         ) : null}
       </View>
 
+      {/* Quick actions — full-width labeled cards. '/top-talent' & '/brands-directory'
+          are new routes; cast until typegen runs. */}
+      <View style={styles.quickRow}>
+        {quickAction('person-add', t('contactsAddFriend'), () => router.push('/add-friend'))}
+        {quickAction('star', t('contactsTopTalent'), () => router.push('/top-talent' as Href))}
+        {quickAction('briefcase', t('contactsBrands'), () => router.push('/brands-directory' as Href))}
+      </View>
+
       {friendRequests.length > 0 ? (
         <View style={styles.section}>
           <Text style={[styles.sectionLabel, { color: c.inkTertiary }]}>
@@ -251,14 +260,8 @@ export default function ContactsScreen() {
         <View style={{ flex: 1 }}>
           <Text style={[styles.title, { color: c.ink }]}>{t('contactsTitle')}</Text>
           <Text style={[styles.subtitle, { color: c.inkSecondary }]}>
-            {`${contacts.length} ${contacts.length === 1 ? 'contact' : 'contacts'}`}
+            {`${contacts.length} ${t('contactsSubtitle')}`}
           </Text>
-        </View>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {/* '/top-talent' & '/brands-directory' are new routes; cast until typegen runs. */}
-          <RoundIconButton icon="star-outline" onPress={() => router.push('/top-talent' as Href)} />
-          <RoundIconButton icon="briefcase-outline" onPress={() => router.push('/brands-directory' as Href)} />
-          <RoundIconButton icon="person-add" onPress={() => router.push('/add-friend')} />
         </View>
       </View>
 
@@ -326,6 +329,19 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 16, padding: 0 },
 
+  quickRow: { flexDirection: 'row', gap: space.md, marginBottom: space.lg },
+  quickCard: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+  },
+  quickIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  quickLabel: { fontSize: 12, fontWeight: '600' },
+
   section: { marginBottom: space.lg },
   sectionLabel: {
     fontSize: 12,
@@ -364,36 +380,18 @@ const styles = StyleSheet.create({
   rowBody: { flex: 1, justifyContent: 'center', gap: 3 },
   rowName: { fontSize: 16, fontWeight: '600' },
   rowSub: { fontSize: 13 },
+  rowTrailing: { alignItems: 'flex-end', gap: 3, maxWidth: 110 },
+  rowFollowers: { fontSize: 14, fontWeight: '700' },
+  rowPlatform: { fontSize: 11, fontWeight: '500' },
 
   reqRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    paddingTop: 12,
+    paddingVertical: 12,
     gap: 14,
   },
-  reqActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    minHeight: 36,
-  },
-  declineBtn: {
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 18,
-  },
-  declineText: { fontSize: 14, fontWeight: '600' },
-  acceptBtn: {
-    borderRadius: radius.pill,
-    paddingVertical: 8,
-    paddingHorizontal: 22,
-  },
-  acceptText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  unreadDot: { width: 8, height: 8, borderRadius: 4 },
 
   emptyContainer: { flexGrow: 1, paddingHorizontal: space.lg },
 });

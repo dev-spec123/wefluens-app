@@ -103,7 +103,7 @@ export default function CampaignDetail() {
 
         {/* Deliverables */}
         <Card style={styles.sectionCard}>
-          <Text style={[styles.sectionTitle, { color: c.ink }]}>Deliverables</Text>
+          <Text style={[styles.sectionTitle, { color: c.ink }]}>{t('campaignDetailDeliverables')}</Text>
           {DELIVERABLES.map((d) => (
             <View key={d} style={styles.deliverableRow}>
               <Ionicons name="checkmark-circle" size={18} color={c.coral} />
@@ -118,7 +118,7 @@ export default function CampaignDetail() {
         <View style={styles.applyBarInner}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.payoutValue, { color: c.ink }]}>{campaign.budget}</Text>
-            <Text style={[styles.payoutLabel, { color: c.inkSecondary }]}>Estimated payout</Text>
+            <Text style={[styles.payoutLabel, { color: c.inkSecondary }]}>{t('campaignDetailEstimatedPayout')}</Text>
           </View>
           {applied ? (
             <Pressable
