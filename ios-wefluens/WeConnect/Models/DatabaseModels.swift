@@ -728,6 +728,11 @@ nonisolated struct GroupMemberParams: Encodable, Sendable {
     let p_user: String
 }
 
+nonisolated struct GroupSetAvatarParams: Encodable, Sendable {
+    let p_group: String
+    let p_url: String
+}
+
 // MARK: - Delete / Recall / Clear (RPC params + data rows)
 
 /// A row from `message_deletions` — messages the current user has soft-deleted.

@@ -994,6 +994,18 @@ final class AppDataService {
         return clockFormatter.string(from: date)
     }
 
+    /// Decides whether a "file" message is actually a voice clip. The MIME is the
+    /// primary signal but it can be missing or odd (the message_type CHECK has no
+    /// "audio"), so we also recognize the canonical "voice.m4a" name and any common
+    /// audio file extension.
+    nonisolated static func isVoiceFile(mime: String?, name: String?) -> Bool {
+        if mime?.hasPrefix("audio") == true { return true }
+        guard let lower = name?.lowercased() else { return false }
+        if lower == "voice.m4a" { return true }
+        let audioExtensions = [".m4a", ".mp3", ".aac", ".wav", ".ogg"]
+        return audioExtensions.contains { lower.hasSuffix($0) }
+    }
+
     /// Relative time for the conversation list: clock time today, "Yesterday",
     /// or a localized short date for older messages.
     nonisolated static func relativeTime(from date: Date?) -> String {
@@ -1480,7 +1492,9 @@ final class AppDataService {
                     case "audio": kind = .audio
                     // Voice clips are stored as "file" with an audio MIME (the
                     // message_type CHECK has no "audio") — surface them as voice.
-                    case "file": kind = (row.fileMime?.hasPrefix("audio") == true) ? .audio : .file
+                    // Harden the detection: the MIME can be missing or odd, so also
+                    // treat a "voice.m4a" name or any audio-extension file as audio.
+                    case "file": kind = Self.isVoiceFile(mime: row.fileMime, name: row.fileName) ? .audio : .file
                     default: kind = .text
                     }
                 }
@@ -1633,7 +1647,9 @@ final class AppDataService {
                     case "audio": kind = .audio
                     // Voice clips are stored as "file" with an audio MIME (the
                     // message_type CHECK has no "audio") — surface them as voice.
-                    case "file": kind = (row.fileMime?.hasPrefix("audio") == true) ? .audio : .file
+                    // Harden the detection: the MIME can be missing or odd, so also
+                    // treat a "voice.m4a" name or any audio-extension file as audio.
+                    case "file": kind = Self.isVoiceFile(mime: row.fileMime, name: row.fileName) ? .audio : .file
                     default: kind = .text
                     }
                 }
@@ -1881,10 +1897,10 @@ final class AppDataService {
     }
 
     /// Uploads a new group avatar to the public `avatars` bucket and stamps its
-    /// public URL onto the `group_threads` row. Direct table ops — Storage RLS +
-    /// the `group_threads` UPDATE policy (owner-only) gate this server-side, so a
-    /// non-owner write is rejected. Refreshes the inbox so the new photo shows in
-    /// the conversation list. Returns the new public URL.
+    /// public URL onto the `group_threads` row via the owner-gated `group_set_avatar`
+    /// RPC. A direct table UPDATE is silently rejected by RLS, so the DB write goes
+    /// through the SECURITY DEFINER function (owner-only) instead. Refreshes the
+    /// inbox so the new photo shows in the conversation list. Returns the new URL.
     @MainActor
     @discardableResult
     func changeGroupAvatar(groupId: UUID, imageData: Data) async throws -> String {
@@ -1899,9 +1915,7 @@ final class AppDataService {
             .getPublicURL(path: filePath)
         let url = publicURL.absoluteString
         try await supabase
-            .from("group_threads")
-            .update(["avatar_url": url])
-            .eq("id", value: groupId.uuidString)
+            .rpc("group_set_avatar", params: GroupSetAvatarParams(p_group: groupId.uuidString, p_url: url))
             .execute()
         await loadConversations()
         return url

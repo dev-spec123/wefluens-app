@@ -64,7 +64,9 @@ function mapProfile(row: ProfileRow, fallbackName?: string): UserProfile {
     avatarUrl: row.avatar_url,
     notificationsEnabled: row.notifications_enabled ?? true,
     activityStatus: row.activity_status ?? true,
-    dataSharing: row.data_sharing ?? true,
+    // Top Talent is opt-IN: a user is NOT discoverable until they turn it on.
+    // Defaulting this to true (opt-out) made every user appear in the directory.
+    dataSharing: row.data_sharing ?? false,
   };
 }
 
@@ -110,7 +112,7 @@ export async function syncProfile(userId: string, email: string | null): Promise
   return {
     id: userId, name: email ?? 'User', handle: '', role: '', bio: '', location: '',
     followers: '0', engagement: '0%', deals: '0', isAdmin: false, avatarUrl: null,
-    notificationsEnabled: true, activityStatus: true, dataSharing: true,
+    notificationsEnabled: true, activityStatus: true, dataSharing: false,
   };
 }
 
@@ -423,7 +425,11 @@ export async function loadThreadMessages(threadId: string, uid: string): Promise
     .map((r) => {
       const recalled = !!r.recalled_at;
       let kind = recalled ? 'text' : (r.message_type ?? 'text');
-      if (!recalled && kind === 'file' && typeof r.file_mime === 'string' && r.file_mime.startsWith('audio')) kind = 'audio';
+      if (!recalled && kind === 'file') {
+        const mimeIsAudio = typeof r.file_mime === 'string' && r.file_mime.startsWith('audio');
+        const nameIsAudio = typeof r.file_name === 'string' && (r.file_name === 'voice.m4a' || /\.(m4a|mp3|aac|wav|ogg)$/i.test(r.file_name));
+        if (mimeIsAudio || nameIsAudio) kind = 'audio';
+      }
       return {
         id: r.id,
         text: recalled ? '' : r.body,
@@ -577,7 +583,11 @@ export async function loadGroupMessages(groupId: string, uid: string, blockedIds
     .map((r) => {
       const recalled = !!r.recalled_at;
       let kind = recalled ? 'text' : (r.message_type ?? 'text');
-      if (!recalled && kind === 'file' && typeof r.file_mime === 'string' && r.file_mime.startsWith('audio')) kind = 'audio';
+      if (!recalled && kind === 'file') {
+        const mimeIsAudio = typeof r.file_mime === 'string' && r.file_mime.startsWith('audio');
+        const nameIsAudio = typeof r.file_name === 'string' && (r.file_name === 'voice.m4a' || /\.(m4a|mp3|aac|wav|ogg)$/i.test(r.file_name));
+        if (mimeIsAudio || nameIsAudio) kind = 'audio';
+      }
       const sender = r.sender ?? {};
       return {
         id: r.id,
@@ -685,13 +695,14 @@ export async function removeGroupMember(groupId: string, userId: string): Promis
 }
 
 /** Sets a group's avatar (owner). Uploads to the public avatars bucket, then
- *  stores the URL on group_threads. Relies on owner-scoped update RLS. */
+ *  stores the URL on group_threads via a SECURITY DEFINER RPC (avoids RLS on the
+ *  direct table update). */
 export async function changeGroupAvatar(groupId: string, uri: string): Promise<string> {
   const path = `group-${groupId.toLowerCase()}/avatar-${cryptoRandom()}.jpg`;
   await uploadFile('avatars', path, uri, 'image/jpeg', true);
   const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
   const url = pub.publicUrl;
-  const { error } = await supabase.from('group_threads').update({ avatar_url: url }).eq('id', groupId);
+  const { error } = await supabase.rpc('group_set_avatar', { p_group: groupId, p_url: url });
   if (error) throw error;
   return url;
 }
@@ -833,9 +844,9 @@ export async function report(args: {
 // ─────────────────────────── Admin ───────────────────────────
 
 export async function loadAllUsers(): Promise<AdminUser[]> {
-  const { data } = await supabase.from('profiles').select('id,name,email,is_banned').order('created_at', { ascending: false });
+  const { data } = await supabase.from('profiles').select('id,name,email,is_banned,is_admin').order('created_at', { ascending: false });
   return ((data as any[]) ?? []).map((r) => ({
-    id: r.id, name: r.name ?? r.email ?? 'User', email: r.email ?? '', isActive: true, banned: !!r.is_banned,
+    id: r.id, name: r.name ?? r.email ?? 'User', email: r.email ?? '', isActive: true, banned: !!r.is_banned, isAdmin: r.is_admin ?? false,
   }));
 }
 
@@ -848,6 +859,13 @@ export async function adminBanUser(userId: string, ban: boolean): Promise<void> 
 /** Admin: permanently delete a user (admin_delete_user RPC). */
 export async function adminDeleteUser(userId: string): Promise<void> {
   const { error } = await supabase.rpc('admin_delete_user', { target_id: userId });
+  if (error) throw error;
+}
+
+/** Admin: grant or revoke admin (is_admin) on another user (admin_set_admin RPC).
+ *  Server-side this is is_admin-gated and blocks changing your own admin status. */
+export async function adminSetAdmin(targetId: string, makeAdmin: boolean): Promise<void> {
+  const { error } = await supabase.rpc('admin_set_admin', { target: targetId, make_admin: makeAdmin });
   if (error) throw error;
 }
 

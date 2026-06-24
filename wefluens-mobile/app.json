@@ -2,7 +2,7 @@
   "expo": {
     "name": "Wefluens Connect",
     "slug": "wefluens-connect",
-    "version": "1.0.1",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "wefluens",
