@@ -1914,7 +1914,7 @@ final class AppDataService {
             .from("avatars")
             .getPublicURL(path: filePath)
         let url = publicURL.absoluteString
-        _ = try await supabase
+        try await supabase
             .rpc("group_set_avatar", params: GroupSetAvatarParams(p_group: groupId.uuidString, p_url: url))
             .execute()
         await loadConversations()
