@@ -13,7 +13,6 @@ struct ProfileView: View {
     @Environment(AuthManager.self) private var auth
     @Environment(LocalizationManager.self) private var l10n
     @Environment(AppDataService.self) private var data
-    @Environment(DeveloperMode.self) private var developerMode
     @Environment(\.colorScheme) private var colorScheme
     @State private var notificationsOn: Bool = true
     /// Persisted locally (same key as the RN app's AsyncStorage) so the toggle
@@ -54,7 +53,7 @@ struct ProfileView: View {
                     qrCodeBanner
                     favoritesRow
                     settingsGroup
-                    if developerMode.unlocked && auth.isAdmin {
+                    if auth.isAdmin {
                         developerPanelGroup
                     }
                     supportGroup
@@ -517,5 +516,4 @@ struct ProfileView: View {
         .environment(AuthManager())
         .environment(LocalizationManager())
         .environment(AppDataService(userId: nil))
-        .environment(DeveloperMode())
 }

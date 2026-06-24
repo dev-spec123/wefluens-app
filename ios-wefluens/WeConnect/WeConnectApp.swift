@@ -13,7 +13,6 @@ struct WeConnectApp: App {
     @State private var localization = LocalizationManager()
     @State private var theme = ThemeManager()
     @State private var auth = AuthManager()
-    @State private var developerMode = DeveloperMode()
 
     var body: some Scene {
         WindowGroup {
@@ -21,7 +20,6 @@ struct WeConnectApp: App {
                 .environment(localization)
                 .environment(theme)
                 .environment(auth)
-                .environment(developerMode)
                 .preferredColorScheme(theme.mode.colorScheme)
         }
     }

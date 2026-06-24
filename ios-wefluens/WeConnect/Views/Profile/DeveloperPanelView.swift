@@ -11,9 +11,7 @@
 import SwiftUI
 
 struct DeveloperPanelView: View {
-    @Environment(DeveloperMode.self) private var developerMode
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ScrollView {
@@ -28,19 +26,6 @@ struct DeveloperPanelView: View {
                     navRow(icon: "building.2.crop.circle", title: "Manage Brands",
                            subtitle: "Create, edit, feature brands") { ManageBrandsView() }
                 }
-
-                Button {
-                    developerMode.lock()
-                    dismiss()
-                } label: {
-                    Text("Lock developer mode")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Theme.coral)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .cardStyle()
-                }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 18)
             .padding(.top, 12)
