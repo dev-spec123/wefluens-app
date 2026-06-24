@@ -2,7 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text,
+  TextInput, UIManager, View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { NavBar, TagChip } from '@/components/ui';
@@ -10,6 +13,16 @@ import { useAppData } from '@/context/AppDataContext';
 import { useI18n } from '@/lib/i18n';
 import { radius, useTheme } from '@/lib/theme';
 import type { Brand } from '@/lib/types';
+
+// Enable LayoutAnimation on Android (no-op on iOS / web where it's already on).
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+/** Mirror of the Swift withAnimation(.spring) on category chip selection. */
+function animateChip() {
+  LayoutAnimation.configureNext(LayoutAnimation.create(220, 'easeInEaseOut', 'opacity'));
+}
 
 /** Map an SF Symbol-ish name from the backend to an Ionicons glyph. */
 function iconFor(symbol: string): keyof typeof Ionicons.glyphMap {
@@ -38,11 +51,22 @@ export default function BrandsDirectory() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
+  // Mirrors Swift's `@State private var isLoading = true`; cleared once the
+  // initial Discover load settles so the spinner only shows on a cold start.
+  const [isLoading, setIsLoading] = useState(brands.length === 0);
 
   // Safety net — Discover normally loads these at app start.
   useEffect(() => {
-    if (brands.length === 0) void refreshDiscover();
-  }, [brands.length, refreshDiscover]);
+    let active = true;
+    if (brands.length === 0) {
+      void refreshDiscover().finally(() => { if (active) setIsLoading(false); });
+    } else {
+      setIsLoading(false);
+    }
+    return () => { active = false; };
+    // Run once on mount — mirrors Swift's `.task`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -107,6 +131,11 @@ export default function BrandsDirectory() {
     <SafeAreaView style={{ flex: 1, backgroundColor: c.paper }} edges={['top']}>
       <NavBar title={t('contactsBrands')} onBack={() => router.back()} />
 
+      {isLoading && brands.length === 0 ? (
+        <View style={styles.centered}>
+          <ActivityIndicator color={c.coral} size="large" />
+        </View>
+      ) : (
       <View style={{ flex: 1 }}>
         <View style={{ paddingHorizontal: 18, paddingTop: 10 }}>
           <View style={[styles.searchField, { backgroundColor: c.card, borderColor: c.hairline }]}>
@@ -130,11 +159,11 @@ export default function BrandsDirectory() {
 
         {categories.length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-            <Pressable onPress={() => setCategory(null)}>
+            <Pressable onPress={() => { animateChip(); setCategory(null); }}>
               <TagChip text={t('filterAll')} filled={category === null} />
             </Pressable>
             {categories.map((cat) => (
-              <Pressable key={cat} onPress={() => setCategory((cur) => (cur === cat ? null : cat))}>
+              <Pressable key={cat} onPress={() => { animateChip(); setCategory((cur) => (cur === cat ? null : cat)); }}>
                 <TagChip text={cat} filled={category === cat} />
               </Pressable>
             ))}
@@ -175,6 +204,7 @@ export default function BrandsDirectory() {
           </ScrollView>
         )}
       </View>
+      )}
     </SafeAreaView>
   );
 }

@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View,
+  ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, Vibration, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -45,6 +45,12 @@ export default function GroupSettings() {
   );
   const existingIds = useMemo(() => new Set(members.map((m) => m.id)), [members]);
 
+  // Mirrors Swift's haptics — expo-haptics isn't a dependency, so RN's built-in
+  // Vibration stands in (no native add). selectionHaptic = UISelectionFeedbackGenerator;
+  // successHaptic = UINotificationFeedbackGenerator(.success).
+  const selectionHaptic = () => { if (Platform.OS !== 'web') Vibration.vibrate(10); };
+  const successHaptic = () => { if (Platform.OS !== 'web') Vibration.vibrate([0, 30, 60, 30]); };
+
   // Initial group avatar comes from the inbox row; load mute pref on mount.
   useEffect(() => {
     const conv = conversations.find((cv) => cv.id === groupId);
@@ -55,6 +61,7 @@ export default function GroupSettings() {
 
   async function toggleMute(on: boolean) {
     setMutedState(on);
+    selectionHaptic();
     await setMuted(groupId, on);
     await refreshConversations();
   }
@@ -67,6 +74,7 @@ export default function GroupSettings() {
     try {
       const url = await api.changeGroupAvatar(groupId, res.assets[0].uri);
       setAvatarUrl(url);
+      successHaptic();
       await refreshConversations();
     } catch (e) {
       notify(t('groupSettingsChangePhoto'), t('groupSettingsActionError'));
@@ -98,6 +106,7 @@ export default function GroupSettings() {
     setBusyDanger(true);
     try {
       await api.leaveGroup(groupId, userId);
+      successHaptic();
       await refreshConversations();
       router.dismissAll?.();
       router.replace('/(tabs)');
@@ -118,6 +127,7 @@ export default function GroupSettings() {
     setBusyDanger(true);
     try {
       await api.dissolveGroup(groupId);
+      successHaptic();
       await refreshConversations();
       router.dismissAll?.();
       router.replace('/(tabs)');
@@ -156,6 +166,7 @@ export default function GroupSettings() {
     try {
       await api.renameGroup(groupId, newName);
       setCurrentName(newName);
+      successHaptic();
     } catch (e) {
       notify(t('groupSettingsName'), t('groupSettingsActionError'));
       console.warn('group_rename failed', e);
@@ -165,6 +176,7 @@ export default function GroupSettings() {
   }
 
   async function confirmRemove(member: GroupMember) {
+    selectionHaptic();
     const ok = await confirmAsync(t('groupSettingsRemoveConfirm'), undefined, {
       confirmLabel: t('groupSettingsRemove'), cancelLabel: t('authCancel'), destructive: true,
     });
@@ -174,6 +186,7 @@ export default function GroupSettings() {
   async function remove(member: GroupMember) {
     try {
       await api.removeGroupMember(groupId, member.id);
+      successHaptic();
       await reload();
     } catch (e) {
       notify(t('groupSettingsRemove'), t('groupSettingsActionError'));
@@ -269,7 +282,7 @@ export default function GroupSettings() {
             <Text style={[styles.sectionLabel, { color: c.inkTertiary, marginBottom: 0 }]}>
               {`${t('groupSettingsMembers')} · ${members.length}`.toUpperCase()}
             </Text>
-            <Pressable onPress={() => setShowAdd(true)} style={styles.addBtn}>
+            <Pressable onPress={() => { selectionHaptic(); setShowAdd(true); }} style={styles.addBtn}>
               <Ionicons name="person-add" size={14} color={c.coral} />
               <Text style={{ color: c.coral, fontSize: 13, fontWeight: '600' }}>{t('groupSettingsAddMembers')}</Text>
             </Pressable>
@@ -372,6 +385,7 @@ function AddMembersModal({
   const canAdd = selected.size > 0 && !adding;
 
   function toggle(id: string) {
+    if (Platform.OS !== 'web') Vibration.vibrate(10);
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -395,6 +409,7 @@ function AddMembersModal({
     if (failed) {
       notify(t('groupSettingsAddMembers'), t('groupSettingsActionError'));
     } else {
+      if (Platform.OS !== 'web') Vibration.vibrate([0, 30, 60, 30]);
       onAdded();
     }
   }

@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, Vibration, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, Card, Divider, EmptyState, NavBar, SecondaryButton } from '@/components/ui';
@@ -48,6 +48,9 @@ export default function Blocked() {
     try {
       await unblock(contact.id);
       setBlocked((prev) => prev.filter((b) => b.id !== contact.id));
+      // Mirrors Swift's UINotificationFeedbackGenerator().notificationOccurred(.success)
+      // on a successful unblock. expo-haptics isn't a dependency; RN's built-in Vibration needs no native add.
+      if (Platform.OS !== 'web') Vibration.vibrate(10);
     } catch {
       Alert.alert(t('blockError'));
     } finally {

@@ -44,6 +44,7 @@ export default function Settings() {
             );
           })}
         </Card>
+        <Text style={sectionFooter(c.inkSecondary)}>{t('settingsLanguageFooter')}</Text>
 
         {/* ─────────── Appearance ─────────── */}
         <Text style={[sectionHeader(c.inkTertiary), { marginTop: 24 }]}>
@@ -67,6 +68,7 @@ export default function Settings() {
             );
           })}
         </Card>
+        <Text style={sectionFooter(c.inkSecondary)}>{t('settingsAppearanceFooter')}</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -74,4 +76,8 @@ export default function Settings() {
 
 function sectionHeader(color: string) {
   return { color, fontSize: 12, fontWeight: '700' as const, letterSpacing: 1, paddingLeft: 4 };
+}
+
+function sectionFooter(color: string) {
+  return { color, fontSize: 13, marginTop: 10, paddingHorizontal: 4 };
 }

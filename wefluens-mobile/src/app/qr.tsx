@@ -26,25 +26,27 @@ export default function MyQRCode() {
       <NavBar title={t('qrTitle')} onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Avatar colors={gradients.sunset} name={name} imageUrl={profile?.avatarUrl} size={80} online />
+        <View style={styles.avatarShadow}>
+          <Avatar colors={gradients.sunset} name={name} imageUrl={profile?.avatarUrl} size={80} online />
+        </View>
         <Text style={[styles.name, { color: c.ink }]} numberOfLines={1}>{name}</Text>
         {handle.length > 0 ? (
           <Text style={[styles.handle, { color: c.inkSecondary }]} numberOfLines={1}>@{handle}</Text>
         ) : null}
 
-        {/* QR card */}
-        <View style={[styles.qrCard, { borderColor: c.hairline }]}>
-          {payload ? (
-            <QRCode value={payload} size={220} backgroundColor="#fff" color="#1a1410" ecl="M" />
-          ) : (
-            <View style={{ width: 220, height: 220 }} />
-          )}
-        </View>
+        {/* QR card — only when signed in; otherwise a sign-in prompt */}
         {userId ? (
-          <Text style={[styles.idHint, { color: c.inkTertiary }]}>
-            {userId.slice(0, 12).toUpperCase()}…
-          </Text>
-        ) : null}
+          <>
+            <View style={[styles.qrCard, { borderColor: c.hairline }]}>
+              <QRCode value={payload} size={220} backgroundColor="#fff" color="#1a1410" ecl="M" />
+            </View>
+            <Text style={[styles.idHint, { color: c.inkTertiary }]}>
+              {userId.slice(0, 12).toUpperCase()}…
+            </Text>
+          </>
+        ) : (
+          <Text style={[styles.signInPrompt, { color: c.inkSecondary }]}>{t('qrSignInPrompt')}</Text>
+        )}
 
         <Text style={[styles.scanTitle, { color: c.ink }]}>{t('qrScanToAdd')}</Text>
         <Text style={[styles.scanSub, { color: c.inkSecondary }]}>{t('qrScanToAddSub')}</Text>
@@ -68,6 +70,11 @@ export default function MyQRCode() {
 
 const styles = StyleSheet.create({
   content: { alignItems: 'center', paddingHorizontal: 24, paddingTop: 18, paddingBottom: 36 },
+  avatarShadow: {
+    borderRadius: 40,
+    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 14, shadowOffset: { width: 0, height: 8 },
+  },
+  signInPrompt: { fontSize: 15, textAlign: 'center', marginTop: 24, paddingHorizontal: 20, lineHeight: 21 },
   name: { fontSize: 22, fontWeight: '700', marginTop: 12 },
   handle: { fontSize: 14, fontWeight: '500', marginTop: 3 },
   qrCard: {

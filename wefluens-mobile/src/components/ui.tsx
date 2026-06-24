@@ -26,16 +26,19 @@ export function Avatar({
 }) {
   const c = useTheme();
   const ring = size * 0.28;
+  // White hairline ring around the circle — mirrors the Swift Avatar's
+  // `.overlay(Circle().stroke(.white.opacity(0.4), lineWidth: 1))`.
+  const ringStyle = { borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' } as const;
   return (
     <View style={{ width: size, height: size }}>
       {imageUrl ? (
-        <Image source={{ uri: imageUrl }} style={{ width: size, height: size, borderRadius: size / 2 }} contentFit="cover" />
+        <Image source={{ uri: imageUrl }} style={{ width: size, height: size, borderRadius: size / 2, ...ringStyle }} contentFit="cover" />
       ) : (
         <LinearGradient
           colors={colors}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center', ...ringStyle }}
         >
           {symbol ? (
             <Ionicons name={symbol} size={size * 0.5} color="#fff" />
@@ -99,8 +102,17 @@ export function SecondaryButton({
 
 export function Card({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   const c = useTheme();
+  // Soft elevation shadow — mirrors Swift cardStyle's
+  // `.shadow(color: .black.opacity(dark ? 0.2 : 0.05), radius: 18, y: 10)`.
+  const shadow = {
+    shadowColor: '#000',
+    shadowOpacity: c.scheme === 'dark' ? 0.2 : 0.05,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
+  };
   return (
-    <View style={[styles.card, { backgroundColor: c.card, borderColor: c.hairline }, style]}>{children}</View>
+    <View style={[styles.card, shadow, { backgroundColor: c.card, borderColor: c.hairline }, style]}>{children}</View>
   );
 }
 
