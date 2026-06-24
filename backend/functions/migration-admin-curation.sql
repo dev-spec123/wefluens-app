@@ -35,7 +35,9 @@ $$;
 grant execute on function public.is_admin_caller() to authenticated;
 
 -- Feature / reorder / unfeature a creator. rank null => unfeature.
-create or replace function public.admin_set_featured_talent(target uuid, rank int)
+-- (Nullable params get DEFAULT NULL: the Supabase client omits nil args, so the
+-- function must resolve when `rank` isn't sent.)
+create or replace function public.admin_set_featured_talent(target uuid, rank int default null)
 returns void
 language plpgsql security definer set search_path = public
 as $$
@@ -47,7 +49,7 @@ $$;
 grant execute on function public.admin_set_featured_talent(uuid, int) to authenticated;
 
 -- Feature / reorder / unfeature a brand.
-create or replace function public.admin_set_featured_brand(target uuid, rank int)
+create or replace function public.admin_set_featured_brand(target uuid, rank int default null)
 returns void
 language plpgsql security definer set search_path = public
 as $$
@@ -58,16 +60,19 @@ end;
 $$;
 grant execute on function public.admin_set_featured_brand(uuid, int) to authenticated;
 
--- Create (brand_id null) or update a brand. Returns the brand id.
+-- Create (brand_id null) or update a brand. Returns the brand id. p_name is the
+-- only required arg; everything else defaults so the call resolves regardless of
+-- which nil args the client omits. (Reordered so the required param comes first.)
+drop function if exists public.admin_upsert_brand(uuid, text, text, text, text, text, int, int);
 create or replace function public.admin_upsert_brand(
-  brand_id uuid,
   p_name text,
-  p_category text,
-  p_tagline text,
-  p_symbol text,
-  p_colors text,
-  p_active_campaigns int,
-  p_featured_rank int
+  brand_id uuid default null,
+  p_category text default null,
+  p_tagline text default null,
+  p_symbol text default null,
+  p_colors text default null,
+  p_active_campaigns int default null,
+  p_featured_rank int default null
 )
 returns uuid
 language plpgsql security definer set search_path = public
@@ -90,7 +95,7 @@ begin
   end if;
 end;
 $$;
-grant execute on function public.admin_upsert_brand(uuid, text, text, text, text, text, int, int) to authenticated;
+grant execute on function public.admin_upsert_brand(text, uuid, text, text, text, text, int, int) to authenticated;
 
 create or replace function public.admin_delete_brand(target uuid)
 returns void

@@ -78,12 +78,6 @@ struct EditProfileView: View {
         .background(Theme.paper(for: colorScheme).ignoresSafeArea())
         .navigationTitle(l10n.t(.editProfileTitle))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }
-                    .foregroundStyle(Theme.inkSecondary(for: colorScheme))
-            }
-        }
         .overlay(alignment: .top) {
             if showSuccess {
                 successToast
