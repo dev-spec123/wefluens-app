@@ -57,14 +57,22 @@ struct ManageBrandsView: View {
                 if isLoading {
                     ProgressView().tint(Theme.coral).frame(maxWidth: .infinity).padding(.vertical, 20)
                 } else if brandList.isEmpty {
-                    VStack(spacing: 8) {
+                    VStack(spacing: 12) {
                         Image(systemName: "building.2")
                             .font(.system(size: 30, weight: .semibold))
                             .foregroundStyle(Theme.inkTertiary(for: colorScheme))
-                        Text("No brands yet. Tap New Brand to create one.")
+                        Text("No brands yet. Create one above, or import the starter set.")
                             .font(.system(size: 14))
                             .foregroundStyle(Theme.inkSecondary(for: colorScheme))
                             .multilineTextAlignment(.center)
+                        Button { importSamples() } label: {
+                            Text("Import sample brands")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Theme.coral)
+                                .padding(.horizontal, 18).padding(.vertical, 10)
+                                .background(Theme.coral.opacity(0.1)).clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain).disabled(busy)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 30)
                 } else {
@@ -172,6 +180,26 @@ struct ManageBrandsView: View {
             defer { busy = false }
             do { try await data.adminSetFeaturedBrand(brandId: brand.id, rank: rank); await reload() }
             catch { errorText = "Couldn't update brand: \(error.localizedDescription)" }
+        }
+    }
+
+    /// Inserts the hardcoded SampleData brands as real DB rows (one-time seed) so
+    /// there's a starter set to curate. Colors are stored as the JSON [UInt] format
+    /// parseColors expects.
+    private func importSamples() {
+        guard !busy else { return }
+        busy = true
+        Task {
+            defer { busy = false }
+            do {
+                for b in SampleData.brands {
+                    let colorsJSON = "[\(b.colors.map(String.init).joined(separator: ","))]"
+                    try await data.adminUpsertBrand(
+                        id: nil, name: b.name, category: b.category, tagline: b.tagline,
+                        symbol: b.symbol, colors: colorsJSON, activeCampaigns: b.activeCampaigns, featuredRank: nil)
+                }
+                await reload()
+            } catch { errorText = "Couldn't import: \(error.localizedDescription)" }
         }
     }
 

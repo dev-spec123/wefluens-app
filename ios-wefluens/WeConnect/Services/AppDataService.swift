@@ -710,6 +710,19 @@ final class AppDataService {
         }
     }
 
+    /// Lists all users for the Top Talent curation screen, each with its current
+    /// featured state. (Selecting featured_rank will fail loudly if the
+    /// admin-curation migration hasn't been applied — which is the intent.)
+    @MainActor
+    func loadProfilesForCuration() async throws -> [ProfileCurationRow] {
+        try await supabase
+            .from("profiles")
+            .select("id,name,handle,role,avatar_url,followers,featured_rank")
+            .limit(500)
+            .execute()
+            .value
+    }
+
     /// Lists currently-featured creators (with rank) for the curation screen.
     @MainActor
     func adminListFeaturedTalent() async throws -> [FeaturedTalentRow] {

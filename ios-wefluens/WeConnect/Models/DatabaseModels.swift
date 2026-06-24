@@ -342,6 +342,23 @@ nonisolated struct DeleteBrandParams: Encodable, Sendable {
     let target: String
 }
 
+/// A user row for the Top Talent curation list (all users, with featured state).
+nonisolated struct ProfileCurationRow: Codable, Identifiable, Sendable {
+    let id: UUID
+    let name: String?
+    let handle: String?
+    let role: String?
+    let avatarUrl: String?
+    let followers: String?
+    let featuredRank: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, handle, role, followers
+        case avatarUrl = "avatar_url"
+        case featuredRank = "featured_rank"
+    }
+}
+
 /// One currently-featured creator (with its rank) for the curation screen.
 nonisolated struct FeaturedTalentRow: Codable, Identifiable, Sendable {
     let id: UUID
