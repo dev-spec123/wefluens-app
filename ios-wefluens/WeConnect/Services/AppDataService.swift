@@ -830,6 +830,16 @@ final class AppDataService {
             .execute()
     }
 
+    /// Grants (makeAdmin true) or revokes (makeAdmin false) the is_admin flag on
+    /// another user. The server is_admin-gates the call and blocks changing your
+    /// own status. Mirrors adminDeleteBrand. Callers refresh their user list after.
+    @MainActor
+    func adminSetAdmin(targetId: UUID, makeAdmin: Bool) async throws {
+        try await supabase
+            .rpc("admin_set_admin", params: SetAdminParams(target: targetId.uuidString, make_admin: makeAdmin))
+            .execute()
+    }
+
     /// Sends a friend request (pure DB, no email). Returns the server status:
     /// "sent", "already_sent", "already_friends", or "incoming_exists".
     @MainActor

@@ -23,12 +23,16 @@ struct AdminUsersView: View {
         case ban(AdminUser)
         case unban(AdminUser)
         case delete(AdminUser)
+        case makeAdmin(AdminUser)
+        case removeAdmin(AdminUser)
 
         var id: String {
             switch self {
             case .ban(let u): return "ban-\(u.id)"
             case .unban(let u): return "unban-\(u.id)"
             case .delete(let u): return "delete-\(u.id)"
+            case .makeAdmin(let u): return "make-admin-\(u.id)"
+            case .removeAdmin(let u): return "remove-admin-\(u.id)"
             }
         }
     }
@@ -133,6 +137,42 @@ struct AdminUsersView: View {
                 Text("\(u.name)\n\(u.email)\n\nThis action cannot be undone.")
             }
         }
+        .confirmationDialog(
+            "Grant admin to this user?",
+            isPresented: .init(
+                get: { if case .makeAdmin = alertState { true } else { false } },
+                set: { if !$0 { alertState = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Make admin") {
+                guard case .makeAdmin(let u) = alertState else { return }
+                Task { await setAdmin(u, makeAdmin: true) }
+            }
+            Button("Cancel", role: .cancel) { alertState = nil }
+        } message: {
+            if case .makeAdmin(let u) = alertState {
+                Text("\(u.name) (\(u.email)) will get full admin access.")
+            }
+        }
+        .confirmationDialog(
+            "Remove admin from this user?",
+            isPresented: .init(
+                get: { if case .removeAdmin = alertState { true } else { false } },
+                set: { if !$0 { alertState = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Remove admin", role: .destructive) {
+                guard case .removeAdmin(let u) = alertState else { return }
+                Task { await setAdmin(u, makeAdmin: false) }
+            }
+            Button("Cancel", role: .cancel) { alertState = nil }
+        } message: {
+            if case .removeAdmin(let u) = alertState {
+                Text("\(u.name) (\(u.email)) will lose admin access.")
+            }
+        }
     }
 
     // MARK: - Views
@@ -189,11 +229,14 @@ struct AdminUsersView: View {
                 ForEach(users) { user in
                     UserRow(
                         user: user,
+                        isSelf: user.id == auth.userId,
                         l10n: l10n,
                         colorScheme: colorScheme,
                         onBan: { alertState = .ban(user) },
                         onUnban: { alertState = .unban(user) },
-                        onDelete: { alertState = .delete(user) }
+                        onDelete: { alertState = .delete(user) },
+                        onMakeAdmin: { alertState = .makeAdmin(user) },
+                        onRemoveAdmin: { alertState = .removeAdmin(user) }
                     )
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     .listRowBackground(Color.clear)
@@ -292,6 +335,22 @@ struct AdminUsersView: View {
             errorMessage = "Failed to delete user: \(error.localizedDescription)"
         }
     }
+
+    @MainActor
+    private func setAdmin(_ user: AdminUser, makeAdmin: Bool) async {
+        do {
+            try await supabase.rpc(
+                "admin_set_admin",
+                params: AdminSetAdminParams(target: user.id, make_admin: makeAdmin)
+            )
+            .execute()
+            await loadUsers()
+        } catch {
+            errorMessage = makeAdmin
+                ? "Failed to grant admin: \(error.localizedDescription)"
+                : "Failed to remove admin: \(error.localizedDescription)"
+        }
+    }
 }
 
 // MARK: - RPC Params (UUID typed — matches the fixed DB functions)
@@ -303,6 +362,11 @@ nonisolated struct AdminBanParams: Encodable, Sendable {
 
 nonisolated struct AdminDeleteParams: Encodable, Sendable {
     let target_id: UUID
+}
+
+nonisolated struct AdminSetAdminParams: Encodable, Sendable {
+    let target: UUID
+    let make_admin: Bool
 }
 
 // MARK: - Invite edge function
@@ -331,11 +395,16 @@ struct AdminUser: Identifiable {
 
 private struct UserRow: View {
     let user: AdminUser
+    /// True when this row is the signed-in admin's own account. The make/remove-admin
+    /// action is hidden here (belt-and-suspenders; the server also blocks self-change).
+    let isSelf: Bool
     let l10n: LocalizationManager
     let colorScheme: ColorScheme
     let onBan: () -> Void
     let onUnban: () -> Void
     let onDelete: () -> Void
+    let onMakeAdmin: () -> Void
+    let onRemoveAdmin: () -> Void
 
     private var initials: String {
         let parts = user.name.split(separator: " ")
@@ -386,6 +455,23 @@ private struct UserRow: View {
             }
 
             Menu {
+                // Hide the role action on the current admin's own row (the server
+                // also rejects self-change). Everyone else can be promoted/demoted.
+                if !isSelf {
+                    if user.isAdmin {
+                        Button(role: .destructive) {
+                            onRemoveAdmin()
+                        } label: {
+                            Label("Remove admin", systemImage: "xmark.shield.fill")
+                        }
+                    } else {
+                        Button {
+                            onMakeAdmin()
+                        } label: {
+                            Label("Make admin", systemImage: "checkmark.shield.fill")
+                        }
+                    }
+                }
                 if user.isBanned {
                     Button {
                         onUnban()

@@ -342,6 +342,14 @@ nonisolated struct DeleteBrandParams: Encodable, Sendable {
     let target: String
 }
 
+/// Params for the `admin_set_admin` RPC — grant (make_admin true) or revoke
+/// (make_admin false) the is_admin flag on another user. Keys match the SQL
+/// named params exactly. The server also blocks changing your own status.
+nonisolated struct SetAdminParams: Encodable, Sendable {
+    let target: String
+    let make_admin: Bool
+}
+
 /// A user row for the Top Talent curation list (all users, with featured state).
 nonisolated struct ProfileCurationRow: Codable, Identifiable, Sendable {
     let id: UUID
