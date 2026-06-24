@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, StyleSheet, Text, TextInput, View,
@@ -165,6 +165,28 @@ export default function Admin() {
     );
   }
 
+  function CurationRow({
+    icon, title, onPress,
+  }: {
+    icon: keyof typeof Ionicons.glyphMap; title: string; onPress: () => void;
+  }) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.curationRow,
+          { backgroundColor: pressed ? c.cardSubtle : 'transparent' },
+        ]}
+      >
+        <View style={[styles.curationIcon, { backgroundColor: c.coral + '1A' }]}>
+          <Ionicons name={icon} size={16} color={c.coral} />
+        </View>
+        <Text style={[styles.curationTitle, { color: c.ink }]}>{title}</Text>
+        <Ionicons name="chevron-forward" size={15} color={c.inkTertiary} />
+      </Pressable>
+    );
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.paper }} edges={['top']}>
       <NavBar title={t('adminTitle')} onBack={() => router.back()} />
@@ -178,15 +200,32 @@ export default function Admin() {
           keyExtractor={(u) => u.id}
           renderItem={renderRow}
           ListHeaderComponent={
-            <View style={styles.header}>
-              <Text style={[styles.headerTitle, { color: c.inkSecondary }]}>{t('adminAllUsers')}</Text>
-              <Pressable
-                onPress={() => setShowInvite(true)}
-                style={[styles.inviteBtn, { backgroundColor: c.coral + '14' }]}
-                hitSlop={8}
-              >
-                <Text style={{ color: c.coral, fontSize: 13, fontWeight: '700' }}>+ {t('adminInvite')}</Text>
-              </Pressable>
+            <View>
+              <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 }}>
+                <Card>
+                  <CurationRow
+                    icon="business"
+                    title={t('adminManageBrands')}
+                    onPress={() => router.push('/admin/brands' as Href)}
+                  />
+                  <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: 60 }} />
+                  <CurationRow
+                    icon="megaphone"
+                    title={t('adminManageCampaigns')}
+                    onPress={() => router.push('/admin/campaigns' as Href)}
+                  />
+                </Card>
+              </View>
+              <View style={styles.header}>
+                <Text style={[styles.headerTitle, { color: c.inkSecondary }]}>{t('adminAllUsers')}</Text>
+                <Pressable
+                  onPress={() => setShowInvite(true)}
+                  style={[styles.inviteBtn, { backgroundColor: c.coral + '14' }]}
+                  hitSlop={8}
+                >
+                  <Text style={{ color: c.coral, fontSize: 13, fontWeight: '700' }}>+ {t('adminInvite')}</Text>
+                </Pressable>
+              </View>
             </View>
           }
           ListEmptyComponent={<EmptyState icon="people-outline" title={t('adminNoUsers')} />}
@@ -260,6 +299,9 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
   inviteBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.sm },
+  curationRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 14, paddingVertical: 13 },
+  curationIcon: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  curationTitle: { flex: 1, fontSize: 15, fontWeight: '500' },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.sm },
   scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   modalCard: { width: '100%', borderRadius: radius.lg, padding: 20, alignItems: 'center' },

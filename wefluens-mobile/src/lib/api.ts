@@ -801,6 +801,136 @@ export async function loadDiscover(): Promise<{ brands: Brand[]; campaigns: Camp
   }
 }
 
+// ─────────────────── Discover admin curation (is_admin-gated RPCs) ───────────────────
+// Mirrors the Swift AppDataService admin-curation methods. Every RPC is
+// is_admin-gated server-side. Reads go straight to the public tables (no
+// SampleData fallback — the admin view must only show real, editable rows).
+
+/** Parse a hex string ("#FF4D6D" / "FF4D6D") into a decimal int (e.g. 16730477).
+ *  Falls back to the brand coral/tangerine ints used across the app. */
+function hexToInt(s: string, fallback: number): number {
+  const cleaned = s.trim().replace(/^#/, '');
+  const n = parseInt(cleaned, 16);
+  return Number.isFinite(n) ? n & 0xffffff : fallback;
+}
+
+/** Map a raw `brands` row (from select('*')) to a Brand, carrying featuredRank. */
+function mapBrandRow(r: any): Brand & { featuredRank: number | null } {
+  return {
+    id: r.id, name: r.name, category: r.category ?? '', tagline: r.tagline ?? '',
+    symbol: r.symbol ?? 'sparkles', colors: parseColors(r.colors), activeCampaigns: r.active_campaigns ?? 0,
+    featuredRank: r.featured_rank ?? null,
+  };
+}
+
+/** Map a raw `campaigns` row (from select('*')) to a Campaign. */
+function mapCampaignRow(r: any): Campaign {
+  return {
+    id: r.id, title: r.title, brand: r.brand, budget: r.budget ?? '', tags: r.tags ?? [],
+    deadline: r.deadline ?? '', symbol: r.symbol ?? 'sparkles', colors: parseColors(r.colors), spotsLeft: r.spots_left ?? 0,
+  };
+}
+
+/** A Brand plus its featured rank (null = not featured) — the admin list shape. */
+export type AdminBrand = Brand & { featuredRank: number | null };
+
+/** Admin: all brands, name-sorted, straight from the table (no SampleData
+ *  fallback). Mirrors Swift's loadBrandsForAdmin. */
+export async function loadBrandsForAdmin(): Promise<AdminBrand[]> {
+  const { data, error } = await supabase.from('brands').select('*').order('name', { ascending: true });
+  if (error) throw error;
+  return ((data as any[]) ?? []).map(mapBrandRow);
+}
+
+/** Admin: create (id null) or update a brand (admin_upsert_brand RPC). Colors are
+ *  sent as the JSON int-array string parseColors expects. Returns the brand id. */
+export async function adminUpsertBrand(args: {
+  id?: string | null;
+  name: string;
+  category?: string | null;
+  tagline?: string | null;
+  symbol?: string | null;
+  color1: string;
+  color2: string;
+  activeCampaigns?: number | null;
+  featuredRank?: number | null;
+}): Promise<string> {
+  const c1 = hexToInt(args.color1, 0xff4d6d);
+  const c2 = hexToInt(args.color2, 0xff9a5a);
+  const { data, error } = await supabase.rpc('admin_upsert_brand', {
+    brand_id: args.id ?? null,
+    p_name: args.name,
+    p_category: args.category ?? null,
+    p_tagline: args.tagline ?? null,
+    p_symbol: args.symbol ?? null,
+    p_colors: `[${c1},${c2}]`,
+    p_active_campaigns: args.activeCampaigns ?? null,
+    p_featured_rank: args.featuredRank ?? null,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+/** Admin: delete a brand (admin_delete_brand RPC). */
+export async function adminDeleteBrand(id: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_delete_brand', { target: id });
+  if (error) throw error;
+}
+
+/** Admin: feature / reorder / unfeature a brand (admin_set_featured_brand RPC).
+ *  rank null = unfeature. */
+export async function adminSetFeaturedBrand(brandId: string, rank: number | null): Promise<void> {
+  const { error } = await supabase.rpc('admin_set_featured_brand', { target: brandId, rank });
+  if (error) throw error;
+}
+
+/** Admin: all campaigns, newest first, straight from the table (no SampleData
+ *  fallback). Mirrors Swift's loadCampaignsForAdmin. */
+export async function loadCampaignsForAdmin(): Promise<Campaign[]> {
+  const { data, error } = await supabase.from('campaigns').select('*').order('created_at', { ascending: false });
+  if (error) throw error;
+  return ((data as any[]) ?? []).map(mapCampaignRow);
+}
+
+/** Admin: create (id null) or update a campaign (admin_upsert_campaign RPC).
+ *  Colors are sent as two decimal-int strings (color_a / color_b); the SQL
+ *  combines them into the JSON `[a,b]` text parseColors expects. Returns the id. */
+export async function adminUpsertCampaign(args: {
+  id?: string | null;
+  title: string;
+  brand?: string | null;
+  budget?: string | null;
+  tags?: string[] | null;
+  deadline?: string | null;
+  symbol?: string | null;
+  color1: string;
+  color2: string;
+  spotsLeft?: number | null;
+}): Promise<string> {
+  const a = hexToInt(args.color1, 0xff4d6d);
+  const b = hexToInt(args.color2, 0xff9a5a);
+  const { data, error } = await supabase.rpc('admin_upsert_campaign', {
+    campaign_id: args.id ?? null,
+    p_title: args.title,
+    p_brand: args.brand ?? null,
+    p_budget: args.budget ?? null,
+    p_tags: args.tags ?? null,
+    p_deadline: args.deadline ?? null,
+    p_symbol: args.symbol ?? null,
+    p_color_a: String(a),
+    p_color_b: String(b),
+    p_spots_left: args.spotsLeft ?? null,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+/** Admin: delete a campaign (admin_delete_campaign RPC). */
+export async function adminDeleteCampaign(id: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_delete_campaign', { target: id });
+  if (error) throw error;
+}
+
 // ─────────────────────────── Trust & Safety ───────────────────────────
 
 export async function loadBlocks(uid: string): Promise<Set<string>> {
