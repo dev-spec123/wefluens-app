@@ -13,6 +13,12 @@ struct DiscoverView: View {
     private var brands: [Brand] { data.brands }
     private var campaigns: [Campaign] { data.campaigns }
 
+    /// Discover's "Top Brands" strip = admin-featured brands only, in rank order.
+    private var featuredBrands: [Brand] {
+        data.brands.filter { $0.featuredRank != nil }
+            .sorted { ($0.featuredRank ?? 0) < ($1.featuredRank ?? 0) }
+    }
+
     @State private var selectedFilter: String = "All"
     @State private var selectedBrand: String? = nil
 
@@ -67,7 +73,7 @@ struct DiscoverView: View {
 
                     featured
                     filterBar
-                    brandsSection
+                    if !featuredBrands.isEmpty { brandsSection }
                     campaignsSection
                 }
                 .padding(.bottom, 24)
@@ -79,6 +85,10 @@ struct DiscoverView: View {
                     CampaignDetailView(campaign: campaign)
                 }
             }
+            // Refresh on each appearance (e.g. returning from the admin curation
+            // panel) so featured-brand changes show without an app restart.
+            .onAppear { Task { await data.loadDiscover() } }
+            .refreshable { await data.loadDiscover() }
         }
     }
 
@@ -150,7 +160,7 @@ struct DiscoverView: View {
             sectionTitle(l10n.t(.discoverTopBrands))
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
-                    ForEach(brands) { brand in
+                    ForEach(featuredBrands) { brand in
                         Button {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 selectedBrand = (selectedBrand == brand.name) ? nil : brand.name

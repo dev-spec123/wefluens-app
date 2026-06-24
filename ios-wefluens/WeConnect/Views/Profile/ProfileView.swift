@@ -54,7 +54,7 @@ struct ProfileView: View {
                     favoritesRow
                     settingsGroup
                     if auth.isAdmin {
-                        adminGroup
+                        developerPanelGroup
                     }
                     supportGroup
                     signOut
@@ -337,20 +337,20 @@ struct ProfileView: View {
         }
     }
 
-    private var adminGroup: some View {
+    private var developerPanelGroup: some View {
         VStack(alignment: .leading, spacing: 10) {
-            groupTitle("ADMIN")
+            groupTitle("Developer")
             NavigationLink {
-                AdminUsersView()
+                DeveloperPanelView()
             } label: {
                 HStack(spacing: 14) {
-                    Image(systemName: "shield.checkered")
+                    Image(systemName: "hammer.fill")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.coral)
                         .frame(width: 36, height: 36)
                         .background(Theme.coral.opacity(0.1))
                         .clipShape(RoundedRectangle(cornerRadius: 11))
-                    Text(l10n.t(.adminTitle))
+                    Text("Developer Panel")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Theme.ink(for: colorScheme))
                     Spacer()

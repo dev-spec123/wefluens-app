@@ -693,6 +693,82 @@ final class AppDataService {
         return results.filter { !blockedUserIds.contains($0.id) }
     }
 
+    // MARK: - Admin curation (every RPC is is_admin-gated server-side)
+
+    /// Loads brands straight from the DB with NO SampleData fallback — the admin
+    /// view must only show real, editable rows (featuring a sample brand that
+    /// isn't in the table is a no-op).
+    @MainActor
+    func loadBrandsForAdmin() async throws -> [Brand] {
+        let rows: [BrandRow] = try await supabase
+            .from("brands").select().order("name", ascending: true).execute().value
+        return rows.map { row in
+            Brand(id: row.id, name: row.name, category: row.category ?? "",
+                  tagline: row.tagline ?? "", symbol: row.symbol ?? "sparkles",
+                  colors: parseColors(row.colors), activeCampaigns: row.activeCampaigns ?? 0,
+                  featuredRank: row.featuredRank)
+        }
+    }
+
+    /// Lists all users for the Top Talent curation screen, each with its current
+    /// featured state. (Selecting featured_rank will fail loudly if the
+    /// admin-curation migration hasn't been applied — which is the intent.)
+    @MainActor
+    func loadProfilesForCuration() async throws -> [ProfileCurationRow] {
+        try await supabase
+            .from("profiles")
+            .select("id,name,handle,role,avatar_url,followers,featured_rank")
+            .limit(500)
+            .execute()
+            .value
+    }
+
+    /// Lists currently-featured creators (with rank) for the curation screen.
+    @MainActor
+    func adminListFeaturedTalent() async throws -> [FeaturedTalentRow] {
+        try await supabase
+            .rpc("admin_list_featured_talent")
+            .execute()
+            .value
+    }
+
+    /// Feature / reorder / unfeature a creator in Top Talent. rank nil = unfeature.
+    @MainActor
+    func adminSetFeaturedTalent(userId: UUID, rank: Int?) async throws {
+        try await supabase
+            .rpc("admin_set_featured_talent", params: SetFeaturedTalentParams(target: userId.uuidString, rank: rank))
+            .execute()
+    }
+
+    /// Feature / reorder / unfeature a brand.
+    @MainActor
+    func adminSetFeaturedBrand(brandId: UUID, rank: Int?) async throws {
+        try await supabase
+            .rpc("admin_set_featured_brand", params: SetFeaturedBrandParams(target: brandId.uuidString, rank: rank))
+            .execute()
+    }
+
+    /// Create (id nil) or update a brand. Returns the brand id.
+    @MainActor
+    @discardableResult
+    func adminUpsertBrand(id: UUID?, name: String, category: String?, tagline: String?,
+                          symbol: String?, colors: String?, activeCampaigns: Int?, featuredRank: Int?) async throws -> UUID {
+        let newId: UUID = try await supabase
+            .rpc("admin_upsert_brand", params: UpsertBrandParams(
+                brand_id: id?.uuidString, p_name: name, p_category: category, p_tagline: tagline,
+                p_symbol: symbol, p_colors: colors, p_active_campaigns: activeCampaigns, p_featured_rank: featuredRank))
+            .execute()
+            .value
+        return newId
+    }
+
+    @MainActor
+    func adminDeleteBrand(id: UUID) async throws {
+        try await supabase
+            .rpc("admin_delete_brand", params: DeleteBrandParams(target: id.uuidString))
+            .execute()
+    }
+
     /// Sends a friend request (pure DB, no email). Returns the server status:
     /// "sent", "already_sent", "already_friends", or "incoming_exists".
     @MainActor
@@ -1873,51 +1949,41 @@ final class AppDataService {
 
     @MainActor
     func loadDiscover() async {
+        // Brands and campaigns are loaded independently: a failure in one must not
+        // clobber the other (a transient campaigns error used to overwrite real,
+        // freshly-curated brands with SampleData). SampleData is only used as a
+        // fallback when we genuinely have nothing to show.
         do {
             let bRows: [BrandRow] = try await supabase
-                .from("brands")
-                .select()
-                .execute()
-                .value
-
-            brands = bRows.map { row in
+                .from("brands").select().execute().value
+            let mapped = bRows.map { row in
                 Brand(
-                    id: row.id,
-                    name: row.name,
-                    category: row.category ?? "",
-                    tagline: row.tagline ?? "",
-                    symbol: row.symbol ?? "sparkles",
-                    colors: parseColors(row.colors),
-                    activeCampaigns: row.activeCampaigns ?? 0
+                    id: row.id, name: row.name, category: row.category ?? "",
+                    tagline: row.tagline ?? "", symbol: row.symbol ?? "sparkles",
+                    colors: parseColors(row.colors), activeCampaigns: row.activeCampaigns ?? 0,
+                    featuredRank: row.featuredRank
                 )
             }
-
-            let cRows: [CampaignRow] = try await supabase
-                .from("campaigns")
-                .select()
-                .execute()
-                .value
-
-            campaigns = cRows.map { row in
-                Campaign(
-                    id: row.id,
-                    title: row.title,
-                    brand: row.brand,
-                    budget: row.budget ?? "",
-                    tags: row.tags ?? [],
-                    deadline: row.deadline ?? "",
-                    symbol: row.symbol ?? "sparkles",
-                    colors: parseColors(row.colors),
-                    spotsLeft: row.spotsLeft ?? 0
-                )
-            }
-
-            if brands.isEmpty { brands = SampleData.brands }
-            if campaigns.isEmpty { campaigns = SampleData.campaigns }
+            brands = mapped.isEmpty ? SampleData.brands : mapped
         } catch {
-            print("⚠️ Discover load failed: \(error)")
-            brands = SampleData.brands
-            campaigns = SampleData.campaigns
+            print("⚠️ Brands load failed: \(error)")
+            if brands.isEmpty { brands = SampleData.brands }  // keep what we have
+        }
+
+        do {
+            let cRows: [CampaignRow] = try await supabase
+                .from("campaigns").select().execute().value
+            let mapped = cRows.map { row in
+                Campaign(
+                    id: row.id, title: row.title, brand: row.brand, budget: row.budget ?? "",
+                    tags: row.tags ?? [], deadline: row.deadline ?? "", symbol: row.symbol ?? "sparkles",
+                    colors: parseColors(row.colors), spotsLeft: row.spotsLeft ?? 0
+                )
+            }
+            campaigns = mapped.isEmpty ? SampleData.campaigns : mapped
+        } catch {
+            print("⚠️ Campaigns load failed: \(error)")
+            if campaigns.isEmpty { campaigns = SampleData.campaigns }
         }
     }
 }

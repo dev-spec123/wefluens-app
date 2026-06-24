@@ -19,6 +19,10 @@ struct AddFriendView: View {
     @State private var isSearching: Bool = false
     @State private var searchTask: Task<Void, Never>? = nil
 
+    /// The curated Top Talent list, shown as suggestions when no search is active.
+    @State private var suggestions: [SearchUserResult] = []
+    @State private var loadingSuggestions = true
+
     /// Local relationship overrides applied immediately after an action.
     @State private var localRelationship: [UUID: String] = [:]
     @State private var actioning: Set<UUID> = []
@@ -65,7 +69,15 @@ struct AddFriendView: View {
                         .foregroundStyle(Theme.coral)
                 }
             }
+            .task { await loadSuggestions() }
         }
+    }
+
+    @MainActor
+    private func loadSuggestions() async {
+        do { suggestions = try await data.loadTopTalent() }
+        catch { suggestions = [] }
+        loadingSuggestions = false
     }
 
     // MARK: - Search field
@@ -109,7 +121,13 @@ struct AddFriendView: View {
     private var content: some View {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.count < 2 {
-            centeredState(icon: "person.2.fill", title: l10n.t(.addFriendHint), subtitle: nil)
+            if loadingSuggestions && suggestions.isEmpty {
+                ProgressView().tint(Theme.coral).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if suggestions.isEmpty {
+                centeredState(icon: "person.2.fill", title: l10n.t(.addFriendHint), subtitle: nil)
+            } else {
+                peopleList(suggestions, header: l10n.t(.contactsTopTalent))
+            }
         } else if isSearching && results.isEmpty {
             VStack(spacing: 14) {
                 ProgressView().tint(Theme.coral).scaleEffect(1.1)
@@ -121,24 +139,34 @@ struct AddFriendView: View {
         } else if results.isEmpty {
             centeredState(icon: "magnifyingglass", title: l10n.t(.addFriendNoResults), subtitle: nil)
         } else {
-            resultsList
+            peopleList(results, header: nil)
         }
     }
 
-    private var resultsList: some View {
+    private func peopleList(_ people: [SearchUserResult], header: String?) -> some View {
         ScrollView {
-            VStack(spacing: 0) {
-                ForEach(Array(results.enumerated()), id: \.element.id) { index, user in
-                    resultRow(user)
-                    if index < results.count - 1 {
-                        Divider()
-                            .background(Theme.hairline(for: colorScheme))
-                            .padding(.leading, 76)
+            VStack(alignment: .leading, spacing: 8) {
+                if let header {
+                    Text(header.uppercased())
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                        .tracking(1)
+                        .padding(.leading, 6)
+                        .padding(.top, 4)
+                }
+                VStack(spacing: 0) {
+                    ForEach(Array(people.enumerated()), id: \.element.id) { index, user in
+                        resultRow(user)
+                        if index < people.count - 1 {
+                            Divider()
+                                .background(Theme.hairline(for: colorScheme))
+                                .padding(.leading, 76)
+                        }
                     }
                 }
+                .padding(.vertical, 6)
+                .cardStyle()
             }
-            .padding(.vertical, 6)
-            .cardStyle()
             .padding(.bottom, 24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

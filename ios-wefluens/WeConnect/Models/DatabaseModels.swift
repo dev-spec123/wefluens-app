@@ -317,13 +317,73 @@ nonisolated struct BrandRow: Codable, Identifiable, Sendable {
     let symbol: String?
     let colors: String?
     let activeCampaigns: Int?
+    let featuredRank: Int?
     let createdAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id, name, category, tagline, symbol, colors
         case activeCampaigns = "active_campaigns"
+        case featuredRank = "featured_rank"
         case createdAt = "created_at"
     }
+}
+
+// MARK: - Admin curation RPC params
+
+nonisolated struct SetFeaturedTalentParams: Encodable, Sendable {
+    let target: String
+    let rank: Int?
+}
+nonisolated struct SetFeaturedBrandParams: Encodable, Sendable {
+    let target: String
+    let rank: Int?
+}
+nonisolated struct DeleteBrandParams: Encodable, Sendable {
+    let target: String
+}
+
+/// A user row for the Top Talent curation list (all users, with featured state).
+nonisolated struct ProfileCurationRow: Codable, Identifiable, Sendable {
+    let id: UUID
+    let name: String?
+    let handle: String?
+    let role: String?
+    let avatarUrl: String?
+    let followers: String?
+    let featuredRank: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, handle, role, followers
+        case avatarUrl = "avatar_url"
+        case featuredRank = "featured_rank"
+    }
+}
+
+/// One currently-featured creator (with its rank) for the curation screen.
+nonisolated struct FeaturedTalentRow: Codable, Identifiable, Sendable {
+    let id: UUID
+    let name: String
+    let handle: String
+    let role: String
+    let avatarUrl: String?
+    let followers: String
+    let featuredRank: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, handle, role, followers
+        case avatarUrl = "avatar_url"
+        case featuredRank = "featured_rank"
+    }
+}
+nonisolated struct UpsertBrandParams: Encodable, Sendable {
+    let brand_id: String?
+    let p_name: String
+    let p_category: String?
+    let p_tagline: String?
+    let p_symbol: String?
+    let p_colors: String?
+    let p_active_campaigns: Int?
+    let p_featured_rank: Int?
 }
 
 // MARK: - Friendships & Friend RPCs

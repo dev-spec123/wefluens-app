@@ -17,6 +17,23 @@ ref** before running anything (Settings → General → Reference ID). This proj
 
 ---
 
+## Admin curation pass (later branch — feature/admin-curation)
+
+After the steps below, the admin-curation feature adds one more migration:
+
+1. SQL Editor → run **`backend/functions/migration-admin-curation.sql`** — adds
+   `featured_rank` to `profiles` and `brands`, the `admin_*` curation RPCs, and
+   updates `browse_top_talent` to put featured creators first.
+2. **Make yourself an admin** so the hidden panel works — the curation tools are
+   gated by `is_admin`:
+   ```sql
+   update public.profiles set is_admin = true where email = 'ronaldj@wefluens.com';
+   ```
+3. In the app, open Me → About and tap the version ~7× to unlock the Developer
+   panel (only appears for admins).
+
+---
+
 ## 1. Run the schema migration  *(required)*
 
 Dashboard → **SQL Editor** → New query → paste the full contents of
