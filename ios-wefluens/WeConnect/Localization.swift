@@ -146,6 +146,8 @@ enum L10n: String {
     case faqTitle
     case supportFormTitle, supportSubjectField, supportMessageField
     case supportSendButton, supportSentMsg, supportErrorMsg, supportEmptyMsg
+    case supportTypeField, supportTypeBug, supportTypeIdea, supportTypeOther
+    case supportAddImages, supportMaxImages, supportImageTooLarge
 
     // Settings
     case settingsTitle, settingsLanguage, settingsLanguageFooter, settingsDone
@@ -406,6 +408,13 @@ final class LocalizationManager {
             .supportSentMsg: "Thanks — we got your message and will get back to you by email.",
             .supportErrorMsg: "Couldn't send your message. Please try again.",
             .supportEmptyMsg: "Please add a subject and a message.",
+            .supportTypeField: "Type",
+            .supportTypeBug: "Bug",
+            .supportTypeIdea: "Idea",
+            .supportTypeOther: "Other",
+            .supportAddImages: "Add images",
+            .supportMaxImages: "Max 6 images",
+            .supportImageTooLarge: "Image too large (max 5MB)",
             .profileSignOut: "Sign Out",
             .settingsTitle: "Settings", .settingsLanguage: "Language",
             .settingsLanguageFooter: "Choose your preferred language. It applies across the whole app.",
@@ -700,6 +709,13 @@ final class LocalizationManager {
             .supportSentMsg: "谢谢——我们已收到您的消息，会通过邮件回复您。",
             .supportErrorMsg: "消息发送失败，请重试。",
             .supportEmptyMsg: "请填写主题和消息内容。",
+            .supportTypeField: "类型",
+            .supportTypeBug: "问题",
+            .supportTypeIdea: "建议",
+            .supportTypeOther: "其他",
+            .supportAddImages: "添加图片",
+            .supportMaxImages: "最多 6 张图片",
+            .supportImageTooLarge: "图片过大（最大 5MB）",
             .profileSignOut: "退出登录",
             .settingsTitle: "设置", .settingsLanguage: "语言",
             .settingsLanguageFooter: "选择你偏好的语言，将应用于整个 App。",
@@ -994,6 +1010,13 @@ final class LocalizationManager {
             .supportSentMsg: "Gracias: recibimos tu mensaje y te responderemos por correo.",
             .supportErrorMsg: "No se pudo enviar tu mensaje. Inténtalo de nuevo.",
             .supportEmptyMsg: "Añade un asunto y un mensaje.",
+            .supportTypeField: "Tipo",
+            .supportTypeBug: "Error",
+            .supportTypeIdea: "Idea",
+            .supportTypeOther: "Otro",
+            .supportAddImages: "Añadir imágenes",
+            .supportMaxImages: "Máx. 6 imágenes",
+            .supportImageTooLarge: "Imagen demasiado grande (máx. 5MB)",
             .profileSignOut: "Cerrar Sesión",
             .settingsTitle: "Ajustes", .settingsLanguage: "Idioma",
             .settingsLanguageFooter: "Elige tu idioma preferido. Se aplica en toda la app.",

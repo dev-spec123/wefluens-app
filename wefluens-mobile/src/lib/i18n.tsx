@@ -155,6 +155,10 @@ const en: Dict = {
   supportMessage: 'Message', supportMessagePlaceholder: 'Describe your issue or question…',
   supportSend: 'Send', supportSentTitle: 'Message sent', supportSentBody: "Thanks — we'll get back to you by email.",
   supportErrorTitle: "Couldn't send", supportErrorBody: 'Please try again in a moment.',
+  supportType: 'Type', supportTypeBug: 'Bug', supportTypeIdea: 'Idea', supportTypeOther: 'Other',
+  supportAttachments: 'Attachments', supportAddImages: 'Add images',
+  supportMaxImages: 'Max 6 images', supportImageTooLarge: 'Image too large (max 5MB)',
+  supportRemoveImage: 'Remove image',
   rateComingSoon: 'Ratings open once the app is live on the App Store / Google Play.',
   profileSignOut: 'Sign Out', profileAdmin: 'Backend Management', profileDeleteAccount: 'Delete Account',
   profileDeleteAccountConfirm: 'Permanently delete your account and all your data? This cannot be undone.',
@@ -361,6 +365,10 @@ const zh: Dict = {
   supportMessage: '内容', supportMessagePlaceholder: '描述你的问题或疑问……',
   supportSend: '发送', supportSentTitle: '已发送', supportSentBody: '谢谢——我们会通过邮件回复你。',
   supportErrorTitle: '发送失败', supportErrorBody: '请稍后再试。',
+  supportType: '类型', supportTypeBug: '问题', supportTypeIdea: '建议', supportTypeOther: '其他',
+  supportAttachments: '附件', supportAddImages: '添加图片',
+  supportMaxImages: '最多 6 张图片', supportImageTooLarge: '图片过大（上限 5MB）',
+  supportRemoveImage: '移除图片',
   rateComingSoon: '应用在 App Store / Google Play 上架后即可评分。',
   profileSignOut: '退出登录', profileAdmin: '后端管理', profileDeleteAccount: '注销账号',
   profileDeleteAccountConfirm: '永久删除你的账号和所有数据？此操作不可撤销。',
@@ -567,6 +575,10 @@ const es: Dict = {
   supportMessage: 'Mensaje', supportMessagePlaceholder: 'Describe tu problema o pregunta…',
   supportSend: 'Enviar', supportSentTitle: 'Mensaje enviado', supportSentBody: 'Gracias — te responderemos por correo.',
   supportErrorTitle: 'No se pudo enviar', supportErrorBody: 'Inténtalo de nuevo en un momento.',
+  supportType: 'Tipo', supportTypeBug: 'Error', supportTypeIdea: 'Idea', supportTypeOther: 'Otro',
+  supportAttachments: 'Adjuntos', supportAddImages: 'Añadir imágenes',
+  supportMaxImages: 'Máx. 6 imágenes', supportImageTooLarge: 'Imagen demasiado grande (máx. 5MB)',
+  supportRemoveImage: 'Quitar imagen',
   rateComingSoon: 'Podrás valorar cuando la app esté disponible en App Store / Google Play.',
   profileSignOut: 'Cerrar Sesión', profileAdmin: 'Gestión de Backend', profileDeleteAccount: 'Eliminar Cuenta',
   profileDeleteAccountConfirm: '¿Eliminar permanentemente tu cuenta y todos tus datos? No se puede deshacer.',
@@ -641,6 +653,13 @@ export type L10nKey = keyof typeof en;
 
 const STORAGE_KEY = 'wefluens.language';
 
+// Module-level mirror of the active language so non-React code (e.g. lib/api.ts)
+// can read the current language without a hook. Kept in sync by LanguageProvider.
+let currentLang: Lang = 'en';
+export function getCurrentLang(): Lang {
+  return currentLang;
+}
+
 interface I18nContextValue {
   lang: Lang;
   setLang: (l: Lang) => void;
@@ -663,11 +682,14 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       const stored = (await AsyncStorage.getItem(STORAGE_KEY)) as Lang | null;
-      setLangState(stored ?? deviceDefault());
+      const resolved = stored ?? deviceDefault();
+      currentLang = resolved;
+      setLangState(resolved);
     })();
   }, []);
 
   const setLang = useCallback((l: Lang) => {
+    currentLang = l;
     setLangState(l);
     AsyncStorage.setItem(STORAGE_KEY, l).catch(() => {});
   }, []);

@@ -7,6 +7,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { supabase } from './supabase';
+import { getCurrentLang } from './i18n';
 import { avatarGradient } from './theme';
 import { clockTime, parseColors, relativeTime } from './format';
 import { messageMentionsMe } from './mentions';
@@ -88,9 +89,56 @@ export async function setNotificationsEnabled(userId: string, on: boolean): Prom
   if (error) throw error;
 }
 
-/** Submits an in-app support ticket (records it server-side + emails support). */
-export async function submitSupportTicket(subject: string, body: string): Promise<void> {
-  const { data, error } = await supabase.functions.invoke('submit-support-ticket', { body: { subject, body } });
+/** A picked support attachment: a local image URI plus its (optional) source MIME. */
+export type SupportImageInput = string | { uri: string; mime?: string | null };
+
+export type SupportTicketType = 'bug' | 'idea' | 'other';
+
+const MAX_SUPPORT_IMAGES = 6;
+const MAX_SUPPORT_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB per image (decoded size)
+
+/** Decoded byte length of a base64 string (ignoring whitespace), without
+ *  allocating the bytes. Used to enforce the per-image 5MB cap. */
+function base64ByteLength(b64: string): number {
+  const clean = b64.replace(/[^A-Za-z0-9+/=]/g, '');
+  const padding = clean.endsWith('==') ? 2 : clean.endsWith('=') ? 1 : 0;
+  return Math.floor((clean.length * 3) / 4) - padding;
+}
+
+/** Submits an in-app support ticket (records it server-side + emails support).
+ *  Images are compressed (~1600px) then base64-encoded inline. Caps at 6 images
+ *  and skips any that still exceed 5MB after compression. */
+export async function submitSupportTicket(args: {
+  subject: string;
+  body: string;
+  type: SupportTicketType;
+  images?: SupportImageInput[];
+}): Promise<void> {
+  const { subject, body, type } = args;
+  const inputs = (args.images ?? []).slice(0, MAX_SUPPORT_IMAGES);
+
+  const images: Array<{ dataBase64: string; mime: string }> = [];
+  for (const input of inputs) {
+    const uri = typeof input === 'string' ? input : input.uri;
+    const srcMime = typeof input === 'string' ? null : input.mime ?? null;
+    try {
+      // Compress first to keep the inline payload small. Pass a large width so the
+      // helper always resizes down to its ~1600px target before re-encoding.
+      const compressed = await maybeCompressImage(uri, srcMime, 1600);
+      const dataBase64 = await FileSystem.readAsStringAsync(compressed.uri, { encoding: 'base64' });
+      // Skip anything that's still over 5MB after compression.
+      if (base64ByteLength(dataBase64) > MAX_SUPPORT_IMAGE_BYTES) continue;
+      images.push({ dataBase64, mime: compressed.mime });
+    } catch {
+      // A single bad attachment shouldn't sink the whole ticket — skip it.
+    }
+  }
+
+  const lang: 'zh' | 'en' = getCurrentLang() === 'zh' ? 'zh' : 'en';
+
+  const { data, error } = await supabase.functions.invoke('submit-support-ticket', {
+    body: { subject, body, type, lang, images },
+  });
   if (error) throw error;
   if (data && (data as { ok?: boolean }).ok === false) throw new Error('SUPPORT_FAILED');
 }

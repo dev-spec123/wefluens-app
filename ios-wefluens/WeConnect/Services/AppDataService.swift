@@ -301,12 +301,35 @@ final class AppDataService {
 
     /// Submits an in-app support ticket via the `submit-support-ticket` edge
     /// function (records it in support_tickets and emails support@ via Resend).
-    /// Returns true on success.
+    /// `type` is the feedback category ("bug" | "idea" | "other"). `images` are
+    /// attachments (capped at 6); each is downscaled + JPEG-compressed (≈1600px)
+    /// and base64-encoded into `{ dataBase64, mime: "image/jpeg" }`. The UI language
+    /// is mapped to "zh" (Chinese) or "en" (everything else). Returns true on success.
     @MainActor
-    func submitSupportTicket(subject: String, body: String) async throws -> Bool {
+    func submitSupportTicket(
+        subject: String,
+        body: String,
+        type: String = "other",
+        language: AppLanguage = .english,
+        images: [Data] = []
+    ) async throws -> Bool {
+        let lang = language == .chinese ? "zh" : "en"
+        let encoded: [SupportTicketImage] = images.prefix(6).compactMap { raw in
+            let compressed = Self.compressedJPEG(raw, maxDimension: 1600, quality: 0.7) ?? raw
+            return SupportTicketImage(
+                dataBase64: compressed.base64EncodedString(),
+                mime: "image/jpeg"
+            )
+        }
         let resp: SupportTicketResponse = try await supabase.functions.invoke(
             "submit-support-ticket",
-            options: .init(body: SupportTicketRequest(subject: subject, body: body))
+            options: .init(body: SupportTicketRequest(
+                subject: subject,
+                body: body,
+                type: type,
+                lang: lang,
+                images: encoded
+            ))
         )
         return resp.ok == true
     }

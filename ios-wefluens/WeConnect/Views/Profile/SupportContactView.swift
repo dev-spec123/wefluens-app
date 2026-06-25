@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 struct SupportContactView: View {
     @Environment(AppDataService.self) private var data
@@ -15,8 +16,21 @@ struct SupportContactView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
 
+    /// Feedback categories sent to the edge function as `type`.
+    private enum FeedbackType: String, CaseIterable {
+        case bug, idea, other
+    }
+
+    /// Per-image size cap enforced before/after compression: 5 MB.
+    private static let maxImageBytes = 5 * 1024 * 1024
+    /// Max number of attachments accepted by the edge function.
+    private static let maxImages = 6
+
     @State private var subject = ""
     @State private var message = ""
+    @State private var feedbackType: FeedbackType = .other
+    @State private var pickerItems: [PhotosPickerItem] = []
+    @State private var images: [Data] = []
     @State private var isSending = false
     @State private var sent = false
     @State private var errorText: String?
@@ -25,6 +39,14 @@ struct SupportContactView: View {
         !subject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !isSending
+    }
+
+    private func typeLabel(_ type: FeedbackType) -> String {
+        switch type {
+        case .bug: return l10n.t(.supportTypeBug)
+        case .idea: return l10n.t(.supportTypeIdea)
+        case .other: return l10n.t(.supportTypeOther)
+        }
     }
 
     var body: some View {
@@ -57,6 +79,15 @@ struct SupportContactView: View {
                     .lineSpacing(4)
                     .foregroundStyle(Theme.inkSecondary(for: colorScheme))
                     .fixedSize(horizontal: false, vertical: true)
+
+                field(title: l10n.t(.supportTypeField)) {
+                    Picker(l10n.t(.supportTypeField), selection: $feedbackType) {
+                        ForEach(FeedbackType.allCases, id: \.self) { type in
+                            Text(typeLabel(type)).tag(type)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
 
                 field(title: l10n.t(.supportSubjectField)) {
                     TextField(l10n.t(.supportSubjectPlaceholder), text: $subject)
@@ -91,6 +122,8 @@ struct SupportContactView: View {
                             }
                         }
                 }
+
+                imagesField
 
                 if let errorText {
                     Text(errorText)
@@ -143,6 +176,98 @@ struct SupportContactView: View {
         }
     }
 
+    private var imagesField: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                PhotosPicker(
+                    selection: $pickerItems,
+                    maxSelectionCount: Self.maxImages,
+                    matching: .images
+                ) {
+                    VStack(spacing: 6) {
+                        Image(systemName: "photo.badge.plus")
+                            .font(.system(size: 20, weight: .semibold))
+                        Text(l10n.t(.supportAddImages))
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundStyle(Theme.coral)
+                    .frame(width: 78, height: 78)
+                    .background(Theme.card(for: colorScheme))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
+                }
+                .disabled(images.count >= Self.maxImages)
+                .opacity(images.count >= Self.maxImages ? 0.5 : 1)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(Array(images.enumerated()), id: \.offset) { index, data in
+                            thumbnail(for: data, at: index)
+                        }
+                    }
+                }
+            }
+
+            Text(l10n.t(.supportMaxImages))
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+        }
+        .onChange(of: pickerItems) { _, items in
+            loadImages(from: items)
+        }
+    }
+
+    @ViewBuilder
+    private func thumbnail(for data: Data, at index: Int) -> some View {
+        if let uiImage = UIImage(data: data) {
+            ZStack(alignment: .topTrailing) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 78, height: 78)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
+
+                Button {
+                    images.remove(at: index)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.white, .black.opacity(0.55))
+                }
+                .buttonStyle(.plain)
+                .padding(4)
+            }
+        }
+    }
+
+    /// Loads each picked item as Data, rejecting any over 5 MB and capping the
+    /// total at 6. Clears the picker selection afterward so the same photo can
+    /// be re-added and selection state stays in sync with `images`.
+    private func loadImages(from items: [PhotosPickerItem]) {
+        guard !items.isEmpty else { return }
+        Task {
+            var collected = images
+            var rejectedTooLarge = false
+            for item in items {
+                if collected.count >= Self.maxImages { break }
+                guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+                if data.count > Self.maxImageBytes {
+                    rejectedTooLarge = true
+                    continue
+                }
+                collected.append(data)
+            }
+            await MainActor.run {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                    images = Array(collected.prefix(Self.maxImages))
+                }
+                errorText = rejectedTooLarge ? l10n.t(.supportImageTooLarge) : nil
+                pickerItems = []
+            }
+        }
+    }
+
     private func send() {
         guard canSend else {
             errorText = l10n.t(.supportEmptyMsg)
@@ -155,7 +280,10 @@ struct SupportContactView: View {
             do {
                 let ok = try await data.submitSupportTicket(
                     subject: subject.trimmingCharacters(in: .whitespacesAndNewlines),
-                    body: message.trimmingCharacters(in: .whitespacesAndNewlines)
+                    body: message.trimmingCharacters(in: .whitespacesAndNewlines),
+                    type: feedbackType.rawValue,
+                    language: l10n.language,
+                    images: images
                 )
                 if ok {
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
