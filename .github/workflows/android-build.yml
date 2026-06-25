@@ -36,6 +36,15 @@ jobs:
       - name: Prebuild (generate android/)
         run: npx expo prebuild -p android --no-install
 
+      - name: Raise Gradle/Kotlin memory (avoid KSP Metaspace OOM)
+        run: |
+          {
+            echo ""
+            echo "org.gradle.jvmargs=-Xmx5g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
+            echo "org.gradle.workers.max=2"
+            echo "kotlin.daemon.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g"
+          } >> android/gradle.properties
+
       - name: Decode signing keystore
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
