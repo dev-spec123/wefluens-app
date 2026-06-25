@@ -1,12 +1,16 @@
 name: android-build
 
 # Manual only — a free, no-queue alternative to the EAS build queue.
-# Builds a standalone release APK on GitHub's Linux runners and uploads it as an
-# artifact. Needs these repo secrets (a base64 keystore, shared with local builds
-# so the signature stays consistent):
+# Builds a standalone release APK on GitHub's Linux runners, uploads it as an
+# artifact, AND publishes it to a stable "android-latest" GitHub Release so you get
+# a clickable public download link. Needs these repo secrets (shared with local
+# builds so the signature stays consistent):
 #   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
 on:
   workflow_dispatch:
+
+permissions:
+  contents: write   # to publish the APK as a Release asset
 
 jobs:
   build:
@@ -30,19 +34,30 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
+      # Cache Gradle deps + wrapper so re-runs don't re-download everything.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('wefluens-mobile/package-lock.json') }}
+          restore-keys: |
+            gradle-
+
       - name: Install JS deps
         run: npm ci
 
       - name: Prebuild (generate android/)
         run: npx expo prebuild -p android --no-install
 
-      - name: Raise Gradle/Kotlin memory (avoid KSP Metaspace OOM)
+      - name: Gradle config — memory + arm64-only (much faster than all 4 ABIs)
         run: |
           {
             echo ""
             echo "org.gradle.jvmargs=-Xmx5g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
             echo "org.gradle.workers.max=2"
             echo "kotlin.daemon.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g"
+            echo "reactNativeArchitectures=arm64-v8a"
           } >> android/gradle.properties
 
       - name: Decode signing keystore
@@ -53,7 +68,7 @@ jobs:
       - name: Build release APK
         working-directory: wefluens-mobile/android
         run: |
-          ./gradlew :app:assembleRelease --no-daemon \
+          ./gradlew :app:assembleRelease --no-daemon --build-cache \
             -Pandroid.injected.signing.store.file="$PWD/app/release.keystore" \
             -Pandroid.injected.signing.store.password="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
             -Pandroid.injected.signing.key.alias="${{ secrets.ANDROID_KEY_ALIAS }}" \
@@ -64,3 +79,14 @@ jobs:
           name: wefluens-connect-android-apk
           path: wefluens-mobile/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+      - name: Publish APK to the android-latest Release (clickable download link)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: wefluens-mobile/android/app/build/outputs/apk/release
+        run: |
+          gh release delete android-latest -R "${{ github.repository }}" --yes --cleanup-tag 2>/dev/null || true
+          gh release create android-latest *.apk -R "${{ github.repository }}" \
+            -t "Android latest (CI build)" \
+            -n "Latest CI-built standalone release APK. Replaced on every run."
+          echo "Download: https://github.com/${{ github.repository }}/releases/download/android-latest/app-release.apk"
