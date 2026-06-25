@@ -18,6 +18,7 @@ struct ForcePasswordChangeView: View {
     /// settings sheet that can be dismissed.
     var forced: Bool = true
 
+    @State private var currentPassword = ""
     @State private var newPassword = ""
     @State private var confirmPassword = ""
     @State private var isSaving = false
@@ -78,6 +79,14 @@ struct ForcePasswordChangeView: View {
                 Spacer()
 
                 VStack(spacing: 12) {
+                    if !forced {
+                        secureField(
+                            icon: "lock.shield.fill",
+                            placeholder: l10n.t(.changePwCurrent),
+                            text: $currentPassword,
+                            contentType: .password
+                        )
+                    }
                     secureField(
                         icon: "lock.fill",
                         placeholder: l10n.t(.forcePwNew),
@@ -204,11 +213,34 @@ struct ForcePasswordChangeView: View {
     private var canSubmit: Bool {
         newPassword.count >= 8 && confirmPassword.count >= 8
             && PasswordPolicy.error(newPassword) == nil
+            && (forced || !currentPassword.isEmpty)
     }
 
     @MainActor
     private func save() async {
         errorText = nil
+
+        // Voluntary change only: confirm the user knows their current password
+        // (re-auth) before anything is changed. The forced first-login flow has
+        // no current-password field and skips this entirely.
+        if !forced {
+            let current = currentPassword
+            guard !current.isEmpty else {
+                errorText = l10n.t(.changePwCurrentRequired)
+                return
+            }
+            guard newPassword != current else {
+                errorText = l10n.t(.changePwSameAsCurrent)
+                return
+            }
+            isSaving = true
+            let ok = await auth.verifyCurrentPassword(current)
+            isSaving = false
+            guard ok else {
+                errorText = l10n.t(.changePwWrongCurrent)
+                return
+            }
+        }
 
         guard newPassword.count >= 8 else {
             errorText = l10n.t(.forcePwTooShort)

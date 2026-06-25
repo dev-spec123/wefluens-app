@@ -26,9 +26,10 @@ const INITIAL_PASSWORD = '11111111';
 
 export default function ChangePassword() {
   const { t } = useI18n();
-  const { changePassword } = useAuth();
+  const { verifyCurrentPassword, changePassword } = useAuth();
   const router = useRouter();
 
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [saving, setSaving] = useState(false);
@@ -49,10 +50,20 @@ export default function ChangePassword() {
   }, [glow]);
   const glowTranslate = glow.interpolate({ inputRange: [0, 1], outputRange: [-120, -220] });
 
-  const canSubmit = newPassword.length >= 8 && confirmPassword.length >= 8;
+  const canSubmit = currentPassword.length > 0 && newPassword.length >= 8 && confirmPassword.length >= 8;
 
   async function save() {
     setError(null);
+    const current = currentPassword;
+    if (!current) {
+      setError(t('changePwCurrentRequired'));
+      return;
+    }
+    const ok = await verifyCurrentPassword(current);
+    if (!ok) {
+      setError(t('changePwWrongCurrent'));
+      return;
+    }
     if (newPassword.length < 8) {
       setError(t('forcePwTooShort'));
       return;
@@ -64,6 +75,10 @@ export default function ChangePassword() {
     }
     if (newPassword === INITIAL_PASSWORD) {
       setError(t('forcePwSameAsInitial'));
+      return;
+    }
+    if (newPassword === current) {
+      setError(t('changePwSameAsCurrent'));
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -115,6 +130,21 @@ export default function ChangePassword() {
             <View style={{ flex: 1 }} />
 
             <View style={styles.form}>
+              <View style={styles.field}>
+                <Ionicons name="lock-closed" size={16} color="rgba(255,255,255,0.5)" style={{ marginRight: 10 }} />
+                <TextInput
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  placeholder={t('changePwCurrent')}
+                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="password"
+                  style={styles.input}
+                />
+              </View>
+
               <View style={styles.field}>
                 <Ionicons name="lock-closed" size={16} color="rgba(255,255,255,0.5)" style={{ marginRight: 10 }} />
                 <TextInput

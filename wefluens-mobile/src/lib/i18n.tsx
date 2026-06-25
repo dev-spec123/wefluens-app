@@ -217,6 +217,8 @@ const en: Dict = {
   adminSaveError: "Couldn't save. Please try again.", adminLoadError: "Couldn't load. Please try again.",
   forcePwTitle: 'Set a new password', forcePwSubtitle: 'For your security, please replace the initial password.',
   changePwTitle: 'Change Password', changePwSubtitle: 'Enter a new password for your account.', changePwSuccess: 'Password changed.',
+  changePwCurrent: 'Current password', changePwCurrentRequired: 'Enter your current password',
+  changePwWrongCurrent: 'Current password is incorrect', changePwSameAsCurrent: 'New password must differ from the current one',
   forcePwNew: 'New password', forcePwConfirm: 'Confirm new password', forcePwSave: 'Save & Continue',
   forcePwTooShort: 'Password must be at least 8 characters',
 };
@@ -421,6 +423,8 @@ const zh: Dict = {
   adminSaveError: '保存失败，请重试。', adminLoadError: '加载失败，请重试。',
   forcePwTitle: '设置新密码', forcePwSubtitle: '为了账号安全，请先修改初始密码。',
   changePwTitle: '修改密码', changePwSubtitle: '为你的账号设置一个新密码。', changePwSuccess: '密码已修改。',
+  changePwCurrent: '当前密码', changePwCurrentRequired: '请输入当前密码',
+  changePwWrongCurrent: '当前密码不正确', changePwSameAsCurrent: '新密码不能与当前密码相同',
   forcePwNew: '新密码', forcePwConfirm: '确认新密码', forcePwSave: '保存并进入',
   forcePwTooShort: '密码至少需要 8 位',
 };
@@ -625,6 +629,8 @@ const es: Dict = {
   adminSaveError: 'No se pudo guardar. Inténtalo de nuevo.', adminLoadError: 'No se pudo cargar. Inténtalo de nuevo.',
   forcePwTitle: 'Establece una nueva contraseña', forcePwSubtitle: 'Por tu seguridad, cambia la contraseña inicial.',
   changePwTitle: 'Cambiar contraseña', changePwSubtitle: 'Ingresa una nueva contraseña para tu cuenta.', changePwSuccess: 'Contraseña cambiada.',
+  changePwCurrent: 'Contraseña actual', changePwCurrentRequired: 'Ingresa tu contraseña actual',
+  changePwWrongCurrent: 'La contraseña actual es incorrecta', changePwSameAsCurrent: 'La nueva contraseña debe ser distinta de la actual',
   forcePwNew: 'Nueva contraseña', forcePwConfirm: 'Confirmar nueva contraseña', forcePwSave: 'Guardar y Continuar',
   forcePwTooShort: 'La contraseña debe tener al menos 8 caracteres',
 };

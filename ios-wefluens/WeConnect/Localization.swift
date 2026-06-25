@@ -171,6 +171,8 @@ enum L10n: String {
     // Forced password change
     case forcePwTitle, forcePwSubtitle, forcePwSubtitleOptional, forcePwNew, forcePwConfirm
     case forcePwSave, forcePwTooShort, forcePwSameAsInitial, forcePwChangePassword
+    // Voluntary change — current-password verification
+    case changePwCurrent, changePwCurrentRequired, changePwWrongCurrent, changePwSameAsCurrent
 
     // Admin
     case adminTitle, adminAllUsers, adminDeactivate, adminDelete, adminDeactivateConfirm
@@ -452,6 +454,10 @@ final class LocalizationManager {
             .forcePwTooShort: "Password must be at least 8 characters",
             .forcePwSameAsInitial: "Please pick a password different from the initial one",
             .forcePwChangePassword: "Change Password",
+            .changePwCurrent: "Current password",
+            .changePwCurrentRequired: "Enter your current password",
+            .changePwWrongCurrent: "Current password is incorrect",
+            .changePwSameAsCurrent: "New password must differ from the current one",
             .adminTitle: "Backend Management",
             .adminBadge: "ADMIN",
             .adminAllUsers: "All Users",
@@ -742,6 +748,10 @@ final class LocalizationManager {
             .forcePwTooShort: "密码至少需要 8 位",
             .forcePwSameAsInitial: "新密码不能与初始密码相同",
             .forcePwChangePassword: "修改密码",
+            .changePwCurrent: "当前密码",
+            .changePwCurrentRequired: "请输入当前密码",
+            .changePwWrongCurrent: "当前密码不正确",
+            .changePwSameAsCurrent: "新密码不能与当前密码相同",
             .adminTitle: "后端管理",
             .adminBadge: "管理员",
             .adminAllUsers: "全部用户",
@@ -1032,6 +1042,10 @@ final class LocalizationManager {
             .forcePwTooShort: "La contraseña debe tener al menos 8 caracteres",
             .forcePwSameAsInitial: "Elige una contraseña distinta de la inicial",
             .forcePwChangePassword: "Cambiar Contraseña",
+            .changePwCurrent: "Contraseña actual",
+            .changePwCurrentRequired: "Introduce tu contraseña actual",
+            .changePwWrongCurrent: "La contraseña actual es incorrecta",
+            .changePwSameAsCurrent: "La nueva contraseña debe ser distinta de la actual",
             .adminTitle: "Gestión de Backend",
             .adminBadge: "ADMIN",
             .adminAllUsers: "Todos los Usuarios",
