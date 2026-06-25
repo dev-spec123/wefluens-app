@@ -316,7 +316,7 @@ Deno.serve(async (req) => {
           type,
           subject,
           details: body,
-          panel: "connect",
+          panel: "app",
           lang,
           submitted_by: submittedBy,
           done: false,
