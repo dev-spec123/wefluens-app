@@ -224,8 +224,8 @@ struct ChatsListView: View {
                         Label(l10n.t(.chatsScan), systemImage: "qrcode.viewfinder")
                     }
                 } label: {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 17, weight: .semibold))
+                    Image(systemName: "plus")
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(width: 44, height: 44)
                         .background(Theme.sunset)
