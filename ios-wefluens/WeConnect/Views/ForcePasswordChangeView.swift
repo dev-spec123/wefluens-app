@@ -203,6 +203,7 @@ struct ForcePasswordChangeView: View {
 
     private var canSubmit: Bool {
         newPassword.count >= 8 && confirmPassword.count >= 8
+            && PasswordPolicy.error(newPassword) == nil
     }
 
     @MainActor
@@ -211,6 +212,10 @@ struct ForcePasswordChangeView: View {
 
         guard newPassword.count >= 8 else {
             errorText = l10n.t(.forcePwTooShort)
+            return
+        }
+        if let weak = PasswordPolicy.error(newPassword) {
+            errorText = l10n.t(weak)
             return
         }
         guard newPassword != initialPassword else {

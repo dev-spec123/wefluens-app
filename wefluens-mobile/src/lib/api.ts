@@ -762,43 +762,92 @@ export async function hideConversation(id: string, type: 'dm' | 'group'): Promis
 
 // ─────────────────────────── Discover ───────────────────────────
 
-// Demo Discover content, mirrored from the Swift app's SampleData. Used as a
-// fallback so the Discover tab is never empty when the brands/campaigns tables
-// haven't been seeded (Swift does the same: `if brands.isEmpty { = SampleData }`).
-const SAMPLE_BRANDS: Brand[] = [
-  { id: 'sample-brand-glossier', name: 'Glossier', category: 'Beauty', tagline: 'Skin first. Makeup second.', symbol: 'sparkles', colors: ['#FF8FB1', '#FF5C8A'], activeCampaigns: 3 },
-  { id: 'sample-brand-aether', name: 'Aether', category: 'Fashion', tagline: 'Modern essentials, made to last.', symbol: 'bag.fill', colors: ['#232526', '#414345'], activeCampaigns: 2 },
-  { id: 'sample-brand-bloom', name: 'Bloom', category: 'Wellness', tagline: 'Daily rituals for a calmer mind.', symbol: 'leaf.fill', colors: ['#11998E', '#38EF7D'], activeCampaigns: 1 },
-  { id: 'sample-brand-voltic', name: 'Voltic', category: 'Tech', tagline: 'Power that keeps up with you.', symbol: 'bolt.fill', colors: ['#396AFC', '#2948FF'], activeCampaigns: 4 },
-];
-const SAMPLE_CAMPAIGNS: Campaign[] = [
-  { id: 'sample-campaign-summer-glow', title: 'Summer Glow Launch', brand: 'Glossier', budget: '$8K–12K', tags: ['Reels', 'Beauty', 'UGC'], deadline: 'Jun 20', symbol: 'sun.max.fill', colors: ['#FF6CAB', '#FF5C8A'], spotsLeft: 2 },
-  { id: 'sample-campaign-city-capsule', title: 'City Capsule Drop', brand: 'Aether', budget: '$5K–9K', tags: ['Fashion', 'Story'], deadline: 'Jun 28', symbol: 'tshirt.fill', colors: ['#434343', '#000000'], spotsLeft: 4 },
-  { id: 'sample-campaign-morning-reset', title: 'Morning Reset Ritual', brand: 'Bloom', budget: '$3K–6K', tags: ['Wellness', 'Reels'], deadline: 'Jul 5', symbol: 'leaf.fill', colors: ['#11998E', '#38EF7D'], spotsLeft: 6 },
-  { id: 'sample-campaign-charge-anywhere', title: 'Charge Anywhere', brand: 'Voltic', budget: '$10K+', tags: ['Tech', 'Review', 'YouTube'], deadline: 'Jul 12', symbol: 'bolt.fill', colors: ['#396AFC', '#2948FF'], spotsLeft: 1 },
-];
+// Discover now shows ONLY real DB rows — no SampleData/demo fallback. The two
+// list_discover_* RPCs return the curated, ordered shapes (brands featured-first
+// then name; campaigns newest-first). On any error we return empty arrays so the
+// UI shows a friendly empty state rather than fake content.
+
+/** Map a list_discover_brands() row to a Brand. */
+function mapDiscoverBrand(r: any): Brand {
+  return {
+    id: r.id,
+    name: r.name,
+    category: r.category ?? '',
+    tagline: r.tagline ?? '',
+    symbol: r.symbol ?? 'sparkles',
+    colors: parseColors(r.colors),
+    activeCampaigns: r.active_campaigns ?? 0,
+    iconUrl: r.icon_url ?? null,
+    featuredRank: r.featured_rank ?? null,
+    applicationCount: Number(r.application_count ?? 0),
+  };
+}
+
+/** Map a list_discover_campaigns() row to a Campaign. */
+function mapDiscoverCampaign(r: any): Campaign {
+  return {
+    id: r.id,
+    title: r.title,
+    brand: r.brand ?? '',
+    brandId: r.brand_id ?? null,
+    budget: r.budget ?? '',
+    tags: r.tags ?? [],
+    deadline: r.deadline ?? '',
+    description: r.description ?? '',
+    symbol: r.symbol ?? 'sparkles',
+    colors: parseColors(r.colors),
+    spotsLeft: r.spots_left ?? 0,
+    iconUrl: r.icon_url ?? null,
+    applicationCount: Number(r.application_count ?? 0),
+    applied: !!r.applied,
+  };
+}
 
 export async function loadDiscover(): Promise<{ brands: Brand[]; campaigns: Campaign[] }> {
   try {
-    const [{ data: b }, { data: c }] = await Promise.all([
-      supabase.from('brands').select('*'),
-      supabase.from('campaigns').select('*'),
+    const [{ data: b, error: be }, { data: c, error: ce }] = await Promise.all([
+      supabase.rpc('list_discover_brands'),
+      supabase.rpc('list_discover_campaigns'),
     ]);
-    const brands = ((b as any[]) ?? []).map((r) => ({
-      id: r.id, name: r.name, category: r.category ?? '', tagline: r.tagline ?? '',
-      symbol: r.symbol ?? 'sparkles', colors: parseColors(r.colors), activeCampaigns: r.active_campaigns ?? 0,
-    }));
-    const campaigns = ((c as any[]) ?? []).map((r) => ({
-      id: r.id, title: r.title, brand: r.brand, budget: r.budget ?? '', tags: r.tags ?? [],
-      deadline: r.deadline ?? '', symbol: r.symbol ?? 'sparkles', colors: parseColors(r.colors), spotsLeft: r.spots_left ?? 0,
-    }));
+    if (be || ce) return { brands: [], campaigns: [] };
     return {
-      brands: brands.length > 0 ? brands : SAMPLE_BRANDS,
-      campaigns: campaigns.length > 0 ? campaigns : SAMPLE_CAMPAIGNS,
+      brands: ((b as any[]) ?? []).map(mapDiscoverBrand),
+      campaigns: ((c as any[]) ?? []).map(mapDiscoverCampaign),
     };
   } catch {
-    return { brands: SAMPLE_BRANDS, campaigns: SAMPLE_CAMPAIGNS };
+    return { brands: [], campaigns: [] };
   }
+}
+
+/** Apply to a campaign (idempotent; server decrements spots_left once). */
+export async function applyToCampaign(campaignId: string): Promise<void> {
+  const { error } = await supabase.rpc('apply_to_campaign', { p_campaign: campaignId });
+  if (error) throw error;
+}
+
+/** Withdraw a previous application (gives the spot back). */
+export async function withdrawFromCampaign(campaignId: string): Promise<void> {
+  const { error } = await supabase.rpc('withdraw_from_campaign', { p_campaign: campaignId });
+  if (error) throw error;
+}
+
+/** The caller's applied campaign ids — the server is the source of truth for
+ *  "Applied" state (the on-device cache is just a fast mirror). */
+export async function loadMyApplications(): Promise<string[]> {
+  const { data, error } = await supabase.rpc('list_my_applications');
+  if (error || !data) return [];
+  // The RPC returns a setof uuid — rows may be bare strings or {…} objects.
+  return (data as any[]).map((row) => (typeof row === 'string' ? row : (row.id ?? row))).filter(Boolean);
+}
+
+/** Uploads a brand/campaign icon to the public `discover` bucket and returns its
+ *  public URL (stored on the row via the admin upsert RPCs). */
+export async function uploadDiscoverIcon(kind: 'brands' | 'campaigns', id: string, uri: string): Promise<string> {
+  const img = await maybeCompressImage(uri);
+  const path = `${kind}/${id}-${cryptoRandom()}.jpg`;
+  await uploadFile('discover', path, img.uri, 'image/jpeg', true);
+  const { data } = supabase.storage.from('discover').getPublicUrl(path);
+  return data.publicUrl;
 }
 
 // ─────────────────── Discover admin curation (is_admin-gated RPCs) ───────────────────
@@ -815,19 +864,26 @@ function hexToInt(s: string, fallback: number): number {
 }
 
 /** Map a raw `brands` row (from select('*')) to a Brand, carrying featuredRank. */
-function mapBrandRow(r: any): Brand & { featuredRank: number | null } {
+function mapBrandRow(r: any): Brand {
   return {
     id: r.id, name: r.name, category: r.category ?? '', tagline: r.tagline ?? '',
     symbol: r.symbol ?? 'sparkles', colors: parseColors(r.colors), activeCampaigns: r.active_campaigns ?? 0,
+    iconUrl: r.icon_url ?? null,
     featuredRank: r.featured_rank ?? null,
+    applicationCount: Number(r.application_count ?? 0),
   };
 }
 
 /** Map a raw `campaigns` row (from select('*')) to a Campaign. */
 function mapCampaignRow(r: any): Campaign {
   return {
-    id: r.id, title: r.title, brand: r.brand, budget: r.budget ?? '', tags: r.tags ?? [],
-    deadline: r.deadline ?? '', symbol: r.symbol ?? 'sparkles', colors: parseColors(r.colors), spotsLeft: r.spots_left ?? 0,
+    id: r.id, title: r.title, brand: r.brand, brandId: r.brand_id ?? null,
+    budget: r.budget ?? '', tags: r.tags ?? [], deadline: r.deadline ?? '',
+    description: r.description ?? '',
+    symbol: r.symbol ?? 'sparkles', colors: parseColors(r.colors), spotsLeft: r.spots_left ?? 0,
+    iconUrl: r.icon_url ?? null,
+    applicationCount: Number(r.application_count ?? 0),
+    applied: !!r.applied,
   };
 }
 
@@ -850,13 +906,17 @@ export async function adminUpsertBrand(args: {
   category?: string | null;
   tagline?: string | null;
   symbol?: string | null;
-  color1: string;
-  color2: string;
+  color1?: string;
+  color2?: string;
   activeCampaigns?: number | null;
   featuredRank?: number | null;
+  iconUrl?: string | null;
 }): Promise<string> {
-  const c1 = hexToInt(args.color1, 0xff4d6d);
-  const c2 = hexToInt(args.color2, 0xff9a5a);
+  // colors/symbol are now only the DEFAULT fallback look (the icon image, when
+  // uploaded, takes over). The RPC still needs them, so send the brand defaults
+  // when the editor no longer collects them.
+  const c1 = hexToInt(args.color1 ?? '', 0xff4d6d);
+  const c2 = hexToInt(args.color2 ?? '', 0xff9a5a);
   const { data, error } = await supabase.rpc('admin_upsert_brand', {
     brand_id: args.id ?? null,
     p_name: args.name,
@@ -866,6 +926,7 @@ export async function adminUpsertBrand(args: {
     p_colors: `[${c1},${c2}]`,
     p_active_campaigns: args.activeCampaigns ?? null,
     p_featured_rank: args.featuredRank ?? null,
+    p_icon_url: args.iconUrl ?? null,
   });
   if (error) throw error;
   return data as string;
@@ -903,12 +964,18 @@ export async function adminUpsertCampaign(args: {
   tags?: string[] | null;
   deadline?: string | null;
   symbol?: string | null;
-  color1: string;
-  color2: string;
+  color1?: string;
+  color2?: string;
   spotsLeft?: number | null;
+  iconUrl?: string | null;
+  description?: string | null;
+  brandId?: string | null;
 }): Promise<string> {
-  const a = hexToInt(args.color1, 0xff4d6d);
-  const b = hexToInt(args.color2, 0xff9a5a);
+  // colors/symbol are now only the DEFAULT fallback look (the icon image, when
+  // uploaded, takes over). The RPC still needs them, so send the brand defaults
+  // when the editor no longer collects them.
+  const a = hexToInt(args.color1 ?? '', 0xff4d6d);
+  const b = hexToInt(args.color2 ?? '', 0xff9a5a);
   const { data, error } = await supabase.rpc('admin_upsert_campaign', {
     campaign_id: args.id ?? null,
     p_title: args.title,
@@ -920,6 +987,9 @@ export async function adminUpsertCampaign(args: {
     p_color_a: String(a),
     p_color_b: String(b),
     p_spots_left: args.spotsLeft ?? null,
+    p_icon_url: args.iconUrl ?? null,
+    p_description: args.description ?? null,
+    p_brand_id: args.brandId ?? null,
   });
   if (error) throw error;
   return data as string;

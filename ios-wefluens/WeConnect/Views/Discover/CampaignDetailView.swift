@@ -7,11 +7,14 @@ import SwiftUI
 
 struct CampaignDetailView: View {
     @Environment(LocalizationManager.self) private var l10n
+    @Environment(AppDataService.self) private var data
     @Environment(\.colorScheme) private var colorScheme
     let campaign: Campaign
     @Environment(\.dismiss) private var dismiss
     @State private var applied = false
     @State private var showWithdrawConfirm = false
+    @State private var busy = false
+    @State private var applyError: String? = nil
 
     var body: some View {
         ScrollView {
@@ -26,7 +29,16 @@ struct CampaignDetailView: View {
         .background(Theme.paper(for: colorScheme).ignoresSafeArea())
         .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
-        .onAppear { applied = Self.isCampaignApplied(campaign.id.uuidString) }
+        // Seed from the server's truth (the campaign row's `applied`), then refine
+        // with my live applications list so leaving + returning stays in sync.
+        .onAppear {
+            applied = campaign.applied
+            Task {
+                if let ids = try? await data.loadMyApplications() {
+                    applied = ids.contains(campaign.id)
+                }
+            }
+        }
         .overlay(alignment: .topLeading) {
             Button { dismiss() } label: {
                 Image(systemName: "chevron.left")
@@ -50,29 +62,69 @@ struct CampaignDetailView: View {
             Button(l10n.t(.campaignCancelApplication), role: .destructive) { withdraw() }
             Button(l10n.t(.adminCancel), role: .cancel) { }
         }
+        .alert(l10n.t(.discoverApplyFailed), isPresented: Binding(
+            get: { applyError != nil },
+            set: { if !$0 { applyError = nil } }
+        )) {
+            Button("OK", role: .cancel) { applyError = nil }
+        }
     }
 
     private func apply() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            applied = true
+        guard !busy else { return }
+        busy = true
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { applied = true }
+        Task {
+            defer { busy = false }
+            do {
+                try await data.applyToCampaign(campaign.id)
+                await data.loadDiscover()
+            } catch {
+                withAnimation { applied = false }   // roll back optimistic UI
+                applyError = error.localizedDescription
+            }
         }
-        Self.setCampaignApplied(campaign.id.uuidString, true)
     }
 
     private func withdraw() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            applied = false
+        guard !busy else { return }
+        busy = true
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { applied = false }
+        Task {
+            defer { busy = false }
+            do {
+                try await data.withdrawFromCampaign(campaign.id)
+                await data.loadDiscover()
+            } catch {
+                withAnimation { applied = true }    // roll back optimistic UI
+                applyError = error.localizedDescription
+            }
         }
-        Self.setCampaignApplied(campaign.id.uuidString, false)
     }
 
     private var hero: some View {
         ZStack(alignment: .bottomLeading) {
+            // Gradient backdrop is always present (keeps the title legible). When the
+            // campaign has an uploaded icon, render it over the gradient; otherwise the
+            // existing oversized SF-symbol is the default look.
             LinearGradient(colors: campaign.colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing)
-            Image(systemName: campaign.symbol)
-                .font(.system(size: 120, weight: .bold))
-                .foregroundStyle(.white.opacity(0.15))
-                .offset(x: 110, y: 20)
+            if let iconUrl = campaign.iconUrl, let url = URL(string: iconUrl) {
+                AsyncImage(url: url) { phase in
+                    if case .success(let image) = phase {
+                        image.resizable().scaledToFill()
+                    } else {
+                        Color.clear
+                    }
+                }
+                .opacity(0.9)
+            } else {
+                Image(systemName: campaign.symbol)
+                    .font(.system(size: 120, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.15))
+                    .offset(x: 110, y: 20)
+            }
+            // Scrim so the brand/title stays readable over any image.
+            LinearGradient(colors: [.clear, .black.opacity(0.35)], startPoint: .center, endPoint: .bottom)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(campaign.brand.uppercased())
@@ -122,7 +174,9 @@ struct CampaignDetailView: View {
             Text(l10n.t(.campaignDetailAbout))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(Theme.ink(for: colorScheme))
-            Text("\(campaign.brand) is looking for authentic creators to bring \(campaign.title) to life. We're seeking on-brand storytelling that resonates with engaged audiences and drives measurable impact across social.")
+            Text(campaign.description.isEmpty
+                 ? "\(campaign.brand) is looking for authentic creators to bring \(campaign.title) to life. We're seeking on-brand storytelling that resonates with engaged audiences and drives measurable impact across social."
+                 : campaign.description)
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.inkSecondary(for: colorScheme))
                 .lineSpacing(4)
@@ -216,24 +270,6 @@ struct CampaignDetailView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .background(.ultraThinMaterial)
-    }
-
-    // MARK: - Applied-state persistence (local, reversible)
-
-    private static let appliedKey = "wefluens.appliedCampaigns"
-
-    private static func appliedIds() -> Set<String> {
-        Set(UserDefaults.standard.stringArray(forKey: appliedKey) ?? [])
-    }
-
-    private static func isCampaignApplied(_ id: String) -> Bool {
-        appliedIds().contains(id)
-    }
-
-    private static func setCampaignApplied(_ id: String, _ value: Bool) {
-        var ids = appliedIds()
-        if value { ids.insert(id) } else { ids.remove(id) }
-        UserDefaults.standard.set(Array(ids), forKey: appliedKey)
     }
 }
 

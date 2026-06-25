@@ -327,11 +327,17 @@ struct Brand: Identifiable {
     let symbol: String
     let colors: [UInt]
     let activeCampaigns: Int
-    /// Admin curation position. Non-nil = featured (shown in Discover's Top Brands,
-    /// sorted ascending); nil = not featured.
+    /// Admin curation position. Non-nil = featured (shown in Discover's 精选/Featured
+    /// section, sorted ascending); nil = not featured.
     let featuredRank: Int?
+    /// Public URL of an uploaded brand icon (in the `discover` Storage bucket). When
+    /// non-nil the card renders this IMAGE; nil falls back to the gradient + SF-symbol.
+    let iconUrl: String?
+    /// How many creators have applied to this brand's campaigns. Drives the
+    /// 热门品牌/Hot section ordering (most-applied first).
+    let applicationCount: Int
 
-    init(id: UUID = UUID(), name: String, category: String, tagline: String, symbol: String, colors: [UInt], activeCampaigns: Int, featuredRank: Int? = nil) {
+    init(id: UUID = UUID(), name: String, category: String, tagline: String, symbol: String, colors: [UInt], activeCampaigns: Int, featuredRank: Int? = nil, iconUrl: String? = nil, applicationCount: Int = 0) {
         self.id = id
         self.name = name
         self.category = category
@@ -340,6 +346,8 @@ struct Brand: Identifiable {
         self.colors = colors
         self.activeCampaigns = activeCampaigns
         self.featuredRank = featuredRank
+        self.iconUrl = iconUrl
+        self.applicationCount = applicationCount
     }
 }
 
@@ -347,23 +355,40 @@ struct Campaign: Identifiable {
     let id: UUID
     let title: String
     let brand: String
+    /// The owning brand's id (nil for legacy rows / sample data without a brand link).
+    let brandId: UUID?
     let budget: String
     let tags: [String]
     let deadline: String
     let symbol: String
     let colors: [UInt]
     let spotsLeft: Int
+    /// Long-form brief shown on the detail screen. Empty when the row has no description.
+    let description: String
+    /// Public URL of an uploaded campaign icon (in the `discover` Storage bucket). When
+    /// non-nil the card renders this IMAGE; nil falls back to the gradient + SF-symbol.
+    let iconUrl: String?
+    /// How many creators have applied to this campaign (server-side count).
+    let applicationCount: Int
+    /// True when the current user has already applied (seeded from the server via
+    /// `list_my_applications` / the campaigns RPC). Drives the Apply/Applied toggle.
+    let applied: Bool
 
-    init(id: UUID = UUID(), title: String, brand: String, budget: String, tags: [String], deadline: String, symbol: String, colors: [UInt], spotsLeft: Int) {
+    init(id: UUID = UUID(), title: String, brand: String, brandId: UUID? = nil, budget: String, tags: [String], deadline: String, symbol: String, colors: [UInt], spotsLeft: Int, description: String = "", iconUrl: String? = nil, applicationCount: Int = 0, applied: Bool = false) {
         self.id = id
         self.title = title
         self.brand = brand
+        self.brandId = brandId
         self.budget = budget
         self.tags = tags
         self.deadline = deadline
         self.symbol = symbol
         self.colors = colors
         self.spotsLeft = spotsLeft
+        self.description = description
+        self.iconUrl = iconUrl
+        self.applicationCount = applicationCount
+        self.applied = applied
     }
 }
 

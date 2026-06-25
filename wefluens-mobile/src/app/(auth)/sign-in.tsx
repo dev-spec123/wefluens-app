@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 import { getSavedCredentials, saveCredentials } from '@/lib/credentials';
 import { useI18n } from '@/lib/i18n';
+import { passwordStrengthError } from '@/lib/passwordPolicy';
 import { gradients, palette, radius } from '@/lib/theme';
 
 const MIN_PW = 8;
@@ -81,6 +82,10 @@ export default function SignIn() {
       let ok = true;
       if (!validEmail(email)) { setEmailError(t('authErrInvalidEmail')); ok = false; }
       if (password.length < MIN_PW) { setPasswordError(t('authErrPasswordShort')); ok = false; }
+      else {
+        const weak = passwordStrengthError(password);
+        if (weak) { setPasswordError(t(weak)); ok = false; }
+      }
       if (confirm !== password) { setConfirmError(t('authPasswordMismatch')); ok = false; }
       if (!agreed || !ok) return;
     } else {

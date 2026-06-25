@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 struct ManageBrandsView: View {
     @Environment(AppDataService.self) private var data
@@ -126,12 +127,10 @@ struct ManageBrandsView: View {
 
     private func brandRow(_ brand: Brand, featuredIndex: Int?) -> some View {
         HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(LinearGradient(colors: brand.colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing))
-                Image(systemName: brand.symbol).font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
-            }
-            .frame(width: 40, height: 40)
+            DiscoverIcon(
+                iconUrl: brand.iconUrl, symbol: brand.symbol, colors: brand.colors,
+                size: 40, corner: 12, symbolSize: 16
+            )
             VStack(alignment: .leading, spacing: 2) {
                 Text(brand.name).font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.ink(for: colorScheme)).lineLimit(1)
@@ -223,6 +222,7 @@ struct ManageBrandsView: View {
 // MARK: - Brand editor
 
 struct BrandEditView: View {
+    @Environment(LocalizationManager.self) private var l10n
     @Environment(AppDataService.self) private var data
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
@@ -233,12 +233,14 @@ struct BrandEditView: View {
     @State private var name = ""
     @State private var category = ""
     @State private var tagline = ""
-    @State private var symbol = "sparkles"
-    @State private var color1 = "FF4D6D"
-    @State private var color2 = "FF9A5A"
-    @State private var activeCampaigns = ""
     @State private var busy = false
     @State private var errorText: String?
+
+    // Icon upload: the freshly picked image (preview + upload payload) and the
+    // existing/uploaded public URL. No icon → the default gradient look stands in.
+    @State private var selectedItem: PhotosPickerItem?
+    @State private var pickedImageData: Data?
+    @State private var iconUrl: String?
 
     private var isEditing: Bool { brand != nil }
     private var canSave: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty && !busy }
@@ -247,16 +249,10 @@ struct BrandEditView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    iconPicker
                     field("Name", $name)
                     field("Category", $category)
                     field("Tagline", $tagline)
-                    field("SF Symbol", $symbol)
-                    HStack(spacing: 12) {
-                        field("Color 1 (hex)", $color1)
-                        field("Color 2 (hex)", $color2)
-                    }
-                    field("Active campaigns (number)", $activeCampaigns)
-                    preview
 
                     if let errorText {
                         Text(errorText)
@@ -287,19 +283,53 @@ struct BrandEditView: View {
                 }
             }
             .onAppear(perform: seed)
+            .onChange(of: selectedItem) { _, newItem in
+                guard let newItem else { return }
+                Task {
+                    if let imgData = try? await newItem.loadTransferable(type: Data.self) {
+                        pickedImageData = imgData
+                    }
+                }
+            }
         }
     }
 
-    private var preview: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(LinearGradient(colors: [hexColor(color1), hexColor(color2)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                Image(systemName: symbol.isEmpty ? "sparkles" : symbol)
-                    .font(.system(size: 20, weight: .semibold)).foregroundStyle(.white)
+    // MARK: - Icon picker
+
+    private var iconPicker: some View {
+        HStack(spacing: 14) {
+            iconPreview
+            VStack(alignment: .leading, spacing: 8) {
+                PhotosPicker(selection: $selectedItem, matching: .images) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "photo.on.rectangle")
+                        Text(l10n.t(.adminUploadIcon)).font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundStyle(Theme.coral)
+                    .padding(.horizontal, 14).padding(.vertical, 9)
+                    .background(Theme.coral.opacity(0.1)).clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
             }
-            .frame(width: 52, height: 52)
-            Text("Preview").font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.inkSecondary(for: colorScheme))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The picked image (if any) takes precedence; then the existing uploaded URL;
+    /// otherwise the default gradient look via the shared DiscoverIcon fallback.
+    @ViewBuilder
+    private var iconPreview: some View {
+        if let pickedImageData, let uiImage = UIImage(data: pickedImageData) {
+            Image(uiImage: uiImage)
+                .resizable().scaledToFill()
+                .frame(width: 52, height: 52)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+        } else {
+            DiscoverIcon(
+                iconUrl: iconUrl, symbol: brand?.symbol ?? "sparkles",
+                colors: brand?.colors ?? [0xFF4D6D, 0xFF9A5A],
+                size: 52, corner: 14, symbolSize: 20
+            )
         }
     }
 
@@ -322,21 +352,7 @@ struct BrandEditView: View {
         name = brand.name
         category = brand.category
         tagline = brand.tagline
-        symbol = brand.symbol
-        if let c = brand.colors.first { color1 = String(format: "%06X", c) }
-        if brand.colors.count > 1 { color2 = String(format: "%06X", brand.colors[1]) }
-        activeCampaigns = String(brand.activeCampaigns)
-    }
-
-    private func hexColor(_ s: String) -> Color {
-        Color(hex: UInt(s.trimmingCharacters(in: CharacterSet(charactersIn: "# ")), radix: 16) ?? 0xFF4D6D)
-    }
-
-    /// JSON array of decimal UInts, matching parseColors' expected storage format.
-    private func colorsJSON() -> String {
-        let c1 = UInt(color1.trimmingCharacters(in: CharacterSet(charactersIn: "# ")), radix: 16) ?? 0xFF4D6D
-        let c2 = UInt(color2.trimmingCharacters(in: CharacterSet(charactersIn: "# ")), radix: 16) ?? 0xFF9A5A
-        return "[\(c1),\(c2)]"
+        iconUrl = brand.iconUrl
     }
 
     private func save() {
@@ -345,16 +361,35 @@ struct BrandEditView: View {
         Task {
             defer { busy = false }
             do {
-                try await data.adminUpsertBrand(
+                let trimmedName = name.trimmingCharacters(in: .whitespaces)
+                // 1) Upsert first so a new brand has an id to attach the icon to.
+                //    Symbol/colors keep their server defaults (admin no longer edits them).
+                let id = try await data.adminUpsertBrand(
                     id: brand?.id,
-                    name: name.trimmingCharacters(in: .whitespaces),
+                    name: trimmedName,
                     category: category.isEmpty ? nil : category,
                     tagline: tagline.isEmpty ? nil : tagline,
-                    symbol: symbol.isEmpty ? "sparkles" : symbol,
-                    colors: colorsJSON(),
-                    activeCampaigns: Int(activeCampaigns) ?? 0,
-                    featuredRank: brand?.featuredRank
+                    symbol: brand?.symbol,
+                    colors: nil,
+                    activeCampaigns: brand?.activeCampaigns,
+                    featuredRank: brand?.featuredRank,
+                    iconUrl: iconUrl
                 )
+                // 2) If a new image was picked, upload it under that id and persist the URL.
+                if let pickedImageData {
+                    let url = try await data.uploadDiscoverIcon(kind: "brands", id: id, imageData: pickedImageData)
+                    try await data.adminUpsertBrand(
+                        id: id,
+                        name: trimmedName,
+                        category: category.isEmpty ? nil : category,
+                        tagline: tagline.isEmpty ? nil : tagline,
+                        symbol: brand?.symbol,
+                        colors: nil,
+                        activeCampaigns: brand?.activeCampaigns,
+                        featuredRank: brand?.featuredRank,
+                        iconUrl: url
+                    )
+                }
                 await onDone()
                 dismiss()
             } catch { errorText = "Couldn't save: \(error.localizedDescription)" }

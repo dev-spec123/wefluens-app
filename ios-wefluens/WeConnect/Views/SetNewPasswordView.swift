@@ -195,6 +195,10 @@ struct SetNewPasswordView: View {
             errorText = l10n.t(.forcePwTooShort)
             return
         }
+        if let weak = PasswordPolicy.error(newPassword) {
+            errorText = l10n.t(weak)
+            return
+        }
         guard newPassword == confirmPassword else {
             errorText = l10n.t(.authPasswordMismatch)
             return
