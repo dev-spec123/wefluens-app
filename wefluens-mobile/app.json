@@ -18,7 +18,9 @@
       "bundleIdentifier": "com.wefluens.connect",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -94,7 +96,8 @@
       ],
       "react-native-compressor",
       "expo-sharing",
-      "expo-notifications"
+      "expo-notifications",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

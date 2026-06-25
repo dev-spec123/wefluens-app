@@ -160,18 +160,33 @@ export interface Brand {
   symbol: string;
   colors: [string, string];
   activeCampaigns: number;
+  /** Public URL of an admin-uploaded brand icon; null = fall back to gradient+symbol. */
+  iconUrl: string | null;
+  /** Non-null = the brand is Featured (精选); the number is its display order. */
+  featuredRank: number | null;
+  /** How many creators have applied across this brand's campaigns (drives Hot/热门). */
+  applicationCount: number;
 }
 
 export interface Campaign {
   id: string;
   title: string;
   brand: string;
+  /** Owning brand id (null for legacy rows). */
+  brandId: string | null;
   budget: string;
   tags: string[];
   deadline: string;
+  description: string;
   symbol: string;
   colors: [string, string];
   spotsLeft: number;
+  /** Public URL of an admin-uploaded campaign icon; null = fall back to gradient+symbol. */
+  iconUrl: string | null;
+  /** How many creators have applied to this campaign (server-side count). */
+  applicationCount: number;
+  /** True when the current user has already applied (seeded from the server). */
+  applied: boolean;
 }
 
 // MARK: - Groups

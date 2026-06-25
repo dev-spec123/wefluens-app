@@ -1,14 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState, TagChip } from '@/components/ui';
 import { useAppData } from '@/context/AppDataContext';
+import { applyToCampaign, withdrawFromCampaign } from '@/lib/api';
+import { seedAppliedCampaigns, setLocalCampaignApplied } from '@/lib/campaignApplications';
+import { notify } from '@/lib/dialog';
 import { useI18n } from '@/lib/i18n';
-import { gradients, radius, space, useTheme } from '@/lib/theme';
+import { radius, space, useTheme } from '@/lib/theme';
 import type { Brand, Campaign } from '@/lib/types';
 
 /** Map an SF Symbol-ish name from the backend to an Ionicons glyph. */
@@ -40,6 +44,15 @@ function iconFor(symbol: string): keyof typeof Ionicons.glyphMap {
   return map[symbol] ?? 'sparkles';
 }
 
+/** Format an ISO deadline ("YYYY-MM-DD") to a short local date; pass anything
+ *  else through unchanged (older rows may store a free-text deadline). */
+function formatDeadline(raw: string): string {
+  if (!raw) return '';
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00` : raw);
+  if (isNaN(d.getTime())) return raw;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 const FILTERS = [
   { key: 'filterAll', match: null },
   { key: 'filterBeauty', match: 'beauty' },
@@ -58,6 +71,18 @@ export default function DiscoverScreen() {
   const [filter, setFilter] = useState<string>('filterAll');
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
 
+  // Server-seeded applied state, keyed by campaign id. Seeded from each
+  // campaign.applied flag (the RPC already resolves "applied" per caller) and
+  // mirrored into the on-device cache so detail screens read it instantly.
+  const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const ids = campaigns.filter((cm) => cm.applied).map((cm) => cm.id);
+    setAppliedIds(new Set(ids));
+    void seedAppliedCampaigns(ids);
+  }, [campaigns]);
+
   async function onRefresh() {
     setRefreshing(true);
     try {
@@ -71,31 +96,72 @@ export default function DiscoverScreen() {
     router.push({ pathname: '/campaign/[id]', params: { id: campaign.id } });
   }
 
-  // Featured = a Glossier campaign if present, else the first one. Drives the hero.
-  const featured = useMemo<Campaign | null>(() => {
-    if (campaigns.length === 0) return null;
-    return campaigns.find((c) => /glossier/i.test(c.brand)) ?? campaigns[0];
-  }, [campaigns]);
+  // Apply / withdraw toggle with optimistic UI + server refresh. The server is
+  // the source of truth: on success we refresh so spots_left / application_count
+  // reflect the real counts; on failure we roll the optimistic flip back.
+  const toggleApply = useCallback(async (campaign: Campaign) => {
+    if (busyId) return;
+    const id = campaign.id;
+    const wasApplied = appliedIds.has(id);
+    setBusyId(id);
+    setAppliedIds((prev) => {
+      const next = new Set(prev);
+      if (wasApplied) next.delete(id); else next.add(id);
+      return next;
+    });
+    void setLocalCampaignApplied(id, !wasApplied);
+    try {
+      if (wasApplied) await withdrawFromCampaign(id);
+      else await applyToCampaign(id);
+      await refreshDiscover();
+    } catch {
+      // Roll back the optimistic flip.
+      setAppliedIds((prev) => {
+        const next = new Set(prev);
+        if (wasApplied) next.add(id); else next.delete(id);
+        return next;
+      });
+      void setLocalCampaignApplied(id, wasApplied);
+      notify(t('discoverApplyError'));
+    } finally {
+      setBusyId(null);
+    }
+  }, [appliedIds, busyId, refreshDiscover, t]);
+
+  // Featured (精选) = brands with a featured_rank (admin toggle). list_discover_brands
+  // already orders these first, by rank.
+  const featuredBrands = useMemo<Brand[]>(
+    () => brands.filter((b) => b.featuredRank != null),
+    [brands],
+  );
+
+  // Hot (热门品牌) = brands sorted by application_count desc (most-applied first).
+  const hotBrands = useMemo<Brand[]>(
+    () => [...brands].sort((a, b) => b.applicationCount - a.applicationCount),
+    [brands],
+  );
 
   // Filter campaigns by the selected category (tag / title / brand match). Falls
   // back to the full list when a category has no matches, so it never looks broken.
   const shownCampaigns = useMemo<Campaign[]>(() => {
     // Tapping a brand filters to that brand and takes precedence over the category bar.
-    if (selectedBrand) return campaigns.filter((c) => c.brand === selectedBrand);
+    if (selectedBrand) return campaigns.filter((cm) => cm.brand === selectedBrand);
     const f = FILTERS.find((x) => x.key === filter);
     if (!f?.match) return campaigns;
     const needle = f.match;
-    const matched = campaigns.filter((c) =>
-      c.tags.some((tag) => tag.toLowerCase().includes(needle))
-      || c.title.toLowerCase().includes(needle)
-      || c.brand.toLowerCase().includes(needle));
+    const matched = campaigns.filter((cm) =>
+      cm.tags.some((tag) => tag.toLowerCase().includes(needle))
+      || cm.title.toLowerCase().includes(needle)
+      || cm.brand.toLowerCase().includes(needle));
     return matched.length > 0 ? matched : campaigns;
   }, [campaigns, filter, selectedBrand]);
+
+  const hasContent = brands.length > 0 || campaigns.length > 0;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.paper }} edges={['top']}>
       <ScrollView
-        contentContainerStyle={{ paddingBottom: space.xxl }}
+        contentContainerStyle={{ paddingBottom: space.xxl, flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.coral} />
@@ -107,93 +173,134 @@ export default function DiscoverScreen() {
           <Text style={[styles.subtitle, { color: c.inkSecondary }]}>{t('discoverSubtitle')}</Text>
         </View>
 
-        {/* Featured hero */}
-        <LinearGradient
-          colors={gradients.dusk}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.hero, { shadowColor: c.plum }]}
-        >
-          <View style={styles.heroAccent} />
-          <View style={{ gap: 12 }}>
-            <View style={styles.featuredChip}>
-              <Text style={styles.featuredChipText}>{t('discoverFeatured')}</Text>
-            </View>
-            <Text style={styles.heroTitle}>
-              {featured ? featured.title : 'Glossier Summer\nGlow Launch'}
-            </Text>
-            <Text style={styles.heroSubtitle}>
-              {featured ? `${featured.brand} · ${featured.budget}` : '3 creator spots · $8K–12K budget'}
-            </Text>
-            {featured ? (
-              <Pressable onPress={() => openCampaign(featured)} style={styles.heroBtn}>
-                <Text style={[styles.heroBtnText, { color: c.plum }]}>{t('discoverViewBrief')}</Text>
-              </Pressable>
+        {!hasContent ? (
+          <View style={styles.emptyWrap}>
+            <EmptyState
+              icon="sparkles-outline"
+              title={t('discoverEmptyTitle')}
+              subtitle={t('discoverEmptySubtitle')}
+            />
+          </View>
+        ) : (
+          <>
+            {/* Featured / 精选 — brands the admin toggled featured. */}
+            {featuredBrands.length > 0 ? (
+              <>
+                <Text style={[styles.sectionTitle, { color: c.ink }]}>{t('discoverFeatured')}</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.brandRow}
+                >
+                  {featuredBrands.map((brand) => (
+                    <BrandCard
+                      key={`feat-${brand.id}`}
+                      brand={brand}
+                      selected={selectedBrand === brand.name}
+                      onPress={() => setSelectedBrand((cur) => (cur === brand.name ? null : brand.name))}
+                    />
+                  ))}
+                </ScrollView>
+              </>
             ) : null}
-          </View>
-        </LinearGradient>
 
-        {/* Filter bar */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterRow}
-        >
-          {FILTERS.map((f) => (
-            <Pressable key={f.key} onPress={() => setFilter(f.key)}>
-              <TagChip text={t(f.key)} filled={filter === f.key} />
-            </Pressable>
-          ))}
-        </ScrollView>
+            {/* Hot / 热门品牌 — brands by application_count desc. */}
+            {hotBrands.length > 0 ? (
+              <>
+                <Text style={[styles.sectionTitle, { color: c.ink, marginTop: featuredBrands.length > 0 ? 26 : 12 }]}>
+                  {t('discoverHotBrands')}
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.brandRow}
+                >
+                  {hotBrands.map((brand) => (
+                    <BrandCard
+                      key={`hot-${brand.id}`}
+                      brand={brand}
+                      selected={selectedBrand === brand.name}
+                      onPress={() => setSelectedBrand((cur) => (cur === brand.name ? null : brand.name))}
+                    />
+                  ))}
+                </ScrollView>
+              </>
+            ) : null}
 
-        {/* Top Brands */}
-        <Text style={[styles.sectionTitle, { color: c.ink }]}>{t('discoverTopBrands')}</Text>
-        {brands.length > 0 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.brandRow}
-          >
-            {brands.map((brand) => (
-              <BrandCard
-                key={brand.id}
-                brand={brand}
-                selected={selectedBrand === brand.name}
-                onPress={() => setSelectedBrand((cur) => (cur === brand.name ? null : brand.name))}
-              />
-            ))}
-          </ScrollView>
-        ) : (
-          <Text style={[styles.emptyRowText, { color: c.inkTertiary }]}>{t('discoverNoBrands')}</Text>
-        )}
-
-        {/* Open Campaigns */}
-        <View style={styles.campaignHeader}>
-          <Text style={[styles.sectionTitle, { color: c.ink, marginBottom: 0 }]}>
-            {t('discoverOpenCampaigns')}
-          </Text>
-          {selectedBrand ? (
-            <Pressable
-              onPress={() => setSelectedBrand(null)}
-              style={[styles.brandFilterPill, { backgroundColor: c.coral }]}
-              hitSlop={6}
+            {/* Filter bar */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterRow}
             >
-              <Text style={styles.brandFilterText} numberOfLines={1}>{selectedBrand}</Text>
-              <Ionicons name="close" size={13} color="#fff" />
-            </Pressable>
-          ) : null}
-        </View>
-        {shownCampaigns.length > 0 ? (
-          <View style={styles.campaignList}>
-            {shownCampaigns.map((campaign) => (
-              <CampaignCard key={campaign.id} campaign={campaign} onPress={() => openCampaign(campaign)} />
-            ))}
-          </View>
-        ) : (
-          <EmptyState icon="megaphone-outline" title={t('discoverNoCampaigns')} />
+              {FILTERS.map((f) => (
+                <Pressable key={f.key} onPress={() => setFilter(f.key)}>
+                  <TagChip text={t(f.key)} filled={filter === f.key} />
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            {/* Open Campaigns */}
+            <View style={styles.campaignHeader}>
+              <Text style={[styles.sectionTitle, { color: c.ink, marginBottom: 0 }]}>
+                {t('discoverOpenCampaigns')}
+              </Text>
+              {selectedBrand ? (
+                <Pressable
+                  onPress={() => setSelectedBrand(null)}
+                  style={[styles.brandFilterPill, { backgroundColor: c.coral }]}
+                  hitSlop={6}
+                >
+                  <Text style={styles.brandFilterText} numberOfLines={1}>{selectedBrand}</Text>
+                  <Ionicons name="close" size={13} color="#fff" />
+                </Pressable>
+              ) : null}
+            </View>
+            {shownCampaigns.length > 0 ? (
+              <View style={styles.campaignList}>
+                {shownCampaigns.map((campaign) => (
+                  <CampaignCard
+                    key={campaign.id}
+                    campaign={campaign}
+                    applied={appliedIds.has(campaign.id)}
+                    busy={busyId === campaign.id}
+                    onPress={() => openCampaign(campaign)}
+                    onToggleApply={() => toggleApply(campaign)}
+                  />
+                ))}
+              </View>
+            ) : (
+              <EmptyState icon="megaphone-outline" title={t('discoverNoCampaigns')} />
+            )}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/** Icon: an uploaded image if the row has one, else the default gradient + SF-symbol. */
+function DiscoverIcon({
+  iconUrl, colors, symbol, size, rounding,
+}: { iconUrl: string | null; colors: [string, string]; symbol: string; size: number; rounding: number }) {
+  if (iconUrl) {
+    return (
+      <Image
+        source={{ uri: iconUrl }}
+        style={{ width: size, height: size, borderRadius: rounding }}
+        contentFit="cover"
+      />
+    );
+  }
+  return (
+    <LinearGradient
+      colors={colors}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={{ width: size, height: size, borderRadius: rounding, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Ionicons name={iconFor(symbol)} size={size * 0.45} color="#fff" />
+    </LinearGradient>
   );
 }
 
@@ -208,14 +315,7 @@ function BrandCard({ brand, selected, onPress }: { brand: Brand; selected: boole
         { backgroundColor: pressed ? c.cardSubtle : c.card, borderColor: selected ? c.coral : c.hairline, borderWidth: selected ? 2 : 1 },
       ]}
     >
-      <LinearGradient
-        colors={brand.colors}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.brandIconWrap}
-      >
-        <Ionicons name={iconFor(brand.symbol)} size={26} color="#fff" />
-      </LinearGradient>
+      <DiscoverIcon iconUrl={brand.iconUrl} colors={brand.colors} symbol={brand.symbol} size={56} rounding={18} />
 
       <View style={{ marginTop: 12 }}>
         <Text style={[styles.brandName, { color: c.ink }]} numberOfLines={1}>{brand.name}</Text>
@@ -238,7 +338,12 @@ function BrandCard({ brand, selected, onPress }: { brand: Brand; selected: boole
   );
 }
 
-function CampaignCard({ campaign, onPress }: { campaign: Campaign; onPress: () => void }) {
+function CampaignCard({
+  campaign, applied, busy, onPress, onToggleApply,
+}: {
+  campaign: Campaign; applied: boolean; busy: boolean;
+  onPress: () => void; onToggleApply: () => void;
+}) {
   const c = useTheme();
   const { t } = useI18n();
   const spotsColor = campaign.spotsLeft <= 2 ? c.coral : c.inkSecondary;
@@ -250,42 +355,67 @@ function CampaignCard({ campaign, onPress }: { campaign: Campaign; onPress: () =
         { backgroundColor: pressed ? c.cardSubtle : c.card, borderColor: c.hairline },
       ]}
     >
-      <LinearGradient
-        colors={campaign.colors}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.campaignIconWrap}
-      >
-        <Ionicons name={iconFor(campaign.symbol)} size={24} color="#fff" />
-      </LinearGradient>
+      <View style={styles.campaignTopRow}>
+        <DiscoverIcon iconUrl={campaign.iconUrl} colors={campaign.colors} symbol={campaign.symbol} size={56} rounding={16} />
 
-      <View style={styles.campaignBody}>
-        <Text style={[styles.campaignTitle, { color: c.ink }]} numberOfLines={1}>{campaign.title}</Text>
-        <Text style={[styles.campaignMeta, { color: c.inkSecondary }]} numberOfLines={1}>
-          {campaign.brand} · {campaign.budget}
-        </Text>
-
-        <View style={styles.campaignInfoRow}>
-          <Ionicons name="time-outline" size={12} color={c.inkTertiary} />
-          <Text style={[styles.campaignInfoText, { color: c.inkTertiary }]}>
-            {t('discoverDue')} {campaign.deadline}
+        <View style={styles.campaignBody}>
+          <Text style={[styles.campaignTitle, { color: c.ink }]} numberOfLines={1}>{campaign.title}</Text>
+          <Text style={[styles.campaignMeta, { color: c.inkSecondary }]} numberOfLines={1}>
+            {campaign.brand} · {campaign.budget}
           </Text>
-          <Text style={[styles.campaignInfoText, { color: c.inkTertiary }]}>·</Text>
-          <Text style={[styles.campaignSpots, { color: spotsColor }]}>
-            {campaign.spotsLeft} {t('discoverSpotsLeft')}
-          </Text>
-        </View>
 
-        {campaign.tags.length > 0 ? (
-          <View style={styles.tagsRow}>
-            {campaign.tags.map((tag) => (
-              <TagChip key={tag} text={tag} />
-            ))}
+          <View style={styles.campaignInfoRow}>
+            <Ionicons name="time-outline" size={12} color={c.inkTertiary} />
+            <Text style={[styles.campaignInfoText, { color: c.inkTertiary }]}>
+              {t('discoverDue')} {formatDeadline(campaign.deadline)}
+            </Text>
+            <Text style={[styles.campaignInfoText, { color: c.inkTertiary }]}>·</Text>
+            <Text style={[styles.campaignSpots, { color: spotsColor }]}>
+              {campaign.spotsLeft} {t('discoverSpotsLeft')}
+            </Text>
           </View>
-        ) : null}
+        </View>
       </View>
 
-      <Ionicons name="chevron-forward" size={14} color={c.inkTertiary} />
+      {campaign.description ? (
+        <Text style={[styles.campaignDesc, { color: c.inkSecondary }]} numberOfLines={2}>
+          {campaign.description}
+        </Text>
+      ) : null}
+
+      {campaign.tags.length > 0 ? (
+        <View style={styles.tagsRow}>
+          {campaign.tags.map((tag) => (
+            <TagChip key={tag} text={tag} />
+          ))}
+        </View>
+      ) : null}
+
+      <View style={styles.campaignFooter}>
+        <View style={styles.applicantsRow}>
+          <Ionicons name="people-outline" size={13} color={c.inkTertiary} />
+          <Text style={[styles.applicantsText, { color: c.inkTertiary }]}>
+            {campaign.applicationCount} {t('discoverApplicants')}
+          </Text>
+        </View>
+        <Pressable
+          onPress={onToggleApply}
+          disabled={busy}
+          hitSlop={6}
+          style={[
+            styles.applyBtn,
+            applied
+              ? { backgroundColor: c.coral + '14', borderColor: c.coral }
+              : { backgroundColor: c.coral, borderColor: c.coral },
+            busy && { opacity: 0.6 },
+          ]}
+        >
+          {applied ? <Ionicons name="checkmark" size={14} color={c.coral} /> : null}
+          <Text style={[styles.applyBtnText, { color: applied ? c.coral : '#fff' }]}>
+            {applied ? t('discoverApplied') : t('discoverApply')}
+          </Text>
+        </Pressable>
+      </View>
     </Pressable>
   );
 }
@@ -295,51 +425,15 @@ const styles = StyleSheet.create({
   title: { fontSize: 32, fontWeight: '700' },
   subtitle: { fontSize: 14, fontWeight: '500', marginTop: 2 },
   sectionTitle: { fontSize: 20, fontWeight: '700', paddingHorizontal: 18, marginBottom: 12 },
-  emptyRowText: { fontSize: 14, fontWeight: '500', paddingHorizontal: 18, paddingVertical: 8 },
 
-  // Featured hero
-  hero: {
-    marginHorizontal: 18,
-    borderRadius: 28,
-    padding: 22,
-    minHeight: 200,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
-  },
-  heroAccent: {
-    position: 'absolute',
-    width: 200, height: 200, borderRadius: 100,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    top: -60, right: -50,
-  },
-  featuredChip: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: radius.pill,
-    paddingHorizontal: 12, paddingVertical: 5,
-  },
-  featuredChipText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  heroTitle: { color: '#fff', fontSize: 26, fontWeight: '800' },
-  heroSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: '500' },
-  heroBtn: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#fff',
-    borderRadius: radius.pill,
-    paddingHorizontal: 22, paddingVertical: 11,
-    marginTop: 4,
-  },
-  heroBtnText: { fontSize: 15, fontWeight: '700' },
+  emptyWrap: { flex: 1, minHeight: 320 },
 
   // Filter bar
   filterRow: { paddingHorizontal: 18, gap: 10, paddingVertical: 16 },
 
   campaignHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 18, marginTop: 26, marginBottom: 12, gap: 10,
+    paddingHorizontal: 18, marginTop: 8, marginBottom: 12, gap: 10,
   },
   brandFilterPill: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
@@ -354,13 +448,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16,
   },
-  brandIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   brandName: { fontSize: 16, fontWeight: '700' },
   brandCategory: { fontSize: 12, fontWeight: '500', marginTop: 3 },
   brandTagline: { fontSize: 12, marginTop: 8, height: 32 },
@@ -370,25 +457,30 @@ const styles = StyleSheet.create({
 
   campaignList: { paddingHorizontal: 18, gap: 14 },
   campaignCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
     borderRadius: radius.card,
     borderWidth: 1,
     padding: 14,
+    gap: 10,
   },
-  campaignIconWrap: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  campaignTopRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   campaignBody: { flex: 1, gap: 5 },
   campaignTitle: { fontSize: 16, fontWeight: '700' },
   campaignMeta: { fontSize: 13, fontWeight: '500' },
   campaignInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   campaignInfoText: { fontSize: 12, fontWeight: '500' },
   campaignSpots: { fontSize: 12, fontWeight: '600' },
-  tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  campaignDesc: { fontSize: 13, lineHeight: 19 },
+  tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  campaignFooter: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  applicantsRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  applicantsText: { fontSize: 12, fontWeight: '600' },
+  applyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    borderRadius: radius.pill, borderWidth: 1.5,
+    paddingHorizontal: 18, paddingVertical: 8,
+  },
+  applyBtnText: { fontSize: 13.5, fontWeight: '700' },
 });

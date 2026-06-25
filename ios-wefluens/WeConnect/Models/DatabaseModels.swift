@@ -318,12 +318,19 @@ nonisolated struct BrandRow: Codable, Identifiable, Sendable {
     let colors: String?
     let activeCampaigns: Int?
     let featuredRank: Int?
+    /// Public URL of an uploaded brand icon (nil → default gradient + symbol look).
+    let iconUrl: String?
+    /// Total applications across this brand's campaigns (from `list_discover_brands`).
+    /// Optional so the plain `brands` table select (admin prefill) still decodes.
+    let applicationCount: Int?
     let createdAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id, name, category, tagline, symbol, colors
         case activeCampaigns = "active_campaigns"
         case featuredRank = "featured_rank"
+        case iconUrl = "icon_url"
+        case applicationCount = "application_count"
         case createdAt = "created_at"
     }
 }
@@ -392,6 +399,8 @@ nonisolated struct UpsertBrandParams: Encodable, Sendable {
     let p_colors: String?
     let p_active_campaigns: Int?
     let p_featured_rank: Int?
+    /// New trailing param: public URL of an uploaded brand icon (nil → server keeps/clears).
+    let p_icon_url: String?
 }
 
 // MARK: - Friendships & Friend RPCs
@@ -831,12 +840,23 @@ nonisolated struct CampaignRow: Codable, Identifiable, Sendable {
     let symbol: String?
     let colors: String?
     let spotsLeft: Int?
+    /// Long-form brief (nil/absent on the plain `campaigns` table select).
+    let description: String?
+    /// Public URL of an uploaded campaign icon (nil → default gradient + symbol look).
+    let iconUrl: String?
+    /// Application count (from `list_discover_campaigns`; absent on the admin select).
+    let applicationCount: Int?
+    /// Whether the caller has applied (from `list_discover_campaigns`; absent on the
+    /// admin select). Optional so both reads decode.
+    let applied: Bool?
     let createdAt: Date?
 
     enum CodingKeys: String, CodingKey {
-        case id, title, brand, budget, tags, deadline, symbol, colors
+        case id, title, brand, budget, tags, deadline, symbol, colors, description, applied
         case brandId = "brand_id"
         case spotsLeft = "spots_left"
+        case iconUrl = "icon_url"
+        case applicationCount = "application_count"
         case createdAt = "created_at"
     }
 }
@@ -858,8 +878,20 @@ nonisolated struct UpsertCampaignParams: Encodable, Sendable {
     let p_color_a: String?
     let p_color_b: String?
     let p_spots_left: Int?
+    /// New trailing params (added by migration-discover-revamp.sql).
+    let p_icon_url: String?
+    let p_description: String?
+    let p_brand_id: String?
 }
 
 nonisolated struct DeleteCampaignParams: Encodable, Sendable {
     let target: String
+}
+
+// MARK: - Discover apply / withdraw RPC params
+//
+// Property name matches the `apply_to_campaign` / `withdraw_from_campaign` SQL
+// named param `p_campaign` exactly.
+nonisolated struct CampaignApplyParams: Encodable, Sendable {
+    let p_campaign: String
 }

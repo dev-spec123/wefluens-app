@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/lib/i18n';
+import { passwordStrengthError } from '@/lib/passwordPolicy';
 import { gradients, palette, radius } from '@/lib/theme';
 
 const MIN_LENGTH = 8;
@@ -52,6 +53,11 @@ export default function SetPassword() {
     setError(null);
     if (newPassword.length < MIN_LENGTH) {
       setError(t('forcePwTooShort'));
+      return;
+    }
+    const weak = passwordStrengthError(newPassword);
+    if (weak) {
+      setError(t(weak));
       return;
     }
     if (newPassword !== confirmPassword) {

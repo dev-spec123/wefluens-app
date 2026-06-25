@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { GradientButton } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { useI18n } from '@/lib/i18n';
+import { passwordStrengthError } from '@/lib/passwordPolicy';
 import { gradients, palette, radius } from '@/lib/theme';
 
 /** Initial password seeded for invited users; the new one must differ. */
@@ -51,6 +52,11 @@ export default function ForcePassword() {
     setError(null);
     if (newPassword.length < 8) {
       setError(t('forcePwTooShort'));
+      return;
+    }
+    const weak = passwordStrengthError(newPassword);
+    if (weak) {
+      setError(t(weak));
       return;
     }
     if (newPassword === INITIAL_PASSWORD) {

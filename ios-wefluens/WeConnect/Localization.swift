@@ -113,6 +113,10 @@ enum L10n: String {
     case discoverTitle, discoverSubtitle, discoverFeatured, discoverViewBrief, discoverTopBrands, discoverOpenCampaigns, discoverActive
     case discoverDue, discoverSpotsLeft
     case filterAll, filterBeauty, filterFashion, filterWellness, filterTech
+    // Discover revamp (精选 / 热门品牌 sections, apply toggle, counts, empty states)
+    case discoverFeaturedBrands, discoverHotBrands
+    case discoverApply, discoverApplied, discoverApplicants
+    case discoverNoFeaturedBrands, discoverApplyFailed
 
     // CampaignDetail
     case campaignDetailBudget, campaignDetailDeadline, campaignDetailSpots
@@ -160,6 +164,7 @@ enum L10n: String {
     case authInviteOnly
     case authForgotPassword, authResetSentTitle, authResetSentMessage
     case authErrInvalidEmail, authErrPasswordShort, authErrPasswordRequired
+    case authErrPasswordWeak
     case authErrRateLimit, authErrGeneric
     case authCheckEmailTitle, authCheckEmailMessage, authBackToSignIn, setPwSuccess
 
@@ -174,6 +179,8 @@ enum L10n: String {
     case adminInvite, adminInviteTitle, adminInviteSubtitle, adminInviteEmailPlaceholder
     case adminInviteSend, adminInviteSent, adminInviteErrInvalid, adminInviteErrExists
     case adminInviteErrEmail, adminInviteErrSend, adminInviteErrGeneric
+    // Discover admin editors (brand / campaign icon upload, brand picker, deadline)
+    case adminUploadIcon, adminPickBrand, adminPickBrandNone, adminDeadline
 
     // Trust & Safety (block / report / terms)
     case reportTitle, reportSubtitle
@@ -357,6 +364,11 @@ final class LocalizationManager {
             .discoverFeatured: "FEATURED", .discoverViewBrief: "View brief", .discoverTopBrands: "Top Brands",
             .discoverOpenCampaigns: "Open Campaigns", .discoverActive: "active",
             .discoverDue: "Due", .discoverSpotsLeft: "spots left",
+            .discoverFeaturedBrands: "Featured", .discoverHotBrands: "Hot Brands",
+            .discoverApply: "Apply", .discoverApplied: "Applied",
+            .discoverApplicants: "applicants",
+            .discoverNoFeaturedBrands: "No featured brands yet",
+            .discoverApplyFailed: "Couldn't update your application. Please try again.",
             .filterAll: "All", .filterBeauty: "Beauty", .filterFashion: "Fashion", .filterWellness: "Wellness", .filterTech: "Tech",
             .campaignDetailBudget: "Budget", .campaignDetailDeadline: "Deadline",
             .campaignDetailSpots: "Spots", .campaignDetailApply: "Apply now", .campaignDetailApplied: "Applied ✓",
@@ -423,6 +435,7 @@ final class LocalizationManager {
             .authResetSentMessage: "If an account exists for that email, we've sent a password reset link. Please check your inbox.",
             .authErrInvalidEmail: "Enter a valid email address",
             .authErrPasswordShort: "Password must be at least 8 characters",
+            .authErrPasswordWeak: "Password must be 8+ characters with an uppercase letter, a lowercase letter, a number, and a special character",
             .authErrPasswordRequired: "Enter your password",
             .authErrRateLimit: "Too many attempts. Please wait about a minute and try again.",
             .authErrGeneric: "Something went wrong. Please try again.",
@@ -447,6 +460,10 @@ final class LocalizationManager {
             .adminDeactivateConfirm: "Deactivate this user? They won't be able to sign in.",
             .adminDeleteConfirm: "Permanently delete this user? This cannot be undone.",
             .adminCancel: "Cancel",
+            .adminUploadIcon: "Upload icon",
+            .adminPickBrand: "Brand",
+            .adminPickBrandNone: "No brand",
+            .adminDeadline: "Deadline",
             .adminNoUsers: "No users found",
             .adminStatusActive: "Active",
             .adminStatusDeactivated: "Deactivated",
@@ -637,6 +654,11 @@ final class LocalizationManager {
             .discoverFeatured: "精选", .discoverViewBrief: "查看简介", .discoverTopBrands: "热门品牌",
             .discoverOpenCampaigns: "开放活动", .discoverActive: "个进行中",
             .discoverDue: "截止", .discoverSpotsLeft: "个名额",
+            .discoverFeaturedBrands: "精选", .discoverHotBrands: "热门品牌",
+            .discoverApply: "申请", .discoverApplied: "已申请",
+            .discoverApplicants: "人已申请",
+            .discoverNoFeaturedBrands: "暂无精选品牌",
+            .discoverApplyFailed: "更新申请失败，请重试。",
             .filterAll: "全部", .filterBeauty: "美妆", .filterFashion: "时尚", .filterWellness: "健康", .filterTech: "科技",
             .campaignDetailBudget: "预算", .campaignDetailDeadline: "截止日",
             .campaignDetailSpots: "名额", .campaignDetailApply: "立即申请", .campaignDetailApplied: "已申请 ✓",
@@ -705,6 +727,7 @@ final class LocalizationManager {
             .authResetSentMessage: "如果该邮箱存在账号，我们已发送密码重置链接，请查收邮件。",
             .authErrInvalidEmail: "请输入有效的邮箱地址",
             .authErrPasswordShort: "密码至少需要 8 位",
+            .authErrPasswordWeak: "密码至少 8 位，且需包含大写字母、小写字母、数字和特殊字符",
             .authErrPasswordRequired: "请输入密码",
             .authCheckEmailTitle: "查看你的邮箱",
             .authCheckEmailMessage: "我们已发送确认链接至",
@@ -727,6 +750,10 @@ final class LocalizationManager {
             .adminDeactivateConfirm: "确定要注销此用户吗？他们将无法登录。",
             .adminDeleteConfirm: "确定要永久删除此用户吗？此操作不可撤销。",
             .adminCancel: "取消",
+            .adminUploadIcon: "上传图标",
+            .adminPickBrand: "品牌",
+            .adminPickBrandNone: "无品牌",
+            .adminDeadline: "截止日期",
             .adminNoUsers: "暂无用户",
             .adminStatusActive: "正常",
             .adminStatusDeactivated: "已注销",
@@ -917,6 +944,11 @@ final class LocalizationManager {
             .discoverFeatured: "DESTACADO", .discoverViewBrief: "Ver brief", .discoverTopBrands: "Marcas Top",
             .discoverOpenCampaigns: "Campañas Abiertas", .discoverActive: "activas",
             .discoverDue: "Entrega", .discoverSpotsLeft: "cupos",
+            .discoverFeaturedBrands: "Destacadas", .discoverHotBrands: "Marcas Populares",
+            .discoverApply: "Aplicar", .discoverApplied: "Aplicado",
+            .discoverApplicants: "solicitantes",
+            .discoverNoFeaturedBrands: "Aún no hay marcas destacadas",
+            .discoverApplyFailed: "No se pudo actualizar tu solicitud. Inténtalo de nuevo.",
             .filterAll: "Todo", .filterBeauty: "Belleza", .filterFashion: "Moda", .filterWellness: "Bienestar", .filterTech: "Tecnología",
             .campaignDetailBudget: "Presupuesto", .campaignDetailDeadline: "Fecha límite",
             .campaignDetailSpots: "Cupos", .campaignDetailApply: "Aplicar", .campaignDetailApplied: "Aplicado ✓",
@@ -985,6 +1017,7 @@ final class LocalizationManager {
             .authResetSentMessage: "Si existe una cuenta con ese correo, hemos enviado un enlace para restablecer la contraseña. Revisa tu bandeja de entrada.",
             .authErrInvalidEmail: "Introduce un correo válido",
             .authErrPasswordShort: "La contraseña debe tener al menos 8 caracteres",
+            .authErrPasswordWeak: "La contraseña debe tener 8+ caracteres con una mayúscula, una minúscula, un número y un carácter especial",
             .authErrPasswordRequired: "Introduce tu contraseña",
             .authCheckEmailTitle: "Revisa tu correo",
             .authCheckEmailMessage: "Enviamos un enlace de confirmación a",
@@ -1007,6 +1040,10 @@ final class LocalizationManager {
             .adminDeactivateConfirm: "¿Desactivar este usuario? No podrá iniciar sesión.",
             .adminDeleteConfirm: "¿Eliminar permanentemente este usuario? No se puede deshacer.",
             .adminCancel: "Cancelar",
+            .adminUploadIcon: "Subir icono",
+            .adminPickBrand: "Marca",
+            .adminPickBrandNone: "Sin marca",
+            .adminDeadline: "Fecha límite",
             .adminNoUsers: "No se encontraron usuarios",
             .adminStatusActive: "Activo",
             .adminStatusDeactivated: "Desactivado",

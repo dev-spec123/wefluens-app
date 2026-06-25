@@ -13,14 +13,29 @@ struct DiscoverView: View {
     private var brands: [Brand] { data.brands }
     private var campaigns: [Campaign] { data.campaigns }
 
-    /// Discover's "Top Brands" strip = admin-featured brands only, in rank order.
+    /// "精选 / Featured" = brands an admin has featured (featured_rank not null), in rank order.
     private var featuredBrands: [Brand] {
         data.brands.filter { $0.featuredRank != nil }
             .sorted { ($0.featuredRank ?? 0) < ($1.featuredRank ?? 0) }
     }
 
+    /// "热门品牌 / Hot" = all brands sorted by application count (most-applied first),
+    /// with name as a stable tiebreaker.
+    private var hotBrands: [Brand] {
+        data.brands.sorted {
+            if $0.applicationCount != $1.applicationCount {
+                return $0.applicationCount > $1.applicationCount
+            }
+            return $0.name < $1.name
+        }
+    }
+
     @State private var selectedFilter: String = "All"
     @State private var selectedBrand: String? = nil
+    /// Server-seeded set of applied campaign ids (source of truth = list_my_applications).
+    /// Seeded on appear; mutated optimistically by the apply/withdraw toggle.
+    @State private var appliedIds: Set<UUID> = []
+    @State private var applyError: String? = nil
 
     private var filters: [(key: L10n, label: String)] {
         [
@@ -71,9 +86,9 @@ struct DiscoverView: View {
                     .padding(.top, 8)
                     .padding(.horizontal, 18)
 
-                    featured
                     filterBar
-                    brandsSection
+                    featuredSection
+                    hotSection
                     campaignsSection
                 }
                 .padding(.bottom, 24)
@@ -86,56 +101,64 @@ struct DiscoverView: View {
                 }
             }
             // Refresh on each appearance (e.g. returning from the admin curation
-            // panel) so featured-brand changes show without an app restart.
-            .onAppear { Task { await data.loadDiscover() } }
-            .refreshable { await data.loadDiscover() }
-        }
-    }
-
-    private var featuredCampaign: Campaign? {
-        campaigns.first(where: { $0.brand.localizedCaseInsensitiveContains("Glossier") }) ?? campaigns.first
-    }
-
-    private var featured: some View {
-        ZStack(alignment: .bottomLeading) {
-            Theme.dusk
-            Circle()
-                .fill(.white.opacity(0.12))
-                .frame(width: 200, height: 200)
-                .offset(x: 120, y: -60)
-                .blur(radius: 8)
-
-            VStack(alignment: .leading, spacing: 12) {
-                TagChip(text: l10n.t(.discoverFeatured), filled: false)
-                    .colorScheme(.dark)
-                Text(featuredCampaign?.title ?? "Glossier Summer\nGlow Launch")
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                Text(featuredCampaign.map { "\($0.brand) · \($0.budget)" } ?? "3 creator spots · $8K–12K budget")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.85))
-
-                if let featuredCampaign {
-                    NavigationLink(value: featuredCampaign.id) {
-                        Text(l10n.t(.discoverViewBrief))
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Theme.plum)
-                            .padding(.horizontal, 22)
-                            .padding(.vertical, 11)
-                            .background(.white)
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 4)
-                }
+            // panel) so featured-brand changes show without an app restart. The
+            // applied set is the server's truth, re-seeded each time.
+            .onAppear { Task { await reload() } }
+            .refreshable { await reload() }
+            .alert(l10n.t(.discoverApplyFailed), isPresented: Binding(
+                get: { applyError != nil },
+                set: { if !$0 { applyError = nil } }
+            )) {
+                Button("OK", role: .cancel) { applyError = nil }
             }
-            .padding(22)
         }
-        .frame(height: 240)
-        .clipShape(RoundedRectangle(cornerRadius: 28))
-        .shadow(color: Theme.plum.opacity(0.3), radius: 20, y: 12)
-        .padding(.horizontal, 18)
     }
+
+    private func reload() async {
+        await data.loadDiscover()
+        do {
+            let ids = try await data.loadMyApplications()
+            appliedIds = Set(ids)
+        } catch {
+            // Fall back to seeding from the campaigns' own `applied` flag if the
+            // dedicated applications read fails — the server still drives state.
+            appliedIds = Set(data.campaigns.filter { $0.applied }.map { $0.id })
+        }
+    }
+
+    // MARK: - Apply / withdraw
+
+    private func isApplied(_ campaign: Campaign) -> Bool {
+        appliedIds.contains(campaign.id) || campaign.applied
+    }
+
+    private func toggleApply(_ campaign: Campaign) {
+        let currentlyApplied = isApplied(campaign)
+        // Optimistic UI; reconcile with the server on completion.
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            if currentlyApplied { appliedIds.remove(campaign.id) }
+            else { appliedIds.insert(campaign.id) }
+        }
+        Task {
+            do {
+                if currentlyApplied {
+                    try await data.withdrawFromCampaign(campaign.id)
+                } else {
+                    try await data.applyToCampaign(campaign.id)
+                }
+                await reload()
+            } catch {
+                // Roll back the optimistic change and surface the error.
+                withAnimation {
+                    if currentlyApplied { appliedIds.insert(campaign.id) }
+                    else { appliedIds.remove(campaign.id) }
+                }
+                applyError = error.localizedDescription
+            }
+        }
+    }
+
+    // MARK: - Sections
 
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -155,32 +178,50 @@ struct DiscoverView: View {
         }
     }
 
-    private var brandsSection: some View {
+    /// 精选 — admin-featured brands. Hidden entirely when there are none (the Hot
+    /// section + its empty state still covers the "no brands at all" case).
+    @ViewBuilder
+    private var featuredSection: some View {
+        if !featuredBrands.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionTitle(l10n.t(.discoverFeaturedBrands))
+                brandStrip(featuredBrands)
+            }
+        }
+    }
+
+    /// 热门品牌 — every brand, most-applied first. This is the section that shows a
+    /// friendly empty state when there are zero brands in the DB.
+    private var hotSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle(l10n.t(.discoverTopBrands))
-            if featuredBrands.isEmpty {
+            sectionTitle(l10n.t(.discoverHotBrands))
+            if hotBrands.isEmpty {
                 Text(l10n.t(.discoverNoBrands))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Theme.inkTertiary(for: colorScheme))
                     .padding(.horizontal, 18)
                     .padding(.vertical, 8)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 14) {
-                        ForEach(featuredBrands) { brand in
-                            Button {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    selectedBrand = (selectedBrand == brand.name) ? nil : brand.name
-                                }
-                            } label: {
-                                BrandCard(brand: brand)
-                            }
-                            .buttonStyle(.plain)
+                brandStrip(hotBrands)
+            }
+        }
+    }
+
+    private func brandStrip(_ list: [Brand]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 14) {
+                ForEach(list) { brand in
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedBrand = (selectedBrand == brand.name) ? nil : brand.name
                         }
+                    } label: {
+                        BrandCard(brand: brand, selected: selectedBrand == brand.name)
                     }
-                    .padding(.horizontal, 18)
+                    .buttonStyle(.plain)
                 }
             }
+            .padding(.horizontal, 18)
         }
     }
 
@@ -210,10 +251,11 @@ struct DiscoverView: View {
             } else {
                 VStack(spacing: 14) {
                     ForEach(visibleCampaigns) { campaign in
-                        NavigationLink(value: campaign.id) {
-                            CampaignCard(campaign: campaign)
-                        }
-                        .buttonStyle(.plain)
+                        CampaignCard(
+                            campaign: campaign,
+                            applied: isApplied(campaign),
+                            onApply: { toggleApply(campaign) }
+                        )
                     }
                 }
                 .padding(.horizontal, 18)
@@ -247,25 +289,22 @@ private struct BrandCard: View {
     @Environment(LocalizationManager.self) private var l10n
     @Environment(\.colorScheme) private var colorScheme
     let brand: Brand
+    var selected: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(LinearGradient(colors: brand.colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing))
-                Image(systemName: brand.symbol)
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-            .frame(width: 56, height: 56)
+            DiscoverIcon(iconUrl: brand.iconUrl, symbol: brand.symbol, colors: brand.colors,
+                         size: 56, corner: 18, symbolSize: 26)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(brand.name)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(Theme.ink(for: colorScheme))
+                    .lineLimit(1)
                 Text(brand.category)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                    .lineLimit(1)
             }
 
             Text(brand.tagline)
@@ -284,6 +323,10 @@ private struct BrandCard: View {
         .padding(16)
         .frame(width: 180, alignment: .leading)
         .cardStyle(cornerRadius: 22)
+        .overlay(
+            RoundedRectangle(cornerRadius: 22)
+                .strokeBorder(selected ? Theme.coral : Color.clear, lineWidth: 2)
+        )
     }
 }
 
@@ -291,56 +334,110 @@ private struct CampaignCard: View {
     @Environment(LocalizationManager.self) private var l10n
     @Environment(\.colorScheme) private var colorScheme
     let campaign: Campaign
+    let applied: Bool
+    let onApply: () -> Void
 
     var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(LinearGradient(colors: campaign.colors.map { Color(hex: $0) }, startPoint: .topLeading, endPoint: .bottomTrailing))
-                Image(systemName: campaign.symbol)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-            .frame(width: 60, height: 60)
+        VStack(alignment: .leading, spacing: 12) {
+            NavigationLink(value: campaign.id) {
+                HStack(spacing: 14) {
+                    DiscoverIcon(iconUrl: campaign.iconUrl, symbol: campaign.symbol, colors: campaign.colors,
+                                 size: 60, corner: 18, symbolSize: 24)
 
-            VStack(alignment: .leading, spacing: 5) {
-                Text(campaign.title)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Theme.ink(for: colorScheme))
-                    .lineLimit(1)
-                Text("\(campaign.brand) · \(campaign.budget)")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Theme.inkSecondary(for: colorScheme))
-                HStack(spacing: 6) {
-                    Image(systemName: "clock")
-                        .font(.system(size: 11))
-                    Text("\(l10n.t(.discoverDue)) \(campaign.deadline)")
-                        .font(.system(size: 12, weight: .medium))
-                    Text("·")
-                    Text("\(campaign.spotsLeft) \(l10n.t(.discoverSpotsLeft))")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(campaign.spotsLeft <= 2 ? Theme.coral : Theme.inkSecondary(for: colorScheme))
-                }
-                .foregroundStyle(Theme.inkTertiary(for: colorScheme))
-
-                if !campaign.tags.isEmpty {
-                    HStack(spacing: 8) {
-                        ForEach(campaign.tags, id: \.self) { tag in
-                            TagChip(text: tag)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(campaign.title)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(Theme.ink(for: colorScheme))
+                            .lineLimit(1)
+                        Text("\(campaign.brand) · \(campaign.budget)")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                        HStack(spacing: 6) {
+                            Image(systemName: "clock")
+                                .font(.system(size: 11))
+                            Text("\(l10n.t(.discoverDue)) \(campaign.deadline)")
+                                .font(.system(size: 12, weight: .medium))
+                            Text("·")
+                            Text("\(campaign.spotsLeft) \(l10n.t(.discoverSpotsLeft))")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(campaign.spotsLeft <= 2 ? Theme.coral : Theme.inkSecondary(for: colorScheme))
                         }
+                        .foregroundStyle(Theme.inkTertiary(for: colorScheme))
                     }
-                    .padding(.top, 2)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                }
+            }
+            .buttonStyle(.plain)
+
+            // Description (server-provided brief). Omitted when empty.
+            if !campaign.description.isEmpty {
+                Text(campaign.description)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                    .lineLimit(2)
+            }
+
+            if !campaign.tags.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(campaign.tags, id: \.self) { tag in
+                        TagChip(text: tag)
+                    }
                 }
             }
 
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .semibold))
+            HStack(spacing: 10) {
+                HStack(spacing: 5) {
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 11))
+                    Text("\(campaign.applicationCount) \(l10n.t(.discoverApplicants))")
+                        .font(.system(size: 12, weight: .semibold))
+                }
                 .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+
+                Spacer()
+
+                applyButton
+            }
+            .padding(.top, 2)
         }
         .padding(14)
         .cardStyle()
+    }
+
+    @ViewBuilder
+    private var applyButton: some View {
+        if applied {
+            Button(action: onApply) {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14))
+                    Text(l10n.t(.discoverApplied))
+                        .font(.system(size: 14, weight: .bold))
+                }
+                .foregroundStyle(Theme.coral)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 9)
+                .background(Theme.coral.opacity(0.08), in: Capsule())
+                .overlay(Capsule().strokeBorder(Theme.coral, lineWidth: 1.5))
+            }
+            .buttonStyle(.plain)
+        } else {
+            Button(action: onApply) {
+                Text(l10n.t(.discoverApply))
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 10)
+                    .background(Theme.sunset)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
     }
 }
 

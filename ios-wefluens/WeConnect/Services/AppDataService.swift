@@ -728,7 +728,8 @@ final class AppDataService {
             Brand(id: row.id, name: row.name, category: row.category ?? "",
                   tagline: row.tagline ?? "", symbol: row.symbol ?? "sparkles",
                   colors: parseColors(row.colors), activeCampaigns: row.activeCampaigns ?? 0,
-                  featuredRank: row.featuredRank)
+                  featuredRank: row.featuredRank, iconUrl: row.iconUrl,
+                  applicationCount: row.applicationCount ?? 0)
         }
     }
 
@@ -774,11 +775,13 @@ final class AppDataService {
     @MainActor
     @discardableResult
     func adminUpsertBrand(id: UUID?, name: String, category: String?, tagline: String?,
-                          symbol: String?, colors: String?, activeCampaigns: Int?, featuredRank: Int?) async throws -> UUID {
+                          symbol: String?, colors: String?, activeCampaigns: Int?, featuredRank: Int?,
+                          iconUrl: String? = nil) async throws -> UUID {
         let newId: UUID = try await supabase
             .rpc("admin_upsert_brand", params: UpsertBrandParams(
                 brand_id: id?.uuidString, p_name: name, p_category: category, p_tagline: tagline,
-                p_symbol: symbol, p_colors: colors, p_active_campaigns: activeCampaigns, p_featured_rank: featuredRank))
+                p_symbol: symbol, p_colors: colors, p_active_campaigns: activeCampaigns, p_featured_rank: featuredRank,
+                p_icon_url: iconUrl))
             .execute()
             .value
         return newId
@@ -799,9 +802,12 @@ final class AppDataService {
         let rows: [CampaignRow] = try await supabase
             .from("campaigns").select().order("created_at", ascending: false).execute().value
         return rows.map { row in
-            Campaign(id: row.id, title: row.title, brand: row.brand, budget: row.budget ?? "",
-                     tags: row.tags ?? [], deadline: row.deadline ?? "", symbol: row.symbol ?? "sparkles",
-                     colors: parseColors(row.colors), spotsLeft: row.spotsLeft ?? 0)
+            Campaign(id: row.id, title: row.title, brand: row.brand, brandId: row.brandId,
+                     budget: row.budget ?? "", tags: row.tags ?? [], deadline: row.deadline ?? "",
+                     symbol: row.symbol ?? "sparkles", colors: parseColors(row.colors),
+                     spotsLeft: row.spotsLeft ?? 0, description: row.description ?? "",
+                     iconUrl: row.iconUrl, applicationCount: row.applicationCount ?? 0,
+                     applied: row.applied ?? false)
         }
     }
 
@@ -812,12 +818,15 @@ final class AppDataService {
     @discardableResult
     func adminUpsertCampaign(id: UUID?, title: String, brand: String?, budget: String?,
                              tags: [String]?, deadline: String?, symbol: String?,
-                             colorA: String?, colorB: String?, spotsLeft: Int?) async throws -> UUID {
+                             colorA: String?, colorB: String?, spotsLeft: Int?,
+                             iconUrl: String? = nil, description: String? = nil,
+                             brandId: UUID? = nil) async throws -> UUID {
         let newId: UUID = try await supabase
             .rpc("admin_upsert_campaign", params: UpsertCampaignParams(
                 campaign_id: id?.uuidString, p_title: title, p_brand: brand, p_budget: budget,
                 p_tags: tags, p_deadline: deadline, p_symbol: symbol,
-                p_color_a: colorA, p_color_b: colorB, p_spots_left: spotsLeft))
+                p_color_a: colorA, p_color_b: colorB, p_spots_left: spotsLeft,
+                p_icon_url: iconUrl, p_description: description, p_brand_id: brandId?.uuidString))
             .execute()
             .value
         return newId
@@ -2034,42 +2043,89 @@ final class AppDataService {
 
     @MainActor
     func loadDiscover() async {
-        // Brands and campaigns are loaded independently: a failure in one must not
-        // clobber the other (a transient campaigns error used to overwrite real,
-        // freshly-curated brands with SampleData). SampleData is only used as a
-        // fallback when we genuinely have nothing to show.
+        // Discover shows ONLY real DB rows now (no SampleData fallback). Brands and
+        // campaigns load independently via their dedicated RPCs so a failure in one
+        // never clobbers the other; an error leaves the prior list untouched and the
+        // view shows its empty state when there's genuinely nothing.
         do {
             let bRows: [BrandRow] = try await supabase
-                .from("brands").select().execute().value
-            let mapped = bRows.map { row in
+                .rpc("list_discover_brands")
+                .execute()
+                .value
+            brands = bRows.map { row in
                 Brand(
                     id: row.id, name: row.name, category: row.category ?? "",
                     tagline: row.tagline ?? "", symbol: row.symbol ?? "sparkles",
                     colors: parseColors(row.colors), activeCampaigns: row.activeCampaigns ?? 0,
-                    featuredRank: row.featuredRank
+                    featuredRank: row.featuredRank, iconUrl: row.iconUrl,
+                    applicationCount: row.applicationCount ?? 0
                 )
             }
-            brands = mapped.isEmpty ? SampleData.brands : mapped
         } catch {
             print("⚠️ Brands load failed: \(error)")
-            if brands.isEmpty { brands = SampleData.brands }  // keep what we have
         }
 
         do {
             let cRows: [CampaignRow] = try await supabase
-                .from("campaigns").select().execute().value
-            let mapped = cRows.map { row in
+                .rpc("list_discover_campaigns")
+                .execute()
+                .value
+            campaigns = cRows.map { row in
                 Campaign(
-                    id: row.id, title: row.title, brand: row.brand, budget: row.budget ?? "",
-                    tags: row.tags ?? [], deadline: row.deadline ?? "", symbol: row.symbol ?? "sparkles",
-                    colors: parseColors(row.colors), spotsLeft: row.spotsLeft ?? 0
+                    id: row.id, title: row.title, brand: row.brand, brandId: row.brandId,
+                    budget: row.budget ?? "", tags: row.tags ?? [], deadline: row.deadline ?? "",
+                    symbol: row.symbol ?? "sparkles", colors: parseColors(row.colors),
+                    spotsLeft: row.spotsLeft ?? 0, description: row.description ?? "",
+                    iconUrl: row.iconUrl, applicationCount: row.applicationCount ?? 0,
+                    applied: row.applied ?? false
                 )
             }
-            campaigns = mapped.isEmpty ? SampleData.campaigns : mapped
         } catch {
             print("⚠️ Campaigns load failed: \(error)")
-            if campaigns.isEmpty { campaigns = SampleData.campaigns }
         }
+    }
+
+    /// Applies the current user to a campaign (idempotent server-side; decrements
+    /// spots_left once). Callers refresh Discover after to reflect server truth.
+    @MainActor
+    func applyToCampaign(_ id: UUID) async throws {
+        try await supabase
+            .rpc("apply_to_campaign", params: CampaignApplyParams(p_campaign: id.uuidString))
+            .execute()
+    }
+
+    /// Withdraws the current user's application from a campaign (gives the spot back).
+    @MainActor
+    func withdrawFromCampaign(_ id: UUID) async throws {
+        try await supabase
+            .rpc("withdraw_from_campaign", params: CampaignApplyParams(p_campaign: id.uuidString))
+            .execute()
+    }
+
+    /// The caller's applied campaign ids (server is the source of truth). Used to
+    /// seed/replace the on-device applied list.
+    @MainActor
+    func loadMyApplications() async throws -> [UUID] {
+        try await supabase
+            .rpc("list_my_applications")
+            .execute()
+            .value
+    }
+
+    /// Uploads a compressed icon to the public `discover` bucket and returns its
+    /// public URL. Mirrors `uploadAvatar`. `kind` is "brand" or "campaign"; the path
+    /// is `{kind}/{id}-{uuid}.jpg` (lowercased to satisfy Storage policies).
+    @MainActor
+    func uploadDiscoverIcon(kind: String, id: UUID, imageData: Data) async throws -> String {
+        let compressed = Self.compressedJPEG(imageData, maxDimension: 512, quality: 0.82) ?? imageData
+        let filePath = "\(kind.lowercased())/\(id.uuidString.lowercased())-\(UUID().uuidString.lowercased()).jpg"
+        try await supabase.storage
+            .from("discover")
+            .upload(filePath, data: compressed, options: FileOptions(contentType: "image/jpeg", upsert: true))
+        let publicURL = try supabase.storage
+            .from("discover")
+            .getPublicURL(path: filePath)
+        return publicURL.absoluteString
     }
 }
 

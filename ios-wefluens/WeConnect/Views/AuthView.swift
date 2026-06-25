@@ -338,6 +338,9 @@ struct AuthView: View {
         if password.count < Self.minPasswordLength {
             passwordError = l10n.t(.authErrPasswordShort)
             ok = false
+        } else if let weak = PasswordPolicy.error(password) {
+            passwordError = l10n.t(weak)
+            ok = false
         }
         if confirmPassword != password {
             confirmError = l10n.t(.authPasswordMismatch)

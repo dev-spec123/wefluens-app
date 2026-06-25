@@ -5,6 +5,8 @@
  * admin_set_featured_brand). English UI strings are localized via i18n.
  */
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -32,12 +34,6 @@ function iconFor(symbol: string): keyof typeof Ionicons.glyphMap {
     'sun.max.fill': 'sunny', 'tshirt.fill': 'shirt', tshirt: 'shirt',
   };
   return map[symbol] ?? 'sparkles';
-}
-
-/** Normalize a hex string for the gradient preview ("FF4D6D" → "#FF4D6D"). */
-function hexColor(s: string, fallback: string): string {
-  const cleaned = s.trim().replace(/^#/, '');
-  return /^[0-9a-fA-F]{6}$/.test(cleaned) ? `#${cleaned.toUpperCase()}` : fallback;
 }
 
 export default function ManageBrands() {
@@ -119,9 +115,13 @@ export default function ManageBrands() {
   function renderRow(brand: AdminBrand, featuredIndex: number | null) {
     return (
       <View key={brand.id} style={styles.row}>
-        <LinearGradient colors={brand.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.rowIcon}>
-          <Ionicons name={iconFor(brand.symbol)} size={16} color="#fff" />
-        </LinearGradient>
+        {brand.iconUrl ? (
+          <Image source={{ uri: brand.iconUrl }} style={styles.rowIcon} contentFit="cover" />
+        ) : (
+          <LinearGradient colors={brand.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.rowIcon}>
+            <Ionicons name={iconFor(brand.symbol)} size={16} color="#fff" />
+          </LinearGradient>
+        )}
         <View style={{ flex: 1 }}>
           <Text style={[styles.rowTitle, { color: c.ink }]} numberOfLines={1}>{brand.name}</Text>
           <Text style={[styles.rowSub, { color: c.inkSecondary }]} numberOfLines={1}>{brand.category}</Text>
@@ -236,11 +236,15 @@ function BrandEditor({
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [tagline, setTagline] = useState('');
-  const [symbol, setSymbol] = useState('sparkles');
-  const [color1, setColor1] = useState('FF4D6D');
-  const [color2, setColor2] = useState('FF9A5A');
-  const [activeCampaigns, setActiveCampaigns] = useState('');
+  // Icon: the already-saved public URL, plus an optional locally-picked uri that
+  // hasn't been uploaded yet (uploaded on Save). The gradient+symbol is the
+  // default fallback shown whenever there's no image.
+  const [iconUrl, setIconUrl] = useState<string | null>(null);
+  const [localIconUri, setLocalIconUri] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Keep the existing default look (gradient + symbol) for brands without an icon.
+  const fallbackColors: [string, string] = brand?.colors ?? ['#FF4D6D', '#FF9A5A'];
+  const fallbackSymbol = brand?.symbol ?? 'sparkles';
 
   // Seed fields whenever the editor opens (edit → existing values, create → defaults).
   useEffect(() => {
@@ -249,34 +253,61 @@ function BrandEditor({
       setName(brand.name);
       setCategory(brand.category);
       setTagline(brand.tagline);
-      setSymbol(brand.symbol);
-      setColor1(brand.colors[0].replace(/^#/, ''));
-      setColor2(brand.colors[1].replace(/^#/, ''));
-      setActiveCampaigns(String(brand.activeCampaigns));
+      setIconUrl(brand.iconUrl ?? null);
     } else {
-      setName(''); setCategory(''); setTagline(''); setSymbol('sparkles');
-      setColor1('FF4D6D'); setColor2('FF9A5A'); setActiveCampaigns('');
+      setName(''); setCategory(''); setTagline(''); setIconUrl(null);
     }
+    setLocalIconUri(null);
   }, [visible, brand]);
 
   const isEditing = brand != null;
   const canSave = name.trim().length > 0 && !busy;
+  const previewUri = localIconUri ?? iconUrl;
+
+  async function pickIcon() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+    if (result.canceled || !result.assets.length) return;
+    setLocalIconUri(result.assets[0].uri);
+  }
+
+  function removeIcon() {
+    setLocalIconUri(null);
+    setIconUrl(null);
+  }
 
   async function save() {
     if (!canSave) return;
     setBusy(true);
     try {
-      await api.adminUpsertBrand({
+      // Upsert first so a brand-new row has an id to key its icon path under,
+      // then (if a fresh image was picked) upload it and re-save the URL.
+      let finalIconUrl = iconUrl;
+      const id = await api.adminUpsertBrand({
         id: brand?.id ?? null,
         name: name.trim(),
         category: category.trim() || null,
         tagline: tagline.trim() || null,
-        symbol: symbol.trim() || 'sparkles',
-        color1,
-        color2,
-        activeCampaigns: activeCampaigns.trim() ? parseInt(activeCampaigns, 10) || 0 : 0,
         featuredRank: brand?.featuredRank ?? null,
+        iconUrl: finalIconUrl,
       });
+      if (localIconUri) {
+        finalIconUrl = await api.uploadDiscoverIcon('brands', id, localIconUri);
+        await api.adminUpsertBrand({
+          id,
+          name: name.trim(),
+          category: category.trim() || null,
+          tagline: tagline.trim() || null,
+          featuredRank: brand?.featuredRank ?? null,
+          iconUrl: finalIconUrl,
+        });
+      }
       await onDone();
     } catch {
       notify(t('adminSaveError'));
@@ -302,25 +333,6 @@ function BrandEditor({
     }
   }
 
-  function FieldRow({ label, value, onChangeText, keyboardType }: {
-    label: string; value: string; onChangeText: (v: string) => void;
-    keyboardType?: 'default' | 'number-pad';
-  }) {
-    return (
-      <View style={{ marginBottom: 14 }}>
-        <Text style={[styles.fieldLabel, { color: c.inkTertiary }]}>{label.toUpperCase()}</Text>
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          keyboardType={keyboardType ?? 'default'}
-          autoCapitalize="none"
-          autoCorrect={false}
-          style={[styles.input, { color: c.ink, backgroundColor: c.card, borderColor: c.hairline }]}
-        />
-      </View>
-    );
-  }
-
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} transparent={false}>
       <SafeAreaView style={{ flex: 1, backgroundColor: c.paper }} edges={['top']}>
@@ -336,31 +348,41 @@ function BrandEditor({
         />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={styles.editorContent} keyboardShouldPersistTaps="handled">
+            {/* Icon upload — image when set, default gradient+symbol otherwise. */}
+            <Text style={[styles.fieldLabel, { color: c.inkTertiary }]}>{t('adminUploadIcon').toUpperCase()}</Text>
+            <View style={styles.iconRow}>
+              <Pressable onPress={pickIcon} disabled={busy}>
+                {previewUri ? (
+                  <Image source={{ uri: previewUri }} style={styles.iconPreview} contentFit="cover" />
+                ) : (
+                  <LinearGradient
+                    colors={fallbackColors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.iconPreview}
+                  >
+                    <Ionicons name={iconFor(fallbackSymbol)} size={26} color="#fff" />
+                  </LinearGradient>
+                )}
+              </Pressable>
+              <View style={{ flex: 1 }}>
+                <Pressable onPress={pickIcon} disabled={busy} hitSlop={6}>
+                  <Text style={{ color: c.coral, fontSize: 14, fontWeight: '600' }}>
+                    {previewUri ? t('adminChangeIcon') : t('adminUploadIcon')}
+                  </Text>
+                </Pressable>
+                {previewUri ? (
+                  <Pressable onPress={removeIcon} disabled={busy} hitSlop={6} style={{ marginTop: 8 }}>
+                    <Text style={{ color: c.inkSecondary, fontSize: 13 }}>{t('adminRemoveIcon')}</Text>
+                  </Pressable>
+                ) : null}
+                <Text style={[styles.iconHint, { color: c.inkTertiary }]}>{t('adminIconHint')}</Text>
+              </View>
+            </View>
+
             <FieldRow label={t('adminFieldName')} value={name} onChangeText={setName} />
             <FieldRow label={t('adminFieldCategory')} value={category} onChangeText={setCategory} />
             <FieldRow label={t('adminFieldTagline')} value={tagline} onChangeText={setTagline} />
-            <FieldRow label={t('adminFieldSymbol')} value={symbol} onChangeText={setSymbol} />
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <View style={{ flex: 1 }}>
-                <FieldRow label={t('adminFieldColor1')} value={color1} onChangeText={setColor1} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <FieldRow label={t('adminFieldColor2')} value={color2} onChangeText={setColor2} />
-              </View>
-            </View>
-            <FieldRow label={t('adminFieldActiveCampaigns')} value={activeCampaigns} onChangeText={setActiveCampaigns} keyboardType="number-pad" />
-
-            <View style={styles.previewRow}>
-              <LinearGradient
-                colors={[hexColor(color1, '#FF4D6D'), hexColor(color2, '#FF9A5A')]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.previewIcon}
-              >
-                <Ionicons name={iconFor(symbol)} size={22} color="#fff" />
-              </LinearGradient>
-              <Text style={[styles.previewLabel, { color: c.inkSecondary }]}>{t('adminPreview')}</Text>
-            </View>
 
             {isEditing ? (
               <Pressable
@@ -375,6 +397,29 @@ function BrandEditor({
         </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
+  );
+}
+
+/** A labelled single-line text input row (module-level so it isn't re-created
+ *  every render — keeping a stable component identity avoids the input losing
+ *  focus on each keystroke). */
+function FieldRow({ label, value, onChangeText, keyboardType }: {
+  label: string; value: string; onChangeText: (v: string) => void;
+  keyboardType?: 'default' | 'number-pad';
+}) {
+  const c = useTheme();
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={[styles.fieldLabel, { color: c.inkTertiary }]}>{label.toUpperCase()}</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType={keyboardType ?? 'default'}
+        autoCapitalize="none"
+        autoCorrect={false}
+        style={[styles.input, { color: c.ink, backgroundColor: c.card, borderColor: c.hairline }]}
+      />
+    </View>
   );
 }
 
@@ -396,8 +441,8 @@ const styles = StyleSheet.create({
   editorContent: { padding: 18, paddingBottom: 40 },
   fieldLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 6 },
   input: { borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
-  previewRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4, marginBottom: 8 },
-  previewIcon: { width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  previewLabel: { fontSize: 13, fontWeight: '500' },
+  iconRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 20 },
+  iconPreview: { width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  iconHint: { fontSize: 11.5, marginTop: 8 },
   deleteBtn: { marginTop: 18, alignItems: 'center', paddingVertical: 14, borderRadius: radius.pill },
 });
