@@ -13,7 +13,7 @@ import {
   useAudioPlayerStatus, useAudioRecorder, useAudioRecorderState,
 } from 'expo-audio';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import * as api from '@/lib/api';
 import { notify } from '@/lib/dialog';
@@ -33,9 +33,10 @@ function formatTime(seconds: number): string {
 // ─────────────────────────── Recorder button ───────────────────────────
 
 /**
- * Hold-to-record microphone button for the chat composer. On release it stops,
- * hands the local clip uri to `onComplete` (which uploads + sends), and resets.
- * Hidden entirely on web, where recording isn't supported.
+ * Tap-to-toggle microphone button for the chat composer: tap once to start
+ * recording, tap again to stop — which hands the local clip uri to `onComplete`
+ * (uploads + sends) and resets. (No press-and-hold: a missed press-out used to
+ * leave recording stuck.) Hidden entirely on web, where recording isn't supported.
  */
 export function VoiceRecordButton({
   onComplete, sending,
@@ -72,13 +73,13 @@ export function VoiceRecordButton({
 
   const startRecording = useCallback(async () => {
     if (busy || sending || activeRef.current) return;
+    activeRef.current = true; // optimistic — stops a double-tap from starting twice
     try {
       const { granted } = await AudioModule.requestRecordingPermissionsAsync();
-      if (!granted) { notify(t('chatMicDenied')); return; }
+      if (!granted) { notify(t('chatMicDenied')); activeRef.current = false; return; }
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await recorder.prepareToRecordAsync();
       recorder.record();
-      activeRef.current = true;
     } catch (e) {
       console.warn('startRecording failed', e);
       activeRef.current = false;
@@ -106,43 +107,33 @@ export function VoiceRecordButton({
   const elapsed = formatTime((state.durationMillis ?? 0) / 1000);
 
   return (
-    <>
-      <Pressable
-        onPressIn={startRecording}
-        onPressOut={stopRecording}
-        disabled={disabled}
-        hitSlop={8}
-        style={[
-          recording ? styles.micBtnRecording : styles.micBtn,
-          recording && { backgroundColor: c.coral + '22' },
-        ]}
-      >
-        {busy ? (
-          <ActivityIndicator color={c.coral} />
-        ) : recording ? (
-          <View style={styles.recordingInline}>
-            <Ionicons name="mic" size={20} color={c.coral} />
-            <Text style={{ color: c.coral, fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] }}>
-              {elapsed}
-            </Text>
-          </View>
-        ) : (
-          <Ionicons name="mic-outline" size={24} color={c.inkSecondary} />
-        )}
-      </Pressable>
-
-      {/* Full-screen recording HUD while the mic is held (mirrors Swift's
-          recordingOverlay): dimmed backdrop, big waveform glyph, label, timer. */}
-      <Modal visible={recording} transparent animationType="fade" statusBarTranslucent>
-        <View style={styles.hudBackdrop} pointerEvents="none">
-          <View style={[styles.hudCard, { backgroundColor: c.coral }]}>
-            <Ionicons name="mic" size={40} color="#fff" />
-            <Text style={styles.hudLabel}>{t('chatRecording')}</Text>
-            <Text style={styles.hudTimer}>{elapsed}</Text>
-          </View>
+    <Pressable
+      onPress={() => {
+        if (disabled) return;
+        if (activeRef.current) stopRecording();
+        else startRecording();
+      }}
+      disabled={disabled}
+      hitSlop={8}
+      style={[
+        recording ? styles.micBtnRecording : styles.micBtn,
+        recording && { backgroundColor: c.coral + '22' },
+      ]}
+    >
+      {busy ? (
+        <ActivityIndicator color={c.coral} />
+      ) : recording ? (
+        // Recording: tap again to stop + send. Inline state only — no modal.
+        <View style={styles.recordingInline}>
+          <Ionicons name="stop" size={18} color={c.coral} />
+          <Text style={{ color: c.coral, fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] }}>
+            {elapsed}
+          </Text>
         </View>
-      </Modal>
-    </>
+      ) : (
+        <Ionicons name="mic-outline" size={24} color={c.inkSecondary} />
+      )}
+    </Pressable>
   );
 }
 

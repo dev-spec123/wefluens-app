@@ -50,6 +50,9 @@ struct ChatDetailView: View {
     // Voice messages
     @State private var recorder = VoiceRecorder()
     @State private var showMicPermissionAlert = false
+    /// Guards against a double-tap re-entering `start()` before the async
+    /// permission/setup completes (which would otherwise spawn a second recorder).
+    @State private var isStartingRecording = false
     @FocusState private var inputFocused: Bool
 
     private var messages: [ChatMessage] { vm?.messages ?? [] }
@@ -93,9 +96,6 @@ struct ChatDetailView: View {
                 }
                 inputBar
             }
-        }
-        .overlay {
-            if recorder.isRecording { recordingOverlay }
         }
         .overlay(alignment: .top) {
             if showCopiedToast {
@@ -577,8 +577,9 @@ struct ChatDetailView: View {
         }
     }
 
-    /// Press-and-hold microphone button. A long-press (min 0s) starts recording;
-    /// releasing the finger ends it and sends. Shows a spinner while uploading.
+    /// Tap-to-toggle microphone button. First tap starts recording; a second tap
+    /// stops it and sends the clip. While recording it shows an inline stop icon and
+    /// the running mm:ss timer (no full-screen overlay). Shows a spinner while uploading.
     @ViewBuilder
     private var micButton: some View {
         if vm?.isSendingVoice == true {
@@ -586,26 +587,32 @@ struct ChatDetailView: View {
                 .tint(Theme.coral)
                 .frame(width: 44, height: 44)
         } else {
-            Image(systemName: recorder.isRecording ? "waveform" : "mic.fill")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(recorder.isRecording ? .white : Theme.coral)
-                .frame(width: 44, height: 44)
-                .background(recorder.isRecording
-                            ? AnyShapeStyle(Theme.sunset)
-                            : AnyShapeStyle(Theme.card(for: colorScheme)))
-                .clipShape(Circle())
-                .overlay(Circle().stroke(Theme.hairline(for: colorScheme), lineWidth: recorder.isRecording ? 0 : 1))
-                .scaleEffect(recorder.isRecording ? 1.12 : 1)
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: recorder.isRecording)
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            if !recorder.isRecording { startRecording() }
-                        }
-                        .onEnded { _ in
-                            stopRecordingAndSend()
-                        }
-                )
+            Button(action: toggleRecording) {
+                if recorder.isRecording {
+                    HStack(spacing: 5) {
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text(String(format: "%d:%02d", Int(recorder.elapsed) / 60, Int(recorder.elapsed) % 60))
+                            .font(.system(size: 13, weight: .semibold))
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .frame(height: 44)
+                    .background(Theme.coral, in: Capsule())
+                } else {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Theme.coral)
+                        .frame(width: 44, height: 44)
+                        .background(Theme.card(for: colorScheme))
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(recorder.isRecording ? l10n.t(.chatRecording) : l10n.t(.chatVoice))
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: recorder.isRecording)
         }
     }
 
@@ -628,40 +635,27 @@ struct ChatDetailView: View {
         .allowsHitTesting(false)
     }
 
-    /// A centered "recording…" indicator shown while the mic is held.
-    private var recordingOverlay: some View {
-        VStack {
-            Spacer()
-            VStack(spacing: 12) {
-                Image(systemName: "waveform")
-                    .font(.system(size: 40, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .symbolEffect(.variableColor.iterative, isActive: true)
-                Text(l10n.t(.chatRecording))
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text(String(format: "%d:%02d", Int(recorder.elapsed) / 60, Int(recorder.elapsed) % 60))
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(.white)
-                    .monospacedDigit()
-            }
-            .padding(.horizontal, 36)
-            .padding(.vertical, 28)
-            .background(Theme.coral.opacity(0.92), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .padding(.bottom, 120)
+    /// Tap handler for the mic button: if not recording, start; if recording, stop
+    /// and send. The first tap kicks off the async start (mic permission + setup);
+    /// the second tap stops and hands the clip to the existing send path.
+    private func toggleRecording() {
+        if recorder.isRecording {
+            stopRecordingAndSend()
+        } else {
+            startRecording()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black.opacity(0.18).ignoresSafeArea())
-        .allowsHitTesting(false)
-        .transition(.opacity)
     }
 
     /// Begins recording (requests mic permission as needed). Surfaces a permission
-    /// alert if it was denied so the user can enable it in Settings.
+    /// alert if it was denied so the user can enable it in Settings. The
+    /// `isStartingRecording` guard prevents a rapid double-tap from starting twice.
     private func startRecording() {
+        guard !isStartingRecording, !recorder.isRecording else { return }
+        isStartingRecording = true
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         Task {
             let started = await recorder.start()
+            isStartingRecording = false
             if !started && recorder.permissionDenied {
                 recorder.permissionDenied = false
                 showMicPermissionAlert = true

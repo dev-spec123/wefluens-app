@@ -2,7 +2,7 @@
 //  VoiceRecorder.swift
 //  WeConnect
 //
-//  Small press-and-hold voice recorder for chat voice messages. Requests mic
+//  Small tap-to-toggle voice recorder for chat voice messages. Requests mic
 //  permission, configures the audio session for record + playback, captures to a
 //  temporary `.m4a` (AAC), and returns the encoded `Data` on stop. All failures
 //  are handled gracefully (no crashes) so the composer can fall back silently.
@@ -11,13 +11,13 @@
 import Foundation
 import AVFoundation
 
-/// Drives a single press-and-hold recording. The view observes `isRecording` to
-/// show the recording indicator and `elapsed` to render the duration. MainActor
-/// isolated to match the app's default actor isolation.
+/// Drives a single tap-to-toggle recording. The view observes `isRecording` to
+/// show the inline recording indicator and `elapsed` to render the duration.
+/// MainActor isolated to match the app's default actor isolation.
 @Observable
 @MainActor
 final class VoiceRecorder {
-    /// True while a recording is in progress (drives the recording overlay).
+    /// True while a recording is in progress (drives the inline recording indicator).
     private(set) var isRecording = false
     /// Seconds elapsed in the current recording (drives the duration label).
     private(set) var elapsed: TimeInterval = 0
