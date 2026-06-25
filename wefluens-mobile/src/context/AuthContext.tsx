@@ -27,6 +27,7 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, agreedToTerms: boolean) => Promise<{ needsConfirmation: boolean }>;
   sendPasswordReset: (email: string) => Promise<void>;
+  verifyCurrentPassword: (currentPassword: string) => Promise<boolean>;
   changePassword: (newPassword: string) => Promise<void>;
   finishRecovery: (newPassword: string) => Promise<void>;
   updateRecoveredPassword: (newPassword: string) => Promise<void>;
@@ -135,6 +136,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   }, []);
 
+  // Re-authenticate the signed-in user against their current password before a
+  // voluntary change. Returns false on invalid credentials; rethrows anything
+  // that isn't an auth failure (network, etc.).
+  const verifyCurrentPassword = useCallback(async (currentPassword: string) => {
+    if (!email) return false;
+    const { error } = await supabase.auth.signInWithPassword({ email, password: currentPassword });
+    if (!error) return true;
+    const status = (error as { status?: number }).status;
+    if (status === 400 || status === 401 || /invalid login credentials/i.test(error.message)) {
+      return false;
+    }
+    throw error;
+  }, [email]);
+
   const changePassword = useCallback(async (newPassword: string) => {
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) throw error;
@@ -174,9 +189,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AuthContextValue>(() => ({
     loading, session, userId, email, profile, isAdmin, mustChangePassword, passwordRecoveryActive,
-    signIn, signUp, sendPasswordReset, changePassword, finishRecovery, updateRecoveredPassword, dismissRecovery, signOut, refreshProfile,
+    signIn, signUp, sendPasswordReset, verifyCurrentPassword, changePassword, finishRecovery, updateRecoveredPassword, dismissRecovery, signOut, refreshProfile,
   }), [loading, session, userId, email, profile, isAdmin, mustChangePassword, passwordRecoveryActive,
-    signIn, signUp, sendPasswordReset, changePassword, finishRecovery, updateRecoveredPassword, dismissRecovery, signOut, refreshProfile]);
+    signIn, signUp, sendPasswordReset, verifyCurrentPassword, changePassword, finishRecovery, updateRecoveredPassword, dismissRecovery, signOut, refreshProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

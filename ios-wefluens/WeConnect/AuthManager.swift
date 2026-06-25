@@ -274,6 +274,22 @@ final class AuthManager {
 
     // MARK: - Change Password
 
+    /// Re-authenticates the signed-in user to confirm they know their CURRENT
+    /// password before a voluntary change. Reads the active session's email and
+    /// attempts a fresh sign-in with the supplied password (mirroring `signIn`).
+    /// Returns `true` only when the credentials are valid; any thrown auth error
+    /// (e.g. invalid credentials) is treated as `false`.
+    @MainActor
+    func verifyCurrentPassword(_ pw: String) async -> Bool {
+        guard let email = userEmail else { return false }
+        do {
+            _ = try await supabase.auth.signIn(email: email, password: pw)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     /// Updates the signed-in user's password and clears the forced-change flag.
     /// Throws so the caller can surface a meaningful message.
     @MainActor
