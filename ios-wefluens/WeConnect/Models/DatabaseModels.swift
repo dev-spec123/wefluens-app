@@ -96,6 +96,18 @@ nonisolated struct FavoriteUpsert: Encodable, Sendable {
 nonisolated struct SupportTicketRequest: Encodable, Sendable {
     let subject: String
     let body: String
+    /// Feedback category: "bug" | "idea" | "other".
+    let type: String
+    /// UI language at submit time: "zh" | "en".
+    let lang: String
+    /// Compressed, base64-encoded image attachments (max 6).
+    let images: [SupportTicketImage]
+}
+
+/// One base64-encoded image attachment in a support ticket payload.
+nonisolated struct SupportTicketImage: Encodable, Sendable {
+    let dataBase64: String
+    let mime: String
 }
 nonisolated struct SupportTicketResponse: Decodable, Sendable {
     let ok: Bool?
