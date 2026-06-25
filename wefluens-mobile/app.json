@@ -55,7 +55,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#E8455A"
+          "backgroundColor": "#E8455A",
+          "image": "./assets/images/splash-blank.png",
+          "imageWidth": 1
         }
       ],
       "expo-localization",
