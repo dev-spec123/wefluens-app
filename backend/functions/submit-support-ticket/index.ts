@@ -40,7 +40,7 @@ const SUPPORT_INBOX = "support@wefluens.com";
 const MAX_IMAGES = 6;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB per image, decoded
 const HUB_BUCKET = "feedback-attachments";
-const HUB_KEY_PREFIX = "Wefluens Connect - Feedback";
+const HUB_KEY_PREFIX = "App - Feedback";
 
 // Mirrors invite-user.loadEmailConfig: env wins, then app_secrets, then default
 // sender. RESEND_TO lets ops redirect the support inbox without a code change.
@@ -149,7 +149,7 @@ function sniffImage(bytes: Uint8Array): { mime: string; ext: string } | null {
 
 // Sanitize the storage submitter segment: keep it readable but path-safe.
 function sanitizeSubmitter(raw: string): string {
-  const cleaned = raw.replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "");
+  const cleaned = raw.replace(/[^a-zA-Z0-9._@-]+/g, "_").replace(/^_+|_+$/g, "");
   return cleaned.length > 0 ? cleaned.slice(0, 64) : "user";
 }
 
@@ -299,9 +299,7 @@ Deno.serve(async (req) => {
     // `feedback` row. Best-effort — the local ticket is already saved, so any hub
     // failure (missing secrets, upload/insert error) is logged and non-fatal.
     const submittedBy = user.email ?? user.id;
-    const submitter = sanitizeSubmitter(
-      user.email ? user.email.split("@")[0] : user.id,
-    );
+    const submitter = sanitizeSubmitter(user.email ?? user.id);
     const validImages = collectValidImages(payload.images);
     let hubOk = false;
     const hubUrls: string[] = [];
