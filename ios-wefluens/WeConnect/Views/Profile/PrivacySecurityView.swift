@@ -12,7 +12,7 @@ struct PrivacySecurityView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var profileVisible: Bool = true
     @State private var showActivity: Bool = true
-    @State private var dataSharing: Bool = false   // opt-in: off until the user turns it on
+    @State private var dataSharing: Bool = true    // Discoverable: opt-out (on unless hidden)
     @State private var showChangePassword: Bool = false
 
     var body: some View {
@@ -111,7 +111,7 @@ struct PrivacySecurityView: View {
             // Seed toggles from the stored profile without triggering a write-back:
             // onChange only fires on a real change, and these match the source.
             showActivity = data.profile?.activityStatus ?? true
-            dataSharing = data.profile?.dataSharing ?? false
+            dataSharing = data.profile?.dataSharing ?? true
         }
     }
 

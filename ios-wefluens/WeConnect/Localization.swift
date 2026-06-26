@@ -74,7 +74,7 @@ enum L10n: String {
     // Group settings
     case groupSettingsTitle, groupSettingsMembers, groupSettingsAddMembers
     case groupSettingsName, groupSettingsNamePlaceholder, groupSettingsSave
-    case groupSettingsOwner, groupSettingsRemove, groupSettingsRemoveConfirm
+    case groupSettingsOwner, groupSettingsRemove, groupSettingsRemoveConfirm, groupMemberYou
     case groupSettingsRenameError, groupSettingsAddError, groupSettingsRemoveError
     case groupSettingsNoFriendsToAdd
     case groupSettingsChangePhoto, groupSettingsMute
@@ -89,7 +89,7 @@ enum L10n: String {
     case contactsRemark, contactsSetRemark
 
     // Add Friend (search + request)
-    case addFriendSearchPlaceholder, addFriendHint, addFriendNoResults, addFriendSearching
+    case addFriendSearchPlaceholder, addFriendHint, addFriendNoResults, addFriendSearching, addFriendSuggested
     case addFriendAdd, addFriendRequested, addFriendFriends, addFriendSent
     case addFriendAlreadyFriends, addFriendIncoming, addFriendError
     case friendAcceptedTitle, friendAcceptedMessage
@@ -309,6 +309,7 @@ final class LocalizationManager {
             .groupSettingsNamePlaceholder: "Group name",
             .groupSettingsSave: "Save",
             .groupSettingsOwner: "Owner",
+            .groupMemberYou: "This is you",
             .groupSettingsRemove: "Remove",
             .groupSettingsRemoveConfirm: "Remove this member from the group?",
             .groupSettingsRenameError: "Couldn't rename the group. Please try again.",
@@ -335,6 +336,7 @@ final class LocalizationManager {
             .contactsRemark: "Remark", .contactsSetRemark: "Set remark",
             .addFriendSearchPlaceholder: "Search by email or @handle",
             .addFriendHint: "Find people by their email or username, then send a friend request.",
+            .addFriendSuggested: "Suggested",
             .addFriendNoResults: "No users found",
             .addFriendSearching: "Searching…",
             .addFriendAdd: "Add",
@@ -386,7 +388,7 @@ final class LocalizationManager {
             .privacyBlockedAccounts: "Blocked Accounts", .privacyBlockedAccountsSub: "Manage accounts you've blocked",
             .privacyVisibility: "Profile Visibility", .privacyVisibilitySub: "Control who can see your profile",
             .privacyActivityStatus: "Activity Status", .privacyActivityStatusSub: "Show when you're active",
-            .privacyDataSharing: "Discoverable", .privacyDataSharingSub: "Appear in the Top Talent directory",
+            .privacyDataSharing: "Discoverable", .privacyDataSharingSub: "Let others find you when they browse Add Friend",
             .qrMyCode: "My QR Code", .qrScanToAdd: "Scan to Add Friend",
             .qrScanToAddSub: "Let others scan this code to send you a friend request.",
             .qrScanButton: "Scan QR Code", .qrSignInPrompt: "Sign in to see your QR code",
@@ -610,6 +612,7 @@ final class LocalizationManager {
             .groupSettingsNamePlaceholder: "群聊名称",
             .groupSettingsSave: "保存",
             .groupSettingsOwner: "群主",
+            .groupMemberYou: "这是你",
             .groupSettingsRemove: "移除",
             .groupSettingsRemoveConfirm: "将该成员移出群聊？",
             .groupSettingsRenameError: "群聊重命名失败，请重试。",
@@ -636,6 +639,7 @@ final class LocalizationManager {
             .contactsRemark: "备注", .contactsSetRemark: "设置备注",
             .addFriendSearchPlaceholder: "搜索邮箱或用户名",
             .addFriendHint: "通过邮箱或用户名找到对方，然后发送好友申请。",
+            .addFriendSuggested: "推荐",
             .addFriendNoResults: "未找到用户",
             .addFriendSearching: "搜索中…",
             .addFriendAdd: "添加",
@@ -687,7 +691,7 @@ final class LocalizationManager {
             .privacyBlockedAccounts: "已屏蔽账户", .privacyBlockedAccountsSub: "管理你屏蔽的账户",
             .privacyVisibility: "资料可见性", .privacyVisibilitySub: "控制谁可以查看你的资料",
             .privacyActivityStatus: "活动状态", .privacyActivityStatusSub: "显示你的在线状态",
-            .privacyDataSharing: "可被发现", .privacyDataSharingSub: "在「顶尖网红」目录中显示",
+            .privacyDataSharing: "可被发现", .privacyDataSharingSub: "允许他人在「添加好友」浏览时找到你",
             .qrMyCode: "我的二维码", .qrScanToAdd: "扫码加好友",
             .qrScanToAddSub: "让别人扫描这个二维码，向你发送好友请求。",
             .qrScanButton: "扫描二维码", .qrSignInPrompt: "登录后查看你的二维码",
@@ -911,6 +915,7 @@ final class LocalizationManager {
             .groupSettingsNamePlaceholder: "Nombre del grupo",
             .groupSettingsSave: "Guardar",
             .groupSettingsOwner: "Propietario",
+            .groupMemberYou: "Eres tú",
             .groupSettingsRemove: "Eliminar",
             .groupSettingsRemoveConfirm: "¿Eliminar a este miembro del grupo?",
             .groupSettingsRenameError: "No se pudo renombrar el grupo. Inténtalo de nuevo.",
@@ -937,6 +942,7 @@ final class LocalizationManager {
             .contactsRemark: "Nota", .contactsSetRemark: "Poner nota",
             .addFriendSearchPlaceholder: "Busca por correo o @usuario",
             .addFriendHint: "Encuentra personas por su correo o usuario y envía una solicitud de amistad.",
+            .addFriendSuggested: "Sugeridos",
             .addFriendNoResults: "No se encontraron usuarios",
             .addFriendSearching: "Buscando…",
             .addFriendAdd: "Agregar",
@@ -988,7 +994,7 @@ final class LocalizationManager {
             .privacyBlockedAccounts: "Cuentas Bloqueadas", .privacyBlockedAccountsSub: "Gestionar cuentas bloqueadas",
             .privacyVisibility: "Visibilidad del Perfil", .privacyVisibilitySub: "Controlar quién ve tu perfil",
             .privacyActivityStatus: "Estado de Actividad", .privacyActivityStatusSub: "Mostrar cuando estás activo",
-            .privacyDataSharing: "Visible", .privacyDataSharingSub: "Aparecer en el directorio Top Talento",
+            .privacyDataSharing: "Visible", .privacyDataSharingSub: "Deja que otros te encuentren al explorar Agregar amigo",
             .qrMyCode: "Mi código QR", .qrScanToAdd: "Escanea para agregar",
             .qrScanToAddSub: "Deja que otros escaneen este código para enviarte una solicitud de amistad.",
             .qrScanButton: "Escanear código QR", .qrSignInPrompt: "Inicia sesión para ver tu código QR",

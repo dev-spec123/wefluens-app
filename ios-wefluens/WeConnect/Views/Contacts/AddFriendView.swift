@@ -19,7 +19,7 @@ struct AddFriendView: View {
     @State private var isSearching: Bool = false
     @State private var searchTask: Task<Void, Never>? = nil
 
-    /// The curated Top Talent list, shown as suggestions when no search is active.
+    /// Browse list of addable users, shown as suggestions when no search is active.
     @State private var suggestions: [SearchUserResult] = []
     @State private var loadingSuggestions = true
 
@@ -75,7 +75,7 @@ struct AddFriendView: View {
 
     @MainActor
     private func loadSuggestions() async {
-        do { suggestions = try await data.loadTopTalent() }
+        do { suggestions = try await data.loadAddableUsers() }
         catch { suggestions = [] }
         loadingSuggestions = false
     }
@@ -126,7 +126,7 @@ struct AddFriendView: View {
             } else if suggestions.isEmpty {
                 centeredState(icon: "person.2.fill", title: l10n.t(.addFriendHint), subtitle: nil)
             } else {
-                peopleList(suggestions, header: l10n.t(.contactsTopTalent))
+                peopleList(suggestions, header: l10n.t(.addFriendSuggested))
             }
         } else if isSearching && results.isEmpty {
             VStack(spacing: 14) {

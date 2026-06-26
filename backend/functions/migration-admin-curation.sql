@@ -130,8 +130,8 @@ as $$
 $$;
 grant execute on function public.admin_list_featured_talent() to authenticated;
 
--- Top Talent: featured creators first (admin order), then opt-in fill. A featured
--- creator is shown even if they haven't opted in; the fill respects data_sharing.
+-- Top Talent: ONLY the admin-curated featured creators, in admin order. No opt-in
+-- fill (the data_sharing/Discoverable toggle no longer affects this list).
 create or replace function public.browse_top_talent(limit_count int default 50)
 returns table (
   id                  uuid,
@@ -177,17 +177,13 @@ as $$
     ) as incoming_request_id
   from public.profiles p
   where p.id <> auth.uid()
-    and (p.featured_rank is not null or coalesce(p.data_sharing, false) = true)
+    and p.featured_rank is not null                  -- curated list only
     and not exists (
       select 1 from public.blocks b
       where (b.blocker_id = auth.uid() and b.blocked_id = p.id)
          or (b.blocker_id = p.id and b.blocked_id = auth.uid())
     )
-  order by
-    (p.featured_rank is null),                       -- featured (false) sort first
-    p.featured_rank asc,                             -- admin's order among featured
-    public.followers_magnitude(p.followers) desc,    -- then opt-in fill by followers
-    p.created_at desc
+  order by p.featured_rank asc                        -- admin's order
   limit greatest(1, least(limit_count, 200))
 $$;
 
