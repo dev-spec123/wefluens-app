@@ -142,15 +142,6 @@ struct TopTalentView: View {
                 .foregroundStyle(Theme.inkSecondary(for: colorScheme))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
-            // When the directory is empty (not searching, not an error), nudge the
-            // user toward the opt-in switch.
-            if !loadFailed && !isSearchActive {
-                Text(l10n.t(.talentOptInHint))
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.inkTertiary(for: colorScheme))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 36)
-            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
