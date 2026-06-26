@@ -89,7 +89,7 @@ enum L10n: String {
     case contactsRemark, contactsSetRemark
 
     // Add Friend (search + request)
-    case addFriendSearchPlaceholder, addFriendHint, addFriendNoResults, addFriendSearching
+    case addFriendSearchPlaceholder, addFriendHint, addFriendNoResults, addFriendSearching, addFriendSuggested
     case addFriendAdd, addFriendRequested, addFriendFriends, addFriendSent
     case addFriendAlreadyFriends, addFriendIncoming, addFriendError
     case friendAcceptedTitle, friendAcceptedMessage
@@ -335,6 +335,7 @@ final class LocalizationManager {
             .contactsRemark: "Remark", .contactsSetRemark: "Set remark",
             .addFriendSearchPlaceholder: "Search by email or @handle",
             .addFriendHint: "Find people by their email or username, then send a friend request.",
+            .addFriendSuggested: "Suggested",
             .addFriendNoResults: "No users found",
             .addFriendSearching: "Searching…",
             .addFriendAdd: "Add",
@@ -636,6 +637,7 @@ final class LocalizationManager {
             .contactsRemark: "备注", .contactsSetRemark: "设置备注",
             .addFriendSearchPlaceholder: "搜索邮箱或用户名",
             .addFriendHint: "通过邮箱或用户名找到对方，然后发送好友申请。",
+            .addFriendSuggested: "推荐",
             .addFriendNoResults: "未找到用户",
             .addFriendSearching: "搜索中…",
             .addFriendAdd: "添加",
@@ -937,6 +939,7 @@ final class LocalizationManager {
             .contactsRemark: "Nota", .contactsSetRemark: "Poner nota",
             .addFriendSearchPlaceholder: "Busca por correo o @usuario",
             .addFriendHint: "Encuentra personas por su correo o usuario y envía una solicitud de amistad.",
+            .addFriendSuggested: "Sugeridos",
             .addFriendNoResults: "No se encontraron usuarios",
             .addFriendSearching: "Buscando…",
             .addFriendAdd: "Agregar",

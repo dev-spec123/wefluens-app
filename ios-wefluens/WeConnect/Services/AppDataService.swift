@@ -738,6 +738,18 @@ final class AppDataService {
         return results.filter { !blockedUserIds.contains($0.id) }
     }
 
+    /// The Add Friend browse list: all addable users (not the curated Top Talent),
+    /// ranked by followers, with relationship status. Backs the suggestions shown
+    /// when the Add Friend search box is empty.
+    @MainActor
+    func loadAddableUsers(limit: Int = 50) async throws -> [SearchUserResult] {
+        let results: [SearchUserResult] = try await supabase
+            .rpc("browse_addable_users", params: BrowseTopTalentParams(limit_count: limit))
+            .execute()
+            .value
+        return results.filter { !blockedUserIds.contains($0.id) }
+    }
+
     // MARK: - Admin curation (every RPC is is_admin-gated server-side)
 
     /// Loads brands straight from the DB with NO SampleData fallback — the admin
