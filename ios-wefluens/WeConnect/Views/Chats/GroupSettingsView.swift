@@ -53,6 +53,7 @@ struct GroupSettingsView: View {
     @State private var isSavingName: Bool = false
     @State private var showAddMembers: Bool = false
     @State private var memberToRemove: GroupMember?
+    @State private var selectedMember: GroupMember?
     @State private var errorMessage: String?
 
     // --- avatar ---
@@ -130,6 +131,10 @@ struct GroupSettingsView: View {
                     onAdded: { Task { await reload() } }
                 )
             }
+        }
+        .sheet(item: $selectedMember) { member in
+            GroupMemberCard(member: member)
+                .presentationDetents([.medium])
         }
         .confirmationDialog(
             l10n.t(.groupSettingsLeaveConfirm),
@@ -335,22 +340,32 @@ struct GroupSettingsView: View {
 
     private func memberRow(_ member: GroupMember) -> some View {
         HStack(spacing: 12) {
-            Avatar(colors: member.avatarColors, initials: member.initials, imageURL: member.avatarUrl, size: 44)
+            // Tapping the avatar/name opens the member's info card.
+            Button {
+                UISelectionFeedbackGenerator().selectionChanged()
+                selectedMember = member
+            } label: {
+                HStack(spacing: 12) {
+                    Avatar(colors: member.avatarColors, initials: member.initials, imageURL: member.avatarUrl, size: 44)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(member.name)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.ink(for: colorScheme))
-                    .lineLimit(1)
-                if !member.handle.isEmpty {
-                    Text("@\(member.handle)")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.inkSecondary(for: colorScheme))
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(member.name)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.ink(for: colorScheme))
+                            .lineLimit(1)
+                        if !member.handle.isEmpty {
+                            Text("@\(member.handle)")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                                .lineLimit(1)
+                        }
+                    }
+
+                    Spacer(minLength: 6)
                 }
+                .contentShape(Rectangle())
             }
-
-            Spacer(minLength: 6)
+            .buttonStyle(.plain)
 
             if member.isOwner {
                 Text(l10n.t(.groupSettingsOwner))
@@ -789,6 +804,145 @@ private struct GroupAddMembersView: View {
                 onAdded?()
                 dismiss()
             }
+        }
+    }
+}
+
+// MARK: - Member info card
+
+/// Tapping a member in the roster opens this card: their avatar, name, @handle,
+/// role + owner badge, and a context-aware action (Add Friend / Requested /
+/// Friends / This is you).
+private struct GroupMemberCard: View {
+    @Environment(AppDataService.self) private var data
+    @Environment(LocalizationManager.self) private var l10n
+    @Environment(\.colorScheme) private var colorScheme
+    let member: GroupMember
+
+    @State private var relationship: String = "none"
+    @State private var busy = false
+    @State private var toast: String?
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Avatar(colors: member.avatarColors, initials: member.initials, imageURL: member.avatarUrl, size: 88)
+                .padding(.top, 28)
+
+            VStack(spacing: 6) {
+                Text(member.name)
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.ink(for: colorScheme))
+                    .multilineTextAlignment(.center)
+                if !member.handle.isEmpty {
+                    Text("@\(member.handle)")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                }
+            }
+
+            HStack(spacing: 8) {
+                if member.isOwner {
+                    label(l10n.t(.groupSettingsOwner), icon: "crown.fill")
+                }
+                if !member.role.isEmpty {
+                    TagChip(text: member.role, filled: false)
+                }
+            }
+
+            actionButton
+                .padding(.top, 4)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 24)
+        .background(Theme.paper(for: colorScheme).ignoresSafeArea())
+        .overlay(alignment: .bottom) {
+            if let toast {
+                Text(toast)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 18).padding(.vertical, 11)
+                    .background(Theme.ink(for: colorScheme).opacity(0.92))
+                    .clipShape(Capsule())
+                    .padding(.bottom, 24)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .onAppear { relationship = computeRelationship() }
+    }
+
+    @ViewBuilder
+    private var actionButton: some View {
+        switch relationship {
+        case "self":
+            label(l10n.t(.groupMemberYou), icon: "person.fill")
+        case "friends":
+            label(l10n.t(.addFriendFriends), icon: "checkmark")
+        case "request_sent":
+            label(l10n.t(.addFriendRequested), icon: "clock")
+        default:
+            Button { addFriend() } label: {
+                HStack(spacing: 6) {
+                    if busy { ProgressView().tint(.white) }
+                    else { Image(systemName: "person.badge.plus").font(.system(size: 14, weight: .bold)) }
+                    Text(l10n.t(.addFriendAdd)).font(.system(size: 15, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 26).padding(.vertical, 13)
+                .background(Theme.sunset).clipShape(Capsule())
+                .shadow(color: Theme.coral.opacity(0.3), radius: 12, y: 6)
+            }
+            .buttonStyle(.plain)
+            .disabled(busy)
+        }
+    }
+
+    private func label(_ text: String, icon: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 13, weight: .bold))
+            Text(text).font(.system(size: 14, weight: .semibold))
+        }
+        .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+        .padding(.horizontal, 18).frame(height: 40)
+        .background(Theme.cardSubtle(for: colorScheme)).clipShape(Capsule())
+        .overlay(Capsule().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
+    }
+
+    private func computeRelationship() -> String {
+        if member.id == data.userId { return "self" }
+        if data.contacts.contains(where: { $0.id == member.id }) { return "friends" }
+        return "none"
+    }
+
+    private func addFriend() {
+        guard !busy else { return }
+        busy = true
+        Task {
+            defer { busy = false }
+            do {
+                let status = try await data.sendFriendRequest(to: member.id, message: l10n.t(.friendRequestMessage))
+                switch status {
+                case "sent":
+                    relationship = "request_sent"
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    show(l10n.t(.addFriendSent))
+                case "already_sent": relationship = "request_sent"
+                case "already_friends": relationship = "friends"
+                default: break
+                }
+                await data.loadContacts()
+            } catch {
+                show(l10n.t(.addFriendError))
+            }
+        }
+    }
+
+    private func show(_ message: String) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { toast = message }
+        Task {
+            try? await Task.sleep(for: .seconds(2.2))
+            withAnimation(.easeOut(duration: 0.25)) { toast = nil }
         }
     }
 }

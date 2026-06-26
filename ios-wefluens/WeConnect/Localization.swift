@@ -74,7 +74,7 @@ enum L10n: String {
     // Group settings
     case groupSettingsTitle, groupSettingsMembers, groupSettingsAddMembers
     case groupSettingsName, groupSettingsNamePlaceholder, groupSettingsSave
-    case groupSettingsOwner, groupSettingsRemove, groupSettingsRemoveConfirm
+    case groupSettingsOwner, groupSettingsRemove, groupSettingsRemoveConfirm, groupMemberYou
     case groupSettingsRenameError, groupSettingsAddError, groupSettingsRemoveError
     case groupSettingsNoFriendsToAdd
     case groupSettingsChangePhoto, groupSettingsMute
@@ -309,6 +309,7 @@ final class LocalizationManager {
             .groupSettingsNamePlaceholder: "Group name",
             .groupSettingsSave: "Save",
             .groupSettingsOwner: "Owner",
+            .groupMemberYou: "This is you",
             .groupSettingsRemove: "Remove",
             .groupSettingsRemoveConfirm: "Remove this member from the group?",
             .groupSettingsRenameError: "Couldn't rename the group. Please try again.",
@@ -611,6 +612,7 @@ final class LocalizationManager {
             .groupSettingsNamePlaceholder: "群聊名称",
             .groupSettingsSave: "保存",
             .groupSettingsOwner: "群主",
+            .groupMemberYou: "这是你",
             .groupSettingsRemove: "移除",
             .groupSettingsRemoveConfirm: "将该成员移出群聊？",
             .groupSettingsRenameError: "群聊重命名失败，请重试。",
@@ -913,6 +915,7 @@ final class LocalizationManager {
             .groupSettingsNamePlaceholder: "Nombre del grupo",
             .groupSettingsSave: "Guardar",
             .groupSettingsOwner: "Propietario",
+            .groupMemberYou: "Eres tú",
             .groupSettingsRemove: "Eliminar",
             .groupSettingsRemoveConfirm: "¿Eliminar a este miembro del grupo?",
             .groupSettingsRenameError: "No se pudo renombrar el grupo. Inténtalo de nuevo.",

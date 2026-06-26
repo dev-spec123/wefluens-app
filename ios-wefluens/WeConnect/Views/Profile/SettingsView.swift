@@ -9,7 +9,6 @@ struct SettingsView: View {
     @Environment(LocalizationManager.self) private var l10n
     @Environment(ThemeManager.self) private var theme
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ScrollView {
@@ -23,12 +22,6 @@ struct SettingsView: View {
         .background(Theme.paper(for: colorScheme).ignoresSafeArea())
         .navigationTitle(l10n.t(.settingsTitle))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button(l10n.t(.settingsDone)) { dismiss() }
-                    .foregroundStyle(Theme.coral)
-            }
-        }
     }
 
     private var appearanceSection: some View {
