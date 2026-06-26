@@ -80,13 +80,14 @@ jobs:
           path: wefluens-mobile/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: Publish APK to the android-latest Release (clickable download link)
+      - name: Publish APK to a versioned GitHub Release ("Wefluens Connect <version>")
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        working-directory: wefluens-mobile/android/app/build/outputs/apk/release
         run: |
-          gh release delete android-latest -R "${{ github.repository }}" --yes --cleanup-tag 2>/dev/null || true
-          gh release create android-latest *.apk -R "${{ github.repository }}" \
-            -t "Android latest (CI build)" \
-            -n "Latest CI-built standalone release APK. Replaced on every run."
-          echo "Download: https://github.com/${{ github.repository }}/releases/download/android-latest/app-release.apk"
+          VERSION=$(node -p "require('./app.json').expo.version")
+          cd android/app/build/outputs/apk/release
+          gh release delete "v$VERSION" -R "${{ github.repository }}" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "v$VERSION" *.apk -R "${{ github.repository }}" \
+            -t "Wefluens Connect $VERSION" \
+            -n "Standalone release APK (CI build) for v$VERSION. Replaced on every run for this version."
+          echo "Download: https://github.com/${{ github.repository }}/releases/download/v$VERSION/app-release.apk"
