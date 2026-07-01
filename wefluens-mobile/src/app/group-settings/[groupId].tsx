@@ -18,12 +18,14 @@ import { useI18n } from '@/lib/i18n';
 import { avatarGradient, gradients, radius, useTheme } from '@/lib/theme';
 import type { Contact, GroupMember } from '@/lib/types';
 
+type MemberRelationship = 'self' | 'friends' | 'request_sent' | 'none';
+
 export default function GroupSettings() {
   const c = useTheme();
   const { t } = useI18n();
   const router = useRouter();
   const { userId } = useAuth();
-  const { conversations, refreshConversations } = useAppData();
+  const { conversations, refreshConversations, contacts, refreshContacts } = useAppData();
   const params = useLocalSearchParams<{ groupId: string; title?: string }>();
   const groupId = params.groupId;
   const initialName = params.title ?? '';
@@ -38,6 +40,7 @@ export default function GroupSettings() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [busyAvatar, setBusyAvatar] = useState(false);
   const [busyDanger, setBusyDanger] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<GroupMember | null>(null);
 
   const isOwner = useMemo(
     () => !!userId && (members.find((m) => m.id === userId)?.isOwner ?? false),
@@ -292,13 +295,19 @@ export default function GroupSettings() {
             {members.map((m, i) => (
               <View key={m.id}>
                 <View style={styles.memberRow}>
-                  <Avatar colors={avatarGradient(m.id)} name={m.name} imageUrl={m.avatarUrl} size={44} />
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={{ color: c.ink, fontSize: 15, fontWeight: '600' }} numberOfLines={1}>{m.name}</Text>
-                    {m.handle.length > 0 && (
-                      <Text style={{ color: c.inkSecondary, fontSize: 13, marginTop: 2 }} numberOfLines={1}>@{m.handle}</Text>
-                    )}
-                  </View>
+                  {/* Tapping the avatar/name opens the member's info card. */}
+                  <Pressable
+                    onPress={() => { selectionHaptic(); setSelectedMember(m); }}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
+                  >
+                    <Avatar colors={avatarGradient(m.id)} name={m.name} imageUrl={m.avatarUrl} size={44} />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={{ color: c.ink, fontSize: 15, fontWeight: '600' }} numberOfLines={1}>{m.name}</Text>
+                      {m.handle.length > 0 && (
+                        <Text style={{ color: c.inkSecondary, fontSize: 13, marginTop: 2 }} numberOfLines={1}>@{m.handle}</Text>
+                      )}
+                    </View>
+                  </Pressable>
                   {m.isOwner ? (
                     <View style={[styles.ownerTag, { backgroundColor: c.coral + (c.scheme === 'dark' ? '2E' : '1A') }]}>
                       <Text style={{ color: c.coral, fontSize: 11, fontWeight: '700' }}>{t('groupSettingsOwner')}</Text>
@@ -341,7 +350,127 @@ export default function GroupSettings() {
         onClose={() => setShowAdd(false)}
         onAdded={() => { setShowAdd(false); void reload(); }}
       />
+
+      <GroupMemberCard
+        member={selectedMember}
+        onClose={() => setSelectedMember(null)}
+      />
     </SafeAreaView>
+  );
+}
+
+// ─────────────────────────── Member info card ───────────────────────────
+
+/** Tapping a member in the roster opens this card: their avatar, name, @handle,
+ *  role + owner badge, and a context-aware action (Add Friend / Requested /
+ *  Friends / This is you). */
+function GroupMemberCard({
+  member, onClose,
+}: { member: GroupMember | null; onClose: () => void }) {
+  const c = useTheme();
+  const { t } = useI18n();
+  const { userId } = useAuth();
+  const { contacts, refreshContacts } = useAppData();
+  const [busy, setBusy] = useState(false);
+  const [relationship, setRelationship] = useState<MemberRelationship>('none');
+
+  useEffect(() => {
+    if (!member) return;
+    if (member.id === userId) setRelationship('self');
+    else if (contacts.some((ct) => ct.id === member.id)) setRelationship('friends');
+    else setRelationship('none');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [member]);
+
+  async function addFriend() {
+    if (!member || busy) return;
+    setBusy(true);
+    try {
+      const status = await api.sendFriendRequest(member.id, t('friendRequestMessage'));
+      switch (status) {
+        case 'sent':
+          setRelationship('request_sent');
+          notify(t('addFriendSent'));
+          break;
+        case 'already_sent':
+          setRelationship('request_sent');
+          break;
+        case 'already_friends':
+          setRelationship('friends');
+          break;
+        default:
+          setRelationship('request_sent');
+          break;
+      }
+      await refreshContacts().catch(() => {});
+    } catch {
+      notify(t('addFriendError'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal visible={!!member} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.memberCardBackdrop} onPress={onClose}>
+        <Pressable style={[styles.memberCardSheet, { backgroundColor: c.paper }]} onPress={() => {}}>
+          {member && (
+            <>
+              <Avatar colors={avatarGradient(member.id)} name={member.name} imageUrl={member.avatarUrl} size={88} />
+              <Text style={[styles.memberCardName, { color: c.ink }]} numberOfLines={1}>{member.name}</Text>
+              {member.handle.length > 0 && (
+                <Text style={[styles.memberCardHandle, { color: c.inkSecondary }]} numberOfLines={1}>@{member.handle}</Text>
+              )}
+
+              <View style={styles.memberCardTags}>
+                {member.isOwner && (
+                  <View style={[styles.ownerTag, { backgroundColor: c.coral + (c.scheme === 'dark' ? '2E' : '1A') }]}>
+                    <Ionicons name="star" size={11} color={c.coral} />
+                    <Text style={{ color: c.coral, fontSize: 11, fontWeight: '700', marginLeft: 4 }}>{t('groupSettingsOwner')}</Text>
+                  </View>
+                )}
+                {member.role.length > 0 && (
+                  <View style={[styles.roleTag, { backgroundColor: c.cardSubtle, borderColor: c.hairline }]}>
+                    <Text style={{ color: c.inkSecondary, fontSize: 11, fontWeight: '700' }}>{member.role}</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={{ marginTop: 16 }}>
+                {relationship === 'self' ? (
+                  <MemberBadge icon="person" text={t('groupMemberYou')} c={c} />
+                ) : relationship === 'friends' ? (
+                  <MemberBadge icon="checkmark" text={t('addFriendFriends')} c={c} />
+                ) : relationship === 'request_sent' ? (
+                  <MemberBadge icon="time-outline" text={t('addFriendRequested')} c={c} />
+                ) : (
+                  <Pressable onPress={addFriend} disabled={busy}>
+                    <LinearGradient
+                      colors={gradients.sunset}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={[styles.memberCardActionPill, { opacity: busy ? 0.7 : 1 }]}
+                    >
+                      {busy ? <ActivityIndicator color="#fff" /> : <Ionicons name="person-add" size={14} color="#fff" />}
+                      <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>{t('addFriendAdd')}</Text>
+                    </LinearGradient>
+                  </Pressable>
+                )}
+              </View>
+            </>
+          )}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function MemberBadge({ icon, text, c }: { icon: keyof typeof Ionicons.glyphMap; text: string; c: ReturnType<typeof useTheme> }) {
+  return (
+    <View style={[styles.memberCardActionPill, { backgroundColor: c.cardSubtle, borderWidth: 1, borderColor: c.hairline }]}>
+      <Ionicons name={icon} size={13} color={c.inkSecondary} />
+      <Text style={{ color: c.inkSecondary, fontSize: 14, fontWeight: '600' }}>{text}</Text>
+    </View>
   );
 }
 
@@ -537,5 +666,20 @@ const styles = StyleSheet.create({
   dangerBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     borderRadius: radius.md, paddingVertical: 14,
+  },
+  memberCardBackdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end',
+  },
+  memberCardSheet: {
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingTop: 28, paddingBottom: 44, paddingHorizontal: 24, alignItems: 'center',
+  },
+  memberCardName: { fontSize: 20, fontWeight: '700', marginTop: 14, textAlign: 'center' },
+  memberCardHandle: { fontSize: 14, fontWeight: '500', marginTop: 2 },
+  memberCardTags: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  roleTag: { flexDirection: 'row', borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 4 },
+  memberCardActionPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    paddingHorizontal: 22, paddingVertical: 12, borderRadius: radius.pill,
   },
 });

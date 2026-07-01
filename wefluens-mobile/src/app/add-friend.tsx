@@ -26,6 +26,10 @@ export default function AddFriend() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchUserResult[]>([]);
   const [searching, setSearching] = useState(false);
+  // Browse list of addable users, shown as "Suggested" when no search is active
+  // (decoupled from the now admin-curated Top Talent — mirrors the Swift app).
+  const [suggestions, setSuggestions] = useState<SearchUserResult[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(true);
   // Per-user relationship overrides applied immediately after an action.
   const [overrides, setOverrides] = useState<Record<string, Relationship>>({});
   const [acting, setActing] = useState<Set<string>>(new Set());
@@ -51,6 +55,16 @@ export default function AddFriend() {
   const successHaptic = useCallback(() => { Vibration.vibrate(20); }, []);
 
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+
+  useEffect(() => {
+    let alive = true;
+    api.browseAddableUsers(blockedIds)
+      .then((res) => { if (alive) setSuggestions(res); })
+      .catch(() => { if (alive) setSuggestions([]); })
+      .finally(() => { if (alive) setLoadingSuggestions(false); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const runSearch = useCallback(async (raw: string) => {
     const trimmed = raw.trim();
@@ -168,6 +182,26 @@ export default function AddFriend() {
 
   const trimmed = query.trim();
 
+  function renderPersonRow(user: SearchUserResult, index: number, total: number) {
+    return (
+      <View key={user.id}>
+        <View style={styles.row}>
+          <Avatar colors={avatarGradient(user.id)} name={user.name} imageUrl={user.avatar_url} size={48} />
+          <View style={{ flex: 1, marginLeft: 14 }}>
+            <Text style={[styles.name, { color: c.ink }]} numberOfLines={1}>
+              {user.name && user.name.length > 0 ? user.name : user.handle}
+            </Text>
+            <Text style={[styles.sub, { color: c.inkSecondary }]} numberOfLines={1}>
+              {subtitleFor(user)}
+            </Text>
+          </View>
+          {renderActionButton(user)}
+        </View>
+        {index < total - 1 && <Divider inset={76} />}
+      </View>
+    );
+  }
+
   function renderActionButton(user: SearchUserResult) {
     if (acting.has(user.id)) {
       return (
@@ -228,7 +262,18 @@ export default function AddFriend() {
 
         {/* Content states */}
         {trimmed.length < 2 ? (
-          <CenteredState icon="people" title={t('addFriendHint')} />
+          loadingSuggestions ? (
+            <View style={styles.centered}><ActivityIndicator color={c.coral} size="large" /></View>
+          ) : suggestions.length === 0 ? (
+            <CenteredState icon="people" title={t('addFriendHint')} />
+          ) : (
+            <ScrollView contentContainerStyle={{ paddingTop: 16, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+              <Text style={[styles.sectionHeader, { color: c.inkSecondary }]}>{t('addFriendSuggested')}</Text>
+              <Card style={{ paddingVertical: 6 }}>
+                {suggestions.map((user, index) => renderPersonRow(user, index, suggestions.length))}
+              </Card>
+            </ScrollView>
+          )
         ) : searching && results.length === 0 ? (
           <View style={styles.centered}>
             <ActivityIndicator color={c.coral} size="large" />
@@ -242,28 +287,7 @@ export default function AddFriend() {
             keyboardShouldPersistTaps="handled"
           >
             <Card style={{ paddingVertical: 6 }}>
-              {results.map((user, index) => (
-                <View key={user.id}>
-                  <View style={styles.row}>
-                    <Avatar
-                      colors={avatarGradient(user.id)}
-                      name={user.name}
-                      imageUrl={user.avatar_url}
-                      size={48}
-                    />
-                    <View style={{ flex: 1, marginLeft: 14 }}>
-                      <Text style={[styles.name, { color: c.ink }]} numberOfLines={1}>
-                        {user.name && user.name.length > 0 ? user.name : user.handle}
-                      </Text>
-                      <Text style={[styles.sub, { color: c.inkSecondary }]} numberOfLines={1}>
-                        {subtitleFor(user)}
-                      </Text>
-                    </View>
-                    {renderActionButton(user)}
-                  </View>
-                  {index < results.length - 1 && <Divider inset={76} />}
-                </View>
-              ))}
+              {results.map((user, index) => renderPersonRow(user, index, results.length))}
             </Card>
           </ScrollView>
         )}
@@ -350,6 +374,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, gap: 14 },
+  sectionHeader: { fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8, marginLeft: 4 },
   centeredText: { fontSize: 15, fontWeight: '500', textAlign: 'center' },
   iconCircle: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 11 },

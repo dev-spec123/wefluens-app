@@ -226,7 +226,6 @@ export default function TopTalent() {
           <CenteredState
             icon={loadFailed && !isSearchActive ? 'cloud-offline' : isSearchActive ? 'search' : 'people'}
             title={loadFailed && !isSearchActive ? t('addFriendError') : isSearchActive ? t('addFriendNoResults') : t('talentEmpty')}
-            subtitle={!loadFailed && !isSearchActive ? t('talentOptInHint') : undefined}
           />
         ) : (
           <ScrollView

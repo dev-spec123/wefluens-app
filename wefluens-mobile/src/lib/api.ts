@@ -65,9 +65,8 @@ function mapProfile(row: ProfileRow, fallbackName?: string): UserProfile {
     avatarUrl: row.avatar_url,
     notificationsEnabled: row.notifications_enabled ?? true,
     activityStatus: row.activity_status ?? true,
-    // Top Talent is opt-IN: a user is NOT discoverable until they turn it on.
-    // Defaulting this to true (opt-out) made every user appear in the directory.
-    dataSharing: row.data_sharing ?? false,
+    // Discoverable (Add Friend's browse list) is opt-OUT: on unless hidden.
+    dataSharing: row.data_sharing ?? true,
   };
 }
 
@@ -143,10 +142,20 @@ export async function submitSupportTicket(args: {
   if (data && (data as { ok?: boolean }).ok === false) throw new Error('SUPPORT_FAILED');
 }
 
-/** The opt-in Top Talent directory (ranked by followers), mirroring the Swift
- *  app's `browse_top_talent`. Only users who enabled Discoverable appear. */
+/** The admin-curated Top Talent showcase, mirroring the Swift app's
+ *  `browse_top_talent`. Featured creators only, in admin order — the
+ *  Discoverable toggle no longer affects this list. */
 export async function loadTopTalent(blockedIds: Set<string>, limit = 50): Promise<SearchUserResult[]> {
   const { data, error } = await supabase.rpc('browse_top_talent', { limit_count: limit });
+  if (error || !data) return [];
+  return (data as SearchUserResult[]).filter((u) => !blockedIds.has(u.id));
+}
+
+/** Add Friend's own browse list (decoupled from the now-curated Top Talent),
+ *  mirroring the Swift app's `browse_addable_users`. All addable users ranked
+ *  by followers, gated by the Discoverable (data_sharing) opt-out toggle. */
+export async function browseAddableUsers(blockedIds: Set<string>, limit = 50): Promise<SearchUserResult[]> {
+  const { data, error } = await supabase.rpc('browse_addable_users', { limit_count: limit });
   if (error || !data) return [];
   return (data as SearchUserResult[]).filter((u) => !blockedIds.has(u.id));
 }
@@ -160,7 +169,7 @@ export async function syncProfile(userId: string, email: string | null): Promise
   return {
     id: userId, name: email ?? 'User', handle: '', role: '', bio: '', location: '',
     followers: '0', engagement: '0%', deals: '0', isAdmin: false, avatarUrl: null,
-    notificationsEnabled: true, activityStatus: true, dataSharing: false,
+    notificationsEnabled: true, activityStatus: true, dataSharing: true,
   };
 }
 
