@@ -144,6 +144,7 @@ enum L10n: String {
     case profileSupport, profileHelp, profileContact, profileRate
     case profileSignOut
     case faqTitle
+    case weListeningTitle, weListeningSub
     case supportFormTitle, supportSubjectField, supportMessageField
     case supportSendButton, supportSentMsg, supportErrorMsg, supportEmptyMsg
     case supportTypeField, supportTypeBug, supportTypeIdea, supportTypeOther
@@ -401,9 +402,10 @@ final class LocalizationManager {
             .profileOpenDeals: "Open to new deals", .profileOpenDealsSub: "Brands can see you're available",
             .profilePreferences: "Preferences", .profileNotifications: "Push Notifications",
             .profilePrivacy: "Privacy & Security", .profileLanguage: "Language",
-            .profileSupport: "Support", .profileHelp: "Help & FAQ", .profileContact: "Contact Support", .profileRate: "Rate the App",
+            .profileSupport: "Support", .profileHelp: "Help & FAQ", .profileContact: "We're Listening", .profileRate: "Rate the App",
+            .weListeningTitle: "We're Listening", .weListeningSub: "Tell us what you need — ideas, requests, anything.",
             .faqTitle: "Help & FAQ",
-            .supportFormTitle: "Contact Support",
+            .supportFormTitle: "We're Listening",
             .supportSubjectField: "Subject",
             .supportMessageField: "How can we help?",
             .supportSendButton: "Send",
@@ -704,9 +706,10 @@ final class LocalizationManager {
             .profileOpenDeals: "接受新合作", .profileOpenDealsSub: "品牌可以看到你的空档",
             .profilePreferences: "偏好设置", .profileNotifications: "推送通知",
             .profilePrivacy: "隐私与安全", .profileLanguage: "语言",
-            .profileSupport: "支持", .profileHelp: "帮助与常见问题", .profileContact: "联系客服", .profileRate: "给应用评分",
+            .profileSupport: "支持", .profileHelp: "帮助与常见问题", .profileContact: "大声说出你的需求", .profileRate: "给应用评分",
+            .weListeningTitle: "大声说出你的需求", .weListeningSub: "把你的想法、需求告诉我们——什么都可以。",
             .faqTitle: "帮助与常见问题",
-            .supportFormTitle: "联系客服",
+            .supportFormTitle: "大声说出你的需求",
             .supportSubjectField: "主题",
             .supportMessageField: "我们能帮您什么？",
             .supportSendButton: "发送",
@@ -1007,9 +1010,10 @@ final class LocalizationManager {
             .profileOpenDeals: "Abierto a nuevos tratos", .profileOpenDealsSub: "Las marcas ven que estás disponible",
             .profilePreferences: "Preferencias", .profileNotifications: "Notificaciones",
             .profilePrivacy: "Privacidad y Seguridad", .profileLanguage: "Idioma",
-            .profileSupport: "Soporte", .profileHelp: "Ayuda y FAQ", .profileContact: "Contactar soporte", .profileRate: "Valorar la App",
+            .profileSupport: "Soporte", .profileHelp: "Ayuda y FAQ", .profileContact: "Te Escuchamos", .profileRate: "Valorar la App",
+            .weListeningTitle: "Te Escuchamos", .weListeningSub: "Cuéntanos lo que necesitas: ideas, solicitudes, lo que sea.",
             .faqTitle: "Ayuda y FAQ",
-            .supportFormTitle: "Contactar soporte",
+            .supportFormTitle: "Te Escuchamos",
             .supportSubjectField: "Asunto",
             .supportMessageField: "¿Cómo podemos ayudarte?",
             .supportSendButton: "Enviar",
