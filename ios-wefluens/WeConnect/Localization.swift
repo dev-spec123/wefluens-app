@@ -144,7 +144,7 @@ enum L10n: String {
     case profileSupport, profileHelp, profileContact, profileRate
     case profileSignOut
     case faqTitle
-    case weListeningTitle, weListeningSub
+    case weListeningTitle
     case supportFormTitle, supportSubjectField, supportMessageField
     case supportSendButton, supportSentMsg, supportErrorMsg, supportEmptyMsg
     case supportTypeField, supportTypeBug, supportTypeIdea, supportTypeOther
@@ -403,7 +403,7 @@ final class LocalizationManager {
             .profilePreferences: "Preferences", .profileNotifications: "Push Notifications",
             .profilePrivacy: "Privacy & Security", .profileLanguage: "Language",
             .profileSupport: "Support", .profileHelp: "Help & FAQ", .profileContact: "We're Listening", .profileRate: "Rate the App",
-            .weListeningTitle: "We're Listening", .weListeningSub: "Tell us what you need — ideas, requests, anything.",
+            .weListeningTitle: "We're Listening",
             .faqTitle: "Help & FAQ",
             .supportFormTitle: "We're Listening",
             .supportSubjectField: "Subject",
@@ -707,7 +707,7 @@ final class LocalizationManager {
             .profilePreferences: "偏好设置", .profileNotifications: "推送通知",
             .profilePrivacy: "隐私与安全", .profileLanguage: "语言",
             .profileSupport: "支持", .profileHelp: "帮助与常见问题", .profileContact: "大声说出你的需求", .profileRate: "给应用评分",
-            .weListeningTitle: "大声说出你的需求", .weListeningSub: "把你的想法、需求告诉我们——什么都可以。",
+            .weListeningTitle: "大声说出你的需求",
             .faqTitle: "帮助与常见问题",
             .supportFormTitle: "大声说出你的需求",
             .supportSubjectField: "主题",
@@ -1011,7 +1011,7 @@ final class LocalizationManager {
             .profilePreferences: "Preferencias", .profileNotifications: "Notificaciones",
             .profilePrivacy: "Privacidad y Seguridad", .profileLanguage: "Idioma",
             .profileSupport: "Soporte", .profileHelp: "Ayuda y FAQ", .profileContact: "Te Escuchamos", .profileRate: "Valorar la App",
-            .weListeningTitle: "Te Escuchamos", .weListeningSub: "Cuéntanos lo que necesitas: ideas, solicitudes, lo que sea.",
+            .weListeningTitle: "Te Escuchamos",
             .faqTitle: "Ayuda y FAQ",
             .supportFormTitle: "Te Escuchamos",
             .supportSubjectField: "Asunto",

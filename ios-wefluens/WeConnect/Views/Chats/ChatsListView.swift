@@ -52,7 +52,6 @@ struct ChatsListView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     header
-                    weListeningBanner
                     if showSearch { searchBar }
 
                     if ordered.isEmpty {
@@ -186,43 +185,23 @@ struct ChatsListView: View {
         }
     }
 
-    /// "We're Listening" — a pinned feedback banner at the top of Chats. Opens the
-    /// feedback form (SupportContactView). Kept here until the team asks to remove it.
-    private var weListeningBanner: some View {
+    /// "We're Listening" — a small pinned feedback entry point in the header, to the
+    /// left of search. Opens the feedback form (SupportContactView). Kept here until
+    /// the team asks to remove it.
+    private var feedbackButton: some View {
         Button {
             UISelectionFeedbackGenerator().selectionChanged()
             showFeedback = true
         } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "megaphone.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 46, height: 46)
-                    .background(.white.opacity(0.18))
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(l10n.t(.weListeningTitle))
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                    Text(l10n.t(.weListeningSub))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                }
-                Spacer(minLength: 6)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.9))
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity)
-            .background(Theme.sunset)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .shadow(color: Theme.coral.opacity(0.3), radius: 14, y: 8)
-            .contentShape(Rectangle())
+            Image(systemName: "megaphone.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.coral)
+                .frame(width: 44, height: 44)
+                .background(Theme.card(for: colorScheme))
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .accessibilityLabel(l10n.t(.weListeningTitle))
     }
 
     private var header: some View {
@@ -237,6 +216,7 @@ struct ChatsListView: View {
             }
             Spacer()
             HStack(spacing: 10) {
+                feedbackButton
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         showSearch.toggle()
