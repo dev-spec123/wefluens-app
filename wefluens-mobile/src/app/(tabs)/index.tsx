@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useMemo, useState } from 'react';
 import {
   FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View,
@@ -15,8 +16,9 @@ import * as api from '@/lib/api';
 import { setMuted, setPinned } from '@/lib/convPrefs';
 import { confirmAsync } from '@/lib/dialog';
 import { useI18n } from '@/lib/i18n';
-import { radius, space, useTheme } from '@/lib/theme';
+import { gradients, radius, space, useTheme } from '@/lib/theme';
 import type { Conversation } from '@/lib/types';
+import type { Href } from 'expo-router';
 
 export default function ChatsScreen() {
   const c = useTheme();
@@ -212,6 +214,8 @@ export default function ChatsScreen() {
         </View>
       </View>
 
+      <WeListeningBanner onPress={() => router.push('/support' as Href)} />
+
       {showSearch ? (
         <View style={styles.searchWrap}>
           <View style={[styles.searchField, { backgroundColor: c.card, borderColor: c.hairline }]}>
@@ -314,6 +318,26 @@ export default function ChatsScreen() {
   );
 }
 
+/** "We're Listening" — a pinned feedback banner at the top of Chats. Opens the
+ *  feedback form. Kept here until the team asks to remove it. */
+function WeListeningBanner({ onPress }: { onPress: () => void }) {
+  const { t } = useI18n();
+  return (
+    <Pressable onPress={onPress} style={{ paddingHorizontal: space.lg, marginBottom: space.md }}>
+      <LinearGradient colors={gradients.sunset} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.banner}>
+        <View style={styles.bannerIcon}>
+          <Ionicons name="megaphone" size={20} color="#fff" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.bannerTitle}>{t('supportTitle')}</Text>
+          <Text style={styles.bannerSubtitle} numberOfLines={2}>{t('weListeningSub')}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.9)" />
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
@@ -374,4 +398,14 @@ const styles = StyleSheet.create({
   },
   unreadText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   emptyContainer: { flexGrow: 1, paddingHorizontal: space.lg },
+  banner: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    borderRadius: radius.card, padding: 16,
+  },
+  bannerIcon: {
+    width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  bannerTitle: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  bannerSubtitle: { color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: '500', marginTop: 3 },
 });

@@ -75,8 +75,8 @@ export default function Privacy() {
   const { profile, refreshProfile } = useAuth();
   const [visibility, setVisibility] = useState(true);
   const [activityStatus, setActivityStatus] = useState(profile?.activityStatus ?? true);
-  // Opt-IN: off until the user turns it on (mirrors Swift's PrivacySecurityView).
-  const [dataSharing, setDataSharing] = useState(profile?.dataSharing ?? false);
+  // Discoverable is opt-OUT: on unless hidden (mirrors Swift's PrivacySecurityView).
+  const [dataSharing, setDataSharing] = useState(profile?.dataSharing ?? true);
 
   // Seed from the loaded profile (it may arrive after first render).
   useEffect(() => {
