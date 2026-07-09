@@ -25,7 +25,7 @@ interface AuthContextValue {
   mustChangePassword: boolean;
   passwordRecoveryActive: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, agreedToTerms: boolean) => Promise<{ needsConfirmation: boolean }>;
+  signUp: (email: string, password: string, agreedToTerms: boolean, inviteCode: string) => Promise<{ needsConfirmation: boolean }>;
   sendPasswordReset: (email: string) => Promise<void>;
   verifyCurrentPassword: (currentPassword: string) => Promise<boolean>;
   changePassword: (newPassword: string) => Promise<void>;
@@ -122,13 +122,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   }, []);
 
-  const signUp = useCallback(async (e: string, password: string, agreedToTerms: boolean) => {
+  // Invite-only signup: creates the account via the signup-with-invite edge
+  // function (validates the code + creates an email-confirmed user), then signs in.
+  // Never calls the public auth.signUp (disabled once invite-only is enabled).
+  const signUp = useCallback(async (e: string, password: string, agreedToTerms: boolean, inviteCode: string) => {
     pendingTermsAccept = agreedToTerms;
-    const redirectTo = Linking.createURL('auth-callback');
-    const { data, error } = await supabase.auth.signUp({ email: e.trim(), password, options: { emailRedirectTo: redirectTo } });
+    const { data, error } = await supabase.functions.invoke('signup-with-invite', {
+      body: { email: e.trim(), password, code: inviteCode.trim() },
+    });
     if (error) throw error;
-    return { needsConfirmation: !data.session };
-  }, []);
+    if (!data?.ok) {
+      const err = new Error(data?.error ?? 'SIGNUP_FAILED') as Error & { inviteError?: string };
+      err.inviteError = data?.error ?? 'SIGNUP_FAILED';
+      throw err;
+    }
+    await signIn(e.trim(), password);
+    return { needsConfirmation: false };
+  }, [signIn]);
 
   const sendPasswordReset = useCallback(async (e: string) => {
     const redirectTo = Linking.createURL('reset-password');

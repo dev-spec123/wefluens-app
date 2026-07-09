@@ -456,6 +456,37 @@ nonisolated struct BrowseTopTalentParams: Encodable, Sendable {
     let limit_count: Int
 }
 
+// MARK: - Invite codes (admin)
+
+nonisolated struct InviteCodeRow: Codable, Identifiable, Sendable {
+    let id: UUID
+    let code: String
+    let maxUses: Int
+    let uses: Int
+    let expiresAt: Date?
+    let revoked: Bool
+    let label: String?
+    let createdAt: Date?
+    /// Computed server-side: active / used / expired / revoked.
+    let status: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, code, uses, revoked, label, status
+        case maxUses = "max_uses"
+        case expiresAt = "expires_at"
+        case createdAt = "created_at"
+    }
+}
+
+nonisolated struct CreateInviteCodeParams: Encodable, Sendable {
+    let p_max_uses: Int
+    let p_expires_at: String?
+    let p_label: String?
+}
+nonisolated struct RevokeInviteCodeParams: Encodable, Sendable {
+    let p_id: String
+}
+
 nonisolated struct SendFriendRequestParams: Encodable, Sendable {
     let target_id: String
     let message: String

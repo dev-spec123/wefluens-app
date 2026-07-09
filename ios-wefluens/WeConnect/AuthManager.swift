@@ -19,6 +19,17 @@ enum AuthErrorKind {
     case generic
 }
 
+// Invite-only signup payloads for the signup-with-invite edge function.
+nonisolated struct SignupWithInviteRequest: Encodable, Sendable {
+    let email: String
+    let password: String
+    let code: String
+}
+nonisolated struct SignupWithInviteResponse: Decodable, Sendable {
+    let ok: Bool?
+    let error: String?
+}
+
 @Observable
 final class AuthManager {
     var isAuthenticated = false
@@ -170,6 +181,33 @@ final class AuthManager {
             }
         } catch {
             setError(error)
+        }
+    }
+
+    /// Invite-only signup: creates the account via the `signup-with-invite` edge
+    /// function (validates the code + creates an email-confirmed user), then signs
+    /// in. Returns nil on success, or a server error code (INVALID_CODE,
+    /// EMAIL_TAKEN, WEAK_PASSWORD, …) for the caller to localize. Never calls the
+    /// public auth.signUp — that path is disabled once invite-only is enabled.
+    @MainActor
+    func signUpWithInvite(email: String, password: String, code: String) async -> String? {
+        guard !isSigningIn else { return nil }
+        isSigningIn = true
+        defer { isSigningIn = false }
+
+        do {
+            let resp: SignupWithInviteResponse = try await supabase.functions.invoke(
+                "signup-with-invite",
+                options: .init(body: SignupWithInviteRequest(email: email, password: password, code: code))
+            )
+            if resp.ok == true {
+                await signIn(email: email, password: password)
+                return nil
+            }
+            return resp.error ?? "SIGNUP_FAILED"
+        } catch {
+            setError(error)
+            return "SIGNUP_FAILED"
         }
     }
 

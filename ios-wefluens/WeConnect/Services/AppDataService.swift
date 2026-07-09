@@ -750,6 +750,35 @@ final class AppDataService {
         return results.filter { !blockedUserIds.contains($0.id) }
     }
 
+    // MARK: - Invite codes (admin, is_admin-gated server-side)
+
+    /// Mints a new invite code. Returns the generated code string.
+    @MainActor
+    func adminCreateInviteCode(maxUses: Int, expiresAt: Date?, label: String?) async throws -> String {
+        let iso = expiresAt.map { ISO8601DateFormatter().string(from: $0) }
+        let trimmedLabel = label?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let code: String = try await supabase
+            .rpc("admin_create_invite_code", params: CreateInviteCodeParams(
+                p_max_uses: max(1, maxUses),
+                p_expires_at: iso,
+                p_label: (trimmedLabel?.isEmpty ?? true) ? nil : trimmedLabel))
+            .execute()
+            .value
+        return code
+    }
+
+    @MainActor
+    func adminListInviteCodes() async throws -> [InviteCodeRow] {
+        try await supabase.rpc("admin_list_invite_codes").execute().value
+    }
+
+    @MainActor
+    func adminRevokeInviteCode(id: UUID) async throws {
+        try await supabase
+            .rpc("admin_revoke_invite_code", params: RevokeInviteCodeParams(p_id: id.uuidString))
+            .execute()
+    }
+
     // MARK: - Admin curation (every RPC is is_admin-gated server-side)
 
     /// Loads brands straight from the DB with NO SampleData fallback — the admin

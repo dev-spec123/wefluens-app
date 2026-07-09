@@ -35,6 +35,7 @@ export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
@@ -73,7 +74,7 @@ export default function SignIn() {
 
   const validEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
   const canSubmit = isSignUp
-    ? !!email && password.length >= MIN_PW && confirm === password && agreed
+    ? !!email && password.length >= MIN_PW && confirm === password && !!inviteCode.trim() && agreed
     : !!email && !!password;
 
   async function submit() {
@@ -96,16 +97,25 @@ export default function SignIn() {
     setBusy(true);
     try {
       if (isSignUp) {
-        const { needsConfirmation } = await signUp(email, password, agreed);
+        const { needsConfirmation } = await signUp(email, password, agreed, inviteCode);
         if (needsConfirmation) setCheckEmail(true);
       } else {
         await signIn(email, password);
         await saveCredentials(email.trim(), password);
       }
     } catch (e: any) {
-      setAuthError(classifyError(e) === 'rateLimit'
-        ? t('authErrRateLimit')
-        : (e?.message ?? t('authErrGeneric')));
+      const inviteErr = e?.inviteError;
+      if (inviteErr === 'INVALID_CODE' || inviteErr === 'CODE_REQUIRED') {
+        setAuthError(t('authErrInviteCode'));
+      } else if (inviteErr === 'EMAIL_TAKEN') {
+        setAuthError(t('authErrEmailTaken'));
+      } else if (inviteErr === 'WEAK_PASSWORD') {
+        setAuthError(t('authErrPasswordShort'));
+      } else {
+        setAuthError(classifyError(e) === 'rateLimit'
+          ? t('authErrRateLimit')
+          : (e?.message ?? t('authErrGeneric')));
+      }
     } finally {
       setBusy(false);
     }
@@ -186,6 +196,16 @@ export default function SignIn() {
                       error={confirmError}
                     />
                   )}
+                  {isSignUp && (
+                    <DarkField
+                      icon="ticket"
+                      placeholder={t('authInviteCodePlaceholder')}
+                      value={inviteCode}
+                      onChangeText={(v) => { setInviteCode(v); setAuthError(null); }}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                    />
+                  )}
 
                   {authError && (
                     <View style={styles.errorBox}>
@@ -224,7 +244,7 @@ export default function SignIn() {
                     </Pressable>
                   )}
 
-                  <Pressable onPress={() => { setIsSignUp((s) => !s); setConfirm(''); setAgreed(false); clearErrors(); }} style={{ alignSelf: 'center', marginTop: 14 }}>
+                  <Pressable onPress={() => { setIsSignUp((s) => !s); setConfirm(''); setInviteCode(''); setAgreed(false); clearErrors(); }} style={{ alignSelf: 'center', marginTop: 14 }}>
                     <Text style={styles.toggle}>{t(isSignUp ? 'authHaveAccount' : 'authNoAccount')}</Text>
                   </Pressable>
                 </View>
