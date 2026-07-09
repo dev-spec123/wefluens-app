@@ -160,6 +160,17 @@ export async function browseAddableUsers(blockedIds: Set<string>, limit = 50): P
   return (data as SearchUserResult[]).filter((u) => !blockedIds.has(u.id));
 }
 
+export interface MyInviteCode { code: string; uses: number; max_uses: number; }
+
+/** The signed-in user's personal shareable invite code (mints one if needed).
+ *  Mirrors the Swift app's get_or_create_my_invite_code. */
+export async function getMyInviteCode(): Promise<MyInviteCode | null> {
+  const { data, error } = await supabase.rpc('get_or_create_my_invite_code');
+  if (error || !data) return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row ? (row as MyInviteCode) : null;
+}
+
 export async function syncProfile(userId: string, email: string | null): Promise<UserProfile> {
   const { data } = await supabase.from('profiles').select('*').eq('id', userId);
   const row = (data as ProfileRow[] | null)?.[0];

@@ -20,6 +20,7 @@ struct ProfileView: View {
     @AppStorage("wefluens.openToDeals") private var availableForDeals: Bool = true
     @State private var showDeleteConfirm = false
     @State private var showContactSupport = false
+    @State private var showInviteFriend = false
 
     private var user: UserProfile {
         data.profile ?? UserProfile(
@@ -51,6 +52,7 @@ struct ProfileView: View {
                     stats
                     availabilityCard
                     qrCodeBanner
+                    inviteFriendRow
                     favoritesRow
                     settingsGroup
                     if auth.isAdmin {
@@ -83,6 +85,9 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showContactSupport) {
                 SupportContactView()
+            }
+            .sheet(isPresented: $showInviteFriend) {
+                InviteFriendView()
             }
             .task {
                 await data.refreshProfile()
@@ -255,6 +260,38 @@ struct ProfileView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.ink(for: colorScheme))
                     Text("Scan or share your QR code")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+            }
+            .padding(16)
+            .cardStyle()
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Invite a Friend (personal shareable invite code)
+
+    private var inviteFriendRow: some View {
+        Button {
+            showInviteFriend = true
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "envelope.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.white)
+                    .frame(width: 46, height: 46)
+                    .background(Theme.sunset)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(l10n.t(.inviteFriendTitle))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.ink(for: colorScheme))
+                    Text(l10n.t(.inviteFriendSubtitle))
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.inkSecondary(for: colorScheme))
                 }

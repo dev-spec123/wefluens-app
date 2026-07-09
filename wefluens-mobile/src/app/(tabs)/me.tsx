@@ -333,6 +333,27 @@ export default function MeScreen() {
           )}
         </Pressable>
 
+        {/* Invite a Friend — personal shareable invite code */}
+        <Pressable onPress={() => router.push('/invite-friend')}>
+          {({ pressed }) => (
+            <Card style={[styles.dealCard, pressed && { opacity: 0.7 }]}>
+              <LinearGradient
+                colors={gradients.sunset}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.iconBadge, { borderRadius: 14, width: 44, height: 44 }]}
+              >
+                <Ionicons name="gift" size={20} color="#fff" />
+              </LinearGradient>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.dealTitle, { color: c.ink }]}>{t('inviteFriendTitle')}</Text>
+                <Text style={[styles.dealSub, { color: c.inkSecondary }]} numberOfLines={1}>{t('inviteFriendSubtitle')}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={c.inkTertiary} />
+            </Card>
+          )}
+        </Pressable>
+
         {/* Favorites — promoted to a primary banner card with a live count subtitle */}
         <Pressable onPress={() => router.push('/favorites')}>
           {({ pressed }) => (

@@ -779,6 +779,19 @@ final class AppDataService {
             .execute()
     }
 
+    /// The signed-in user's personal shareable invite code (any authenticated user).
+    /// Returns their live code, minting one (bounded uses) if they don't have one.
+    @MainActor
+    func getOrCreateMyInviteCode() async throws -> MyInviteCodeRow {
+        let rows: [MyInviteCodeRow] = try await supabase
+            .rpc("get_or_create_my_invite_code").execute().value
+        guard let row = rows.first else {
+            throw NSError(domain: "InviteCode", code: 0,
+                          userInfo: [NSLocalizedDescriptionKey: "No code returned"])
+        }
+        return row
+    }
+
     // MARK: - Admin curation (every RPC is is_admin-gated server-side)
 
     /// Loads brands straight from the DB with NO SampleData fallback — the admin

@@ -487,6 +487,18 @@ nonisolated struct RevokeInviteCodeParams: Encodable, Sendable {
     let p_id: String
 }
 
+/// The caller's personal shareable invite code (from get_or_create_my_invite_code).
+nonisolated struct MyInviteCodeRow: Codable, Sendable {
+    let code: String
+    let uses: Int
+    let maxUses: Int
+
+    enum CodingKeys: String, CodingKey {
+        case code, uses
+        case maxUses = "max_uses"
+    }
+}
+
 nonisolated struct SendFriendRequestParams: Encodable, Sendable {
     let target_id: String
     let message: String

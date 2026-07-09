@@ -143,6 +143,8 @@ enum L10n: String {
     case profilePreferences, profileNotifications, profilePrivacy, profileLanguage
     case profileSupport, profileHelp, profileContact, profileRate
     case profileSignOut
+    case inviteFriendTitle, inviteFriendSubtitle, inviteFriendIntro, inviteFriendRemaining
+    case inviteFriendShare, inviteFriendCopy, inviteFriendCopied, inviteFriendShareMessage
     case faqTitle
     case weListeningTitle
     case supportFormTitle, supportSubjectField, supportMessageField
@@ -421,6 +423,14 @@ final class LocalizationManager {
             .supportMaxImages: "Max 6 images",
             .supportImageTooLarge: "Image too large (max 5MB)",
             .profileSignOut: "Sign Out",
+            .inviteFriendTitle: "Invite a Friend",
+            .inviteFriendSubtitle: "Share your invite code",
+            .inviteFriendIntro: "Wefluens is invite-only. Share your code so friends can join — it works a limited number of times.",
+            .inviteFriendRemaining: "invites left",
+            .inviteFriendShare: "Share",
+            .inviteFriendCopy: "Copy",
+            .inviteFriendCopied: "Copied",
+            .inviteFriendShareMessage: "Join me on Wefluens Connect — use my invite code:",
             .settingsTitle: "Settings", .settingsLanguage: "Language",
             .settingsLanguageFooter: "Choose your preferred language. It applies across the whole app.",
             .settingsDone: "Done",
@@ -728,6 +738,14 @@ final class LocalizationManager {
             .supportMaxImages: "最多 6 张图片",
             .supportImageTooLarge: "图片过大（最大 5MB）",
             .profileSignOut: "退出登录",
+            .inviteFriendTitle: "邀请好友",
+            .inviteFriendSubtitle: "分享你的邀请码",
+            .inviteFriendIntro: "Wefluens 为邀请制。分享你的邀请码，好友即可加入——该邀请码有使用次数限制。",
+            .inviteFriendRemaining: "个名额剩余",
+            .inviteFriendShare: "分享",
+            .inviteFriendCopy: "复制",
+            .inviteFriendCopied: "已复制",
+            .inviteFriendShareMessage: "加入我的 Wefluens Connect——使用我的邀请码：",
             .settingsTitle: "设置", .settingsLanguage: "语言",
             .settingsLanguageFooter: "选择你偏好的语言，将应用于整个 App。",
             .settingsDone: "完成",
@@ -1035,6 +1053,14 @@ final class LocalizationManager {
             .supportMaxImages: "Máx. 6 imágenes",
             .supportImageTooLarge: "Imagen demasiado grande (máx. 5MB)",
             .profileSignOut: "Cerrar Sesión",
+            .inviteFriendTitle: "Invitar a un amigo",
+            .inviteFriendSubtitle: "Comparte tu código de invitación",
+            .inviteFriendIntro: "Wefluens es solo por invitación. Comparte tu código para que tus amigos se unan — tiene usos limitados.",
+            .inviteFriendRemaining: "invitaciones restantes",
+            .inviteFriendShare: "Compartir",
+            .inviteFriendCopy: "Copiar",
+            .inviteFriendCopied: "Copiado",
+            .inviteFriendShareMessage: "Únete a mí en Wefluens Connect — usa mi código de invitación:",
             .settingsTitle: "Ajustes", .settingsLanguage: "Idioma",
             .settingsLanguageFooter: "Elige tu idioma preferido. Se aplica en toda la app.",
             .settingsDone: "Hecho",
