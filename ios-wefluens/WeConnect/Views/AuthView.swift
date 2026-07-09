@@ -17,6 +17,7 @@ struct AuthView: View {
     @State private var email = KeychainHelper.get(AuthManager.savedEmailKey) ?? ""
     @State private var password = KeychainHelper.get(AuthManager.savedPasswordKey) ?? ""
     @State private var confirmPassword = ""
+    @State private var inviteCode = ""
     @State private var isSignUp = false
     @State private var keyboardHeight: CGFloat = 0
     @State private var showResetSent = false
@@ -201,6 +202,30 @@ struct AuthView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
+                // Invite code (sign-up only) — required; the app is invite-only.
+                if isSignUp {
+                    fieldContainer(error: nil) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "ticket.fill")
+                                .font(.system(size: 14))
+                                .foregroundStyle(.white.opacity(0.5))
+                                .frame(width: 20)
+
+                            TextField("", text: $inviteCode)
+                                .placeholder(when: inviteCode.isEmpty) {
+                                    Text(l10n.t(.authInviteCodePlaceholder))
+                                        .foregroundStyle(.white.opacity(0.4))
+                                }
+                                .font(.system(size: 16))
+                                .foregroundStyle(.white)
+                                .textInputAutocapitalization(.characters)
+                                .autocorrectionDisabled()
+                                .onSubmit { submit() }
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
                 // Terms agreement (sign-up only)
                 if isSignUp {
                     agreementRow
@@ -307,10 +332,23 @@ struct AuthView: View {
         let trimmedEmail = email.trimmingCharacters(in: .whitespaces)
         if isSignUp {
             guard validateSignUp(trimmedEmail) else { return }
+            let code = inviteCode.trimmingCharacters(in: .whitespaces)
+            guard !code.isEmpty else {
+                auth.errorMessage = l10n.t(.authErrInviteCode)
+                auth.lastErrorKind = .generic
+                auth.showError = true
+                return
+            }
             // Record that the user accepted the terms at sign-up; stamped server-side
             // once the session exists (ContentView bootstrap).
             UserDefaults.standard.set(true, forKey: Self.pendingTermsKey)
-            Task { await auth.signUp(email: trimmedEmail, password: password) }
+            Task {
+                if let errCode = await auth.signUpWithInvite(email: trimmedEmail, password: password, code: code) {
+                    auth.errorMessage = inviteErrorMessage(errCode)
+                    auth.lastErrorKind = .generic
+                    auth.showError = true
+                }
+            }
         } else {
             guard isValidEmail(trimmedEmail) else {
                 emailError = l10n.t(.authErrInvalidEmail)
@@ -387,9 +425,21 @@ struct AuthView: View {
 
     private var canSubmit: Bool {
         if isSignUp {
-            return !email.isEmpty && !password.isEmpty && !confirmPassword.isEmpty && agreedToTerms
+            return !email.isEmpty && !password.isEmpty && !confirmPassword.isEmpty
+                && !inviteCode.trimmingCharacters(in: .whitespaces).isEmpty && agreedToTerms
         }
         return !email.isEmpty && !password.isEmpty
+    }
+
+    /// Maps a signup-with-invite server error code to a localized inline message.
+    private func inviteErrorMessage(_ code: String) -> String {
+        switch code {
+        case "INVALID_CODE", "CODE_REQUIRED": return l10n.t(.authErrInviteCode)
+        case "EMAIL_TAKEN": return l10n.t(.authErrEmailTaken)
+        case "WEAK_PASSWORD": return l10n.t(.authErrPasswordShort)
+        case "INVALID_EMAIL": return l10n.t(.authErrInvalidEmail)
+        default: return l10n.t(.authErrGeneric)
+        }
     }
 
     // MARK: - Field container with inline error

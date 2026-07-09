@@ -34,6 +34,28 @@ After the steps below, the admin-curation feature adds one more migration:
 
 ---
 
+## Invite-only signup (branch: feature/invite-only)
+
+Makes signup require a valid invite code. Deploy in this order:
+
+1. **SQL** — run `backend/functions/migration-invite-only.sql` (invite_codes +
+   code_redemptions tables, admin_create/list/revoke RPCs, atomic claim/release).
+2. **Edge function** — deploy `signup-with-invite` (the only way to create an
+   account; validates the code + creates an email-confirmed user via the admin API).
+   Deploy the same way as the other functions (see step 3 below).
+3. **Ship both apps** — the iOS + RN builds on this branch add the invite-code field
+   to signup and call the edge function.
+4. **⚠️ FLIP THE GATE LAST** — in Supabase → **Authentication → Sign In / Providers
+   → Email → turn OFF "Allow new users to sign up."** Do this only AFTER both apps
+   are shipped, or in-flight app versions lose the ability to sign up. The edge
+   function still creates users afterward (admin API bypasses this setting).
+5. **Mint codes** — as an admin, open the iOS app → Me → Developer → **Invite
+   Codes**. (Existing users are grandfathered; they keep access.)
+
+To undo invite-only: turn "Allow new users to sign up" back ON.
+
+---
+
 ## 1. Run the schema migration  *(required)*
 
 Dashboard → **SQL Editor** → New query → paste the full contents of

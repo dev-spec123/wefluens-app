@@ -143,6 +143,8 @@ enum L10n: String {
     case profilePreferences, profileNotifications, profilePrivacy, profileLanguage
     case profileSupport, profileHelp, profileContact, profileRate
     case profileSignOut
+    case inviteFriendTitle, inviteFriendSubtitle, inviteFriendIntro, inviteFriendRemaining
+    case inviteFriendShare, inviteFriendCopy, inviteFriendCopied, inviteFriendShareMessage
     case faqTitle
     case weListeningTitle
     case supportFormTitle, supportSubjectField, supportMessageField
@@ -165,6 +167,7 @@ enum L10n: String {
     case authVerifyTitle, authVerifySubtitle, authVerifyButton
     case authResendCode, authResendIn, authChangeEmail, authCodeResent
     case authInviteOnly
+    case authInviteCodePlaceholder, authErrInviteCode, authErrEmailTaken
     case authForgotPassword, authResetSentTitle, authResetSentMessage
     case authErrInvalidEmail, authErrPasswordShort, authErrPasswordRequired
     case authErrPasswordWeak
@@ -420,6 +423,14 @@ final class LocalizationManager {
             .supportMaxImages: "Max 6 images",
             .supportImageTooLarge: "Image too large (max 5MB)",
             .profileSignOut: "Sign Out",
+            .inviteFriendTitle: "Invite a Friend",
+            .inviteFriendSubtitle: "Share your invite code",
+            .inviteFriendIntro: "Wefluens is invite-only. Share your code so friends can join — it works a limited number of times.",
+            .inviteFriendRemaining: "invites left",
+            .inviteFriendShare: "Share",
+            .inviteFriendCopy: "Copy",
+            .inviteFriendCopied: "Copied",
+            .inviteFriendShareMessage: "Join me on Wefluens Connect — use my invite code:",
             .settingsTitle: "Settings", .settingsLanguage: "Language",
             .settingsLanguageFooter: "Choose your preferred language. It applies across the whole app.",
             .settingsDone: "Done",
@@ -454,6 +465,9 @@ final class LocalizationManager {
             .authErrPasswordRequired: "Enter your password",
             .authErrRateLimit: "Too many attempts. Please wait about a minute and try again.",
             .authErrGeneric: "Something went wrong. Please try again.",
+            .authInviteCodePlaceholder: "Invite code",
+            .authErrInviteCode: "That invite code isn't valid, has expired, or is already used.",
+            .authErrEmailTaken: "An account with this email already exists. Try signing in.",
             .authCheckEmailTitle: "Check your email",
             .authCheckEmailMessage: "We sent a confirmation link to",
             .authBackToSignIn: "Back to sign in",
@@ -724,6 +738,14 @@ final class LocalizationManager {
             .supportMaxImages: "最多 6 张图片",
             .supportImageTooLarge: "图片过大（最大 5MB）",
             .profileSignOut: "退出登录",
+            .inviteFriendTitle: "邀请好友",
+            .inviteFriendSubtitle: "分享你的邀请码",
+            .inviteFriendIntro: "Wefluens 为邀请制。分享你的邀请码，好友即可加入——该邀请码有使用次数限制。",
+            .inviteFriendRemaining: "个名额剩余",
+            .inviteFriendShare: "分享",
+            .inviteFriendCopy: "复制",
+            .inviteFriendCopied: "已复制",
+            .inviteFriendShareMessage: "加入我的 Wefluens Connect——使用我的邀请码：",
             .settingsTitle: "设置", .settingsLanguage: "语言",
             .settingsLanguageFooter: "选择你偏好的语言，将应用于整个 App。",
             .settingsDone: "完成",
@@ -751,6 +773,9 @@ final class LocalizationManager {
             .authInviteOnly: "仅限受邀用户 · 如需账号请联系管理员",
             .authErrRateLimit: "尝试次数过多，请等待约一分钟后再试。",
             .authErrGeneric: "出错了，请重试。",
+            .authInviteCodePlaceholder: "邀请码",
+            .authErrInviteCode: "邀请码无效、已过期或已被使用。",
+            .authErrEmailTaken: "该邮箱已注册，请直接登录。",
             .authForgotPassword: "忘记密码？",
             .authResetSentTitle: "重置链接已发送",
             .authResetSentMessage: "如果该邮箱存在账号，我们已发送密码重置链接，请查收邮件。",
@@ -1028,6 +1053,14 @@ final class LocalizationManager {
             .supportMaxImages: "Máx. 6 imágenes",
             .supportImageTooLarge: "Imagen demasiado grande (máx. 5MB)",
             .profileSignOut: "Cerrar Sesión",
+            .inviteFriendTitle: "Invitar a un amigo",
+            .inviteFriendSubtitle: "Comparte tu código de invitación",
+            .inviteFriendIntro: "Wefluens es solo por invitación. Comparte tu código para que tus amigos se unan — tiene usos limitados.",
+            .inviteFriendRemaining: "invitaciones restantes",
+            .inviteFriendShare: "Compartir",
+            .inviteFriendCopy: "Copiar",
+            .inviteFriendCopied: "Copiado",
+            .inviteFriendShareMessage: "Únete a mí en Wefluens Connect — usa mi código de invitación:",
             .settingsTitle: "Ajustes", .settingsLanguage: "Idioma",
             .settingsLanguageFooter: "Elige tu idioma preferido. Se aplica en toda la app.",
             .settingsDone: "Hecho",
@@ -1055,6 +1088,9 @@ final class LocalizationManager {
             .authInviteOnly: "Solo por invitación — pide acceso a tu administrador",
             .authErrRateLimit: "Demasiados intentos. Espera alrededor de un minuto e inténtalo de nuevo.",
             .authErrGeneric: "Algo salió mal. Inténtalo de nuevo.",
+            .authInviteCodePlaceholder: "Código de invitación",
+            .authErrInviteCode: "Ese código no es válido, expiró o ya se usó.",
+            .authErrEmailTaken: "Ya existe una cuenta con este correo. Inicia sesión.",
             .authForgotPassword: "¿Olvidaste tu contraseña?",
             .authResetSentTitle: "Enlace de restablecimiento enviado",
             .authResetSentMessage: "Si existe una cuenta con ese correo, hemos enviado un enlace para restablecer la contraseña. Revisa tu bandeja de entrada.",
