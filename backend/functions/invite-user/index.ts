@@ -102,18 +102,17 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { user } = await requireUser(req);
+    // Any signed-in user may invite. Admins invite freely; everyone else spends
+    // one of their personal invite allowance (same budget as their invite code).
+    const { user, supabase: userClient } = await requireUser(req);
     const admin = createAdminClient();
 
-    // Only admins may invite.
     const { data: me } = await admin
       .from("profiles")
       .select("is_admin")
       .eq("id", user.id)
       .maybeSingle();
-    if (!me?.is_admin) {
-      return jsonResponse({ ok: false, error: "FORBIDDEN" }, 403);
-    }
+    const isAdmin = !!me?.is_admin;
 
     const body = (await req.json().catch(() => ({}))) as InviteBody;
     const email = (body.email ?? "").trim().toLowerCase();
@@ -131,6 +130,24 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, error: "ALREADY_REGISTERED" });
     }
 
+    // Charge a non-admin one invite up front (atomic). Refunded below if the
+    // invitation can't be created or emailed.
+    let spentInvite = false;
+    if (!isAdmin) {
+      const { data: ok, error: spendErr } = await userClient.rpc("spend_my_invite");
+      if (spendErr) {
+        console.error("spend_my_invite failed:", spendErr.message);
+        return jsonResponse({ ok: false, error: "DB_ERROR" });
+      }
+      if (!ok) {
+        return jsonResponse({ ok: false, error: "NO_INVITES_LEFT" });
+      }
+      spentInvite = true;
+    }
+    const refund = async () => {
+      if (spentInvite) await userClient.rpc("refund_my_invite");
+    };
+
     const token = randomToken();
 
     // Clear any prior pending invites for this email, then create a fresh one.
@@ -145,12 +162,14 @@ Deno.serve(async (req) => {
     });
     if (insErr) {
       console.error("invite insert failed:", insErr.message);
+      await refund();
       return jsonResponse({ ok: false, error: "DB_ERROR" });
     }
 
     const { resendKey, from } = await loadEmailConfig(admin);
     if (!resendKey) {
       console.error("RESEND_API_KEY is not configured (env + app_secrets both empty)");
+      await refund();
       return jsonResponse({ ok: false, error: "EMAIL_NOT_CONFIGURED" });
     }
 
@@ -173,6 +192,7 @@ Deno.serve(async (req) => {
     if (!resp.ok) {
       const detail = await resp.text();
       console.error("Resend send failed:", resp.status, detail);
+      await refund();
       return jsonResponse({ ok: false, error: "EMAIL_SEND_FAILED", detail });
     }
 

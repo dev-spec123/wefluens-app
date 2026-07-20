@@ -9,7 +9,7 @@ import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card, NavBar } from '@/components/ui';
@@ -25,6 +25,41 @@ export default function InviteFriend() {
   const [info, setInfo] = useState<api.MyInviteCode | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+
+  // Invite by email — spends one of the same invites.
+  const [emailInput, setEmailInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const left = info ? Math.max(0, info.max_uses - info.uses) : 0;
+
+  async function reload() {
+    const res = await api.getMyInviteCode();
+    setInfo(res);
+  }
+
+  async function onInviteByEmail() {
+    const addr = emailInput.trim();
+    if (!addr || sending) return;
+    setSending(true);
+    setEmailMsg(null);
+    try {
+      const err = await api.inviteByEmail(addr);
+      if (!err) {
+        setEmailInput('');
+        setEmailMsg({ ok: true, text: t('inviteFriendSent') });
+        await reload();
+      } else if (err === 'NO_INVITES_LEFT') {
+        setEmailMsg({ ok: false, text: t('inviteFriendNoneLeft') });
+      } else if (err === 'ALREADY_REGISTERED') {
+        setEmailMsg({ ok: false, text: t('inviteFriendAlreadyMember') });
+      } else {
+        setEmailMsg({ ok: false, text: t('inviteFriendEmailError') });
+      }
+    } finally {
+      setSending(false);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -73,7 +108,7 @@ export default function InviteFriend() {
           <Card style={styles.codeCard}>
             <Text style={[styles.code, { color: c.ink }]}>{info.code}</Text>
             <Text style={[styles.remaining, { color: c.inkSecondary }]}>
-              {Math.max(0, info.max_uses - info.uses)} {t('inviteFriendRemaining')}
+              {left} {t('inviteFriendRemaining')}
             </Text>
           </Card>
 
@@ -96,6 +131,43 @@ export default function InviteFriend() {
               </LinearGradient>
             </Pressable>
           </View>
+
+          {/* Invite a specific person by email — spends one of the same invites. */}
+          <View style={styles.emailBlock}>
+            <Text style={[styles.emailLabel, { color: c.inkTertiary }]}>
+              {t('inviteFriendByEmail').toUpperCase()}
+            </Text>
+            <View style={styles.emailRow}>
+              <TextInput
+                value={emailInput}
+                onChangeText={(v) => { setEmailInput(v); setEmailMsg(null); }}
+                placeholder={t('inviteFriendEmailPlaceholder')}
+                placeholderTextColor={c.inkTertiary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                editable={left > 0 && !sending}
+                style={[styles.emailInput, { color: c.ink, backgroundColor: c.cardSubtle, borderColor: c.hairline }]}
+              />
+              <Pressable
+                onPress={onInviteByEmail}
+                disabled={left === 0 || sending || !emailInput.trim()}
+                style={[
+                  styles.sendBtn,
+                  { backgroundColor: c.coral, opacity: left === 0 || sending || !emailInput.trim() ? 0.5 : 1 },
+                ]}
+              >
+                {sending
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Ionicons name="send" size={16} color="#fff" />}
+              </Pressable>
+            </View>
+            {emailMsg && (
+              <Text style={[styles.emailMsg, { color: emailMsg.ok ? c.coral : '#E5484D' }]}>
+                {emailMsg.text}
+              </Text>
+            )}
+          </View>
         </View>
       )}
     </SafeAreaView>
@@ -113,4 +185,10 @@ const styles = StyleSheet.create({
   btn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 14, borderRadius: 999 },
   btnFilled: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 14, borderRadius: 999 },
   btnText: { fontSize: 15, fontWeight: '600' },
+  emailBlock: { width: '100%', marginTop: 28 },
+  emailLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 1, marginBottom: 8 },
+  emailRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  emailInput: { flex: 1, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15 },
+  sendBtn: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  emailMsg: { fontSize: 13, fontWeight: '500', marginTop: 10 },
 });

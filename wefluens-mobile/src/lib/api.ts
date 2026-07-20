@@ -162,6 +162,17 @@ export async function browseAddableUsers(blockedIds: Set<string>, limit = 50): P
 
 export interface MyInviteCode { code: string; uses: number; max_uses: number; }
 
+/** Invite someone by email. Any signed-in user may do this; non-admins spend one
+ *  of their personal invites (same budget as their code). Returns a server error
+ *  code (NO_INVITES_LEFT, ALREADY_REGISTERED, …) or null on success. */
+export async function inviteByEmail(email: string): Promise<string | null> {
+  const { data, error } = await supabase.functions.invoke('invite-user', {
+    body: { email: email.trim().toLowerCase() },
+  });
+  if (error) return 'GENERIC';
+  return data?.ok ? null : (data?.error ?? 'GENERIC');
+}
+
 /** The signed-in user's personal shareable invite code (mints one if needed).
  *  Mirrors the Swift app's get_or_create_my_invite_code. */
 export async function getMyInviteCode(): Promise<MyInviteCode | null> {

@@ -145,6 +145,7 @@ enum L10n: String {
     case profileSignOut
     case inviteFriendTitle, inviteFriendSubtitle, inviteFriendIntro, inviteFriendRemaining
     case inviteFriendShare, inviteFriendCopy, inviteFriendCopied, inviteFriendShareMessage
+    case inviteFriendByEmail, inviteFriendNoneLeft
     case faqTitle
     case weListeningTitle
     case supportFormTitle, supportSubjectField, supportMessageField
@@ -431,6 +432,8 @@ final class LocalizationManager {
             .inviteFriendCopy: "Copy",
             .inviteFriendCopied: "Copied",
             .inviteFriendShareMessage: "Join me on Wefluens Connect — use my invite code:",
+            .inviteFriendByEmail: "Invite by email",
+            .inviteFriendNoneLeft: "You're out of invites right now.",
             .settingsTitle: "Settings", .settingsLanguage: "Language",
             .settingsLanguageFooter: "Choose your preferred language. It applies across the whole app.",
             .settingsDone: "Done",
@@ -747,6 +750,8 @@ final class LocalizationManager {
             .inviteFriendCopy: "复制",
             .inviteFriendCopied: "已复制",
             .inviteFriendShareMessage: "加入我的 Wefluens Connect——使用我的邀请码：",
+            .inviteFriendByEmail: "通过邮箱邀请",
+            .inviteFriendNoneLeft: "你的邀请名额已用完。",
             .settingsTitle: "设置", .settingsLanguage: "语言",
             .settingsLanguageFooter: "选择你偏好的语言，将应用于整个 App。",
             .settingsDone: "完成",
@@ -1063,6 +1068,8 @@ final class LocalizationManager {
             .inviteFriendCopy: "Copiar",
             .inviteFriendCopied: "Copiado",
             .inviteFriendShareMessage: "Únete a mí en Wefluens Connect — usa mi código de invitación:",
+            .inviteFriendByEmail: "Invitar por correo",
+            .inviteFriendNoneLeft: "Te has quedado sin invitaciones.",
             .settingsTitle: "Ajustes", .settingsLanguage: "Idioma",
             .settingsLanguageFooter: "Elige tu idioma preferido. Se aplica en toda la app.",
             .settingsDone: "Hecho",

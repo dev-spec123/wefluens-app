@@ -17,7 +17,6 @@ struct AdminUsersView: View {
     @State private var isLoading = true
     @State private var alertState: AdminAlertState?
     @State private var errorMessage: String?
-    @State private var showInvite = false
 
     enum AdminAlertState: Identifiable {
         case ban(AdminUser)
@@ -52,15 +51,6 @@ struct AdminUsersView: View {
         .navigationTitle(l10n.t(.adminTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    showInvite = true
-                } label: {
-                    Image(systemName: "person.badge.plus")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Theme.coral)
-                }
-            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     Task { await loadUsers() }
@@ -70,9 +60,6 @@ struct AdminUsersView: View {
                         .foregroundStyle(Theme.coral)
                 }
             }
-        }
-        .sheet(isPresented: $showInvite) {
-            InviteUserSheet { Task { await loadUsers() } }
         }
         .task { await loadUsers() }
         .alert("Error", isPresented: .init(
@@ -191,40 +178,8 @@ struct AdminUsersView: View {
 
     private var usersList: some View {
         List {
-            Section {
-                Button {
-                    showInvite = true
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "envelope.badge.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 44, height: 44)
-                            .background(Theme.sunset)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(l10n.t(.adminInvite))
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(Theme.ink(for: colorScheme))
-                            Text(l10n.t(.adminInviteSubtitle))
-                                .font(.system(size: 12))
-                                .foregroundStyle(Theme.inkSecondary(for: colorScheme))
-                                .lineLimit(2)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.inkTertiary(for: colorScheme))
-                    }
-                    .padding(12)
-                    .cardStyle(cornerRadius: 16)
-                }
-                .buttonStyle(.plain)
-                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-            }
-
+            // Inviting by email moved to Me → Invite a Friend (available to all
+            // users now, spending their personal invite allowance).
             Section(l10n.t(.adminAllUsers)) {
                 ForEach(users) { user in
                     UserRow(
@@ -504,8 +459,10 @@ private struct UserRow: View {
 }
 
 // MARK: - Invite User Sheet
+// Internal (not private) so the user-facing Invite a Friend screen can present it —
+// inviting by email is available to every user now, not just admins.
 
-private struct InviteUserSheet: View {
+struct InviteUserSheet: View {
     @Environment(LocalizationManager.self) private var l10n
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
@@ -680,6 +637,7 @@ private struct InviteUserSheet: View {
         case "ALREADY_REGISTERED": return l10n.t(.adminInviteErrExists)
         case "EMAIL_NOT_CONFIGURED": return l10n.t(.adminInviteErrEmail)
         case "EMAIL_SEND_FAILED": return l10n.t(.adminInviteErrSend)
+        case "NO_INVITES_LEFT": return l10n.t(.inviteFriendNoneLeft)
         default: return l10n.t(.adminInviteErrGeneric)
         }
     }
