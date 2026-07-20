@@ -332,13 +332,9 @@ struct AuthView: View {
         let trimmedEmail = email.trimmingCharacters(in: .whitespaces)
         if isSignUp {
             guard validateSignUp(trimmedEmail) else { return }
+            // Code is optional: an email-invited user signs up without one. The
+            // server decides, and only then do we reveal the invite-only rule.
             let code = inviteCode.trimmingCharacters(in: .whitespaces)
-            guard !code.isEmpty else {
-                auth.errorMessage = l10n.t(.authErrInviteCode)
-                auth.lastErrorKind = .generic
-                auth.showError = true
-                return
-            }
             // Record that the user accepted the terms at sign-up; stamped server-side
             // once the session exists (ContentView bootstrap).
             UserDefaults.standard.set(true, forKey: Self.pendingTermsKey)
@@ -425,8 +421,8 @@ struct AuthView: View {
 
     private var canSubmit: Bool {
         if isSignUp {
-            return !email.isEmpty && !password.isEmpty && !confirmPassword.isEmpty
-                && !inviteCode.trimmingCharacters(in: .whitespaces).isEmpty && agreedToTerms
+            // The invite code is optional — users invited by email don't have one.
+            return !email.isEmpty && !password.isEmpty && !confirmPassword.isEmpty && agreedToTerms
         }
         return !email.isEmpty && !password.isEmpty
     }
@@ -434,6 +430,7 @@ struct AuthView: View {
     /// Maps a signup-with-invite server error code to a localized inline message.
     private func inviteErrorMessage(_ code: String) -> String {
         switch code {
+        case "INVITE_REQUIRED": return l10n.t(.authErrInviteRequired)
         case "INVALID_CODE", "CODE_REQUIRED": return l10n.t(.authErrInviteCode)
         case "EMAIL_TAKEN": return l10n.t(.authErrEmailTaken)
         case "WEAK_PASSWORD": return l10n.t(.authErrPasswordShort)

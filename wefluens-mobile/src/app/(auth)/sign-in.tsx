@@ -73,8 +73,9 @@ export default function SignIn() {
   }
 
   const validEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+  // The invite code is optional — users invited by email don't have one.
   const canSubmit = isSignUp
-    ? !!email && password.length >= MIN_PW && confirm === password && !!inviteCode.trim() && agreed
+    ? !!email && password.length >= MIN_PW && confirm === password && agreed
     : !!email && !!password;
 
   async function submit() {
@@ -105,7 +106,9 @@ export default function SignIn() {
       }
     } catch (e: any) {
       const inviteErr = e?.inviteError;
-      if (inviteErr === 'INVALID_CODE' || inviteErr === 'CODE_REQUIRED') {
+      if (inviteErr === 'INVITE_REQUIRED') {
+        setAuthError(t('authErrInviteRequired'));
+      } else if (inviteErr === 'INVALID_CODE' || inviteErr === 'CODE_REQUIRED') {
         setAuthError(t('authErrInviteCode'));
       } else if (inviteErr === 'EMAIL_TAKEN') {
         setAuthError(t('authErrEmailTaken'));

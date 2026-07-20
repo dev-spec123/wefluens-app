@@ -167,7 +167,7 @@ enum L10n: String {
     case authVerifyTitle, authVerifySubtitle, authVerifyButton
     case authResendCode, authResendIn, authChangeEmail, authCodeResent
     case authInviteOnly
-    case authInviteCodePlaceholder, authErrInviteCode, authErrEmailTaken
+    case authInviteCodePlaceholder, authErrInviteCode, authErrEmailTaken, authErrInviteRequired
     case authForgotPassword, authResetSentTitle, authResetSentMessage
     case authErrInvalidEmail, authErrPasswordShort, authErrPasswordRequired
     case authErrPasswordWeak
@@ -465,9 +465,10 @@ final class LocalizationManager {
             .authErrPasswordRequired: "Enter your password",
             .authErrRateLimit: "Too many attempts. Please wait about a minute and try again.",
             .authErrGeneric: "Something went wrong. Please try again.",
-            .authInviteCodePlaceholder: "Invite code",
+            .authInviteCodePlaceholder: "Invite code (optional)",
             .authErrInviteCode: "That invite code isn't valid, has expired, or is already used.",
             .authErrEmailTaken: "An account with this email already exists. Try signing in.",
+            .authErrInviteRequired: "Wefluens Connect is invite-only. Ask a member for an invite code, or use the email address you were invited with.",
             .authCheckEmailTitle: "Check your email",
             .authCheckEmailMessage: "We sent a confirmation link to",
             .authBackToSignIn: "Back to sign in",
@@ -773,9 +774,10 @@ final class LocalizationManager {
             .authInviteOnly: "仅限受邀用户 · 如需账号请联系管理员",
             .authErrRateLimit: "尝试次数过多，请等待约一分钟后再试。",
             .authErrGeneric: "出错了，请重试。",
-            .authInviteCodePlaceholder: "邀请码",
+            .authInviteCodePlaceholder: "邀请码（选填）",
             .authErrInviteCode: "邀请码无效、已过期或已被使用。",
             .authErrEmailTaken: "该邮箱已注册，请直接登录。",
+            .authErrInviteRequired: "Wefluens Connect 为邀请制。请向成员索取邀请码，或使用收到邀请的邮箱注册。",
             .authForgotPassword: "忘记密码？",
             .authResetSentTitle: "重置链接已发送",
             .authResetSentMessage: "如果该邮箱存在账号，我们已发送密码重置链接，请查收邮件。",
@@ -1088,9 +1090,10 @@ final class LocalizationManager {
             .authInviteOnly: "Solo por invitación — pide acceso a tu administrador",
             .authErrRateLimit: "Demasiados intentos. Espera alrededor de un minuto e inténtalo de nuevo.",
             .authErrGeneric: "Algo salió mal. Inténtalo de nuevo.",
-            .authInviteCodePlaceholder: "Código de invitación",
+            .authInviteCodePlaceholder: "Código de invitación (opcional)",
             .authErrInviteCode: "Ese código no es válido, expiró o ya se usó.",
             .authErrEmailTaken: "Ya existe una cuenta con este correo. Inicia sesión.",
+            .authErrInviteRequired: "Wefluens Connect es solo por invitación. Pide un código a un miembro o usa el correo con el que te invitaron.",
             .authForgotPassword: "¿Olvidaste tu contraseña?",
             .authResetSentTitle: "Enlace de restablecimiento enviado",
             .authResetSentMessage: "Si existe una cuenta con ese correo, hemos enviado un enlace para restablecer la contraseña. Revisa tu bandeja de entrada.",
