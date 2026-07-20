@@ -52,14 +52,28 @@ Deno.serve(async (req) => {
 
     // 1) Email invite: atomically flip a pending, unexpired invite for this email
     //    to activated. If one existed, this user is invited — no code needed.
-    const { data: invites } = await admin
+    // Only LOOK for a valid invite here — don't consume it yet. The email is
+    // unique, so there's no race to guard against (a second signup for the same
+    // address fails on EMAIL_TAKEN regardless), and consuming it only after the
+    // account exists means a failed signup can never burn someone's whitelist
+    // and lock them out.
+    const { data: invites, error: inviteErr } = await admin
       .from("invites")
-      .update({ status: "activated", activated_at: new Date().toISOString() })
+      .select("id")
       .eq("email", email)
       .eq("status", "pending")
       .gt("expires_at", new Date().toISOString())
-      .select("id");
+      .limit(1);
+    // Never swallow this: a failing lookup would otherwise be indistinguishable
+    // from "not invited" and wrongly tell a whitelisted user they're not invited.
+    if (inviteErr) {
+      console.error("email invite lookup failed:", inviteErr.message, inviteErr.details ?? "");
+      return jsonResponse({ ok: false, error: "SERVER_ERROR" });
+    }
     claimedInviteId = (invites as Array<{ id: string }> | null)?.[0]?.id ?? null;
+    console.log(
+      `signup attempt for ${email}: emailInvite=${claimedInviteId ? "found" : "none"}, codeProvided=${code ? "yes" : "no"}`,
+    );
 
     // 2) No email invite ⇒ fall back to an invite code.
     if (!claimedInviteId) {
@@ -85,14 +99,10 @@ Deno.serve(async (req) => {
     });
 
     if (createErr || !created?.user) {
-      // Release whichever claim we made so a transient failure doesn't burn it.
+      // Only a CODE can have been consumed at this point (email invites are
+      // consumed after success), so just give the code use back.
       if (claimedCodeId) {
         await admin.rpc("release_invite_code", { p_code: code });
-      }
-      if (claimedInviteId) {
-        await admin.from("invites")
-          .update({ status: "pending", activated_at: null })
-          .eq("id", claimedInviteId);
       }
       const msg = (createErr?.message ?? "").toLowerCase();
       if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
@@ -102,8 +112,15 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, error: "SIGNUP_FAILED" });
     }
 
+    // Account exists — NOW consume the email invite (best-effort; the account is
+    // already created, and the invite row doubles as the audit trail).
+    if (claimedInviteId) {
+      await admin.from("invites")
+        .update({ status: "activated", activated_at: new Date().toISOString() })
+        .eq("id", claimedInviteId);
+    }
+
     // Audit the code redemption (best-effort — the account already exists).
-    // Email invites are their own audit trail: the invites row is now activated.
     if (claimedCodeId) {
       await admin.from("code_redemptions").insert({
         code_id: claimedCodeId,
