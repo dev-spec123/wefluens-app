@@ -145,6 +145,7 @@ enum L10n: String {
     case profileSignOut
     case inviteFriendTitle, inviteFriendSubtitle, inviteFriendIntro, inviteFriendRemaining
     case inviteFriendShare, inviteFriendCopy, inviteFriendCopied, inviteFriendShareMessage
+    case inviteFriendByEmail, inviteFriendNoneLeft
     case faqTitle
     case weListeningTitle
     case supportFormTitle, supportSubjectField, supportMessageField
@@ -186,7 +187,7 @@ enum L10n: String {
     case adminBadge
     case adminInvite, adminInviteTitle, adminInviteSubtitle, adminInviteEmailPlaceholder
     case adminInviteSend, adminInviteSent, adminInviteErrInvalid, adminInviteErrExists
-    case adminInviteErrEmail, adminInviteErrSend, adminInviteErrGeneric
+    case adminInviteErrGeneric
     // Discover admin editors (brand / campaign icon upload, brand picker, deadline)
     case adminUploadIcon, adminPickBrand, adminPickBrandNone, adminDeadline
 
@@ -431,6 +432,8 @@ final class LocalizationManager {
             .inviteFriendCopy: "Copy",
             .inviteFriendCopied: "Copied",
             .inviteFriendShareMessage: "Join me on Wefluens Connect — use my invite code:",
+            .inviteFriendByEmail: "Invite by email",
+            .inviteFriendNoneLeft: "You're out of invites right now.",
             .settingsTitle: "Settings", .settingsLanguage: "Language",
             .settingsLanguageFooter: "Choose your preferred language. It applies across the whole app.",
             .settingsDone: "Done",
@@ -503,15 +506,13 @@ final class LocalizationManager {
             .adminStatusDeactivated: "Deactivated",
             .adminInvite: "Invite a User",
             .adminInviteTitle: "Invite a new user",
-            .adminInviteSubtitle: "Enter their email — we'll send an activation link. The initial password is 11111111.",
+            .adminInviteSubtitle: "Enter their email to approve it for sign-up. Then tell them to download the app and register with this exact email — no invite code needed.",
             .adminInviteEmailPlaceholder: "User's email",
-            .adminInviteSend: "Send Invite",
-            .adminInviteSent: "Invite sent! Ask them to check their inbox.",
+            .adminInviteSend: "Approve Email",
+            .adminInviteSent: "Done! That email can now sign up in the app.",
             .adminInviteErrInvalid: "That email doesn't look right",
             .adminInviteErrExists: "That email is already registered",
-            .adminInviteErrEmail: "Email service isn't configured yet — contact the developer",
-            .adminInviteErrSend: "Couldn't send the email — the sender domain or address was rejected. Please try again.",
-            .adminInviteErrGeneric: "Couldn't send the invite. Please try again.",
+            .adminInviteErrGeneric: "Couldn't add the invite. Please try again.",
             .reportTitle: "Report",
             .reportSubtitle: "Tell us what's wrong. Reports are confidential and reviewed within 24 hours.",
             .reportReasonSpam: "Spam or scam",
@@ -747,6 +748,8 @@ final class LocalizationManager {
             .inviteFriendCopy: "复制",
             .inviteFriendCopied: "已复制",
             .inviteFriendShareMessage: "加入我的 Wefluens Connect——使用我的邀请码：",
+            .inviteFriendByEmail: "通过邮箱邀请",
+            .inviteFriendNoneLeft: "你的邀请名额已用完。",
             .settingsTitle: "设置", .settingsLanguage: "语言",
             .settingsLanguageFooter: "选择你偏好的语言，将应用于整个 App。",
             .settingsDone: "完成",
@@ -819,15 +822,13 @@ final class LocalizationManager {
             .adminStatusDeactivated: "已注销",
             .adminInvite: "邀请用户",
             .adminInviteTitle: "邀请新用户",
-            .adminInviteSubtitle: "输入对方邮箱，我们会发送注册激活链接。初始密码为 11111111。",
+            .adminInviteSubtitle: "输入对方邮箱，即可将其加入注册白名单。之后请告诉对方下载 App，用这个邮箱直接注册，无需邀请码。",
             .adminInviteEmailPlaceholder: "用户邮箱",
-            .adminInviteSend: "发送邀请",
-            .adminInviteSent: "邀请已发送！请提醒对方查收邮件。",
+            .adminInviteSend: "批准邮箱",
+            .adminInviteSent: "完成！该邮箱现在可以在 App 内注册了。",
             .adminInviteErrInvalid: "邮箱格式不正确",
             .adminInviteErrExists: "该邮箱已注册",
-            .adminInviteErrEmail: "邮件服务尚未配置，请联系开发者",
-            .adminInviteErrSend: "邮件发送失败（发件域名或地址被拒），请稍后重试",
-            .adminInviteErrGeneric: "邀请发送失败，请重试。",
+            .adminInviteErrGeneric: "邀请添加失败，请重试。",
             .reportTitle: "举报",
             .reportSubtitle: "请告诉我们问题所在。举报内容将保密，并在 24 小时内处理。",
             .reportReasonSpam: "垃圾信息或诈骗",
@@ -1063,6 +1064,8 @@ final class LocalizationManager {
             .inviteFriendCopy: "Copiar",
             .inviteFriendCopied: "Copiado",
             .inviteFriendShareMessage: "Únete a mí en Wefluens Connect — usa mi código de invitación:",
+            .inviteFriendByEmail: "Invitar por correo",
+            .inviteFriendNoneLeft: "Te has quedado sin invitaciones.",
             .settingsTitle: "Ajustes", .settingsLanguage: "Idioma",
             .settingsLanguageFooter: "Elige tu idioma preferido. Se aplica en toda la app.",
             .settingsDone: "Hecho",
@@ -1135,15 +1138,13 @@ final class LocalizationManager {
             .adminStatusDeactivated: "Desactivado",
             .adminInvite: "Invitar a un Usuario",
             .adminInviteTitle: "Invitar a un nuevo usuario",
-            .adminInviteSubtitle: "Ingresa su correo — enviaremos un enlace de activación. La contraseña inicial es 11111111.",
+            .adminInviteSubtitle: "Ingresa su correo para aprobarlo. Luego dile que descargue la app y se registre con ese mismo correo — sin código de invitación.",
             .adminInviteEmailPlaceholder: "Correo del usuario",
-            .adminInviteSend: "Enviar Invitación",
-            .adminInviteSent: "¡Invitación enviada! Pídele que revise su correo.",
+            .adminInviteSend: "Aprobar Correo",
+            .adminInviteSent: "¡Listo! Ese correo ya puede registrarse en la app.",
             .adminInviteErrInvalid: "Ese correo no parece válido",
             .adminInviteErrExists: "Ese correo ya está registrado",
-            .adminInviteErrEmail: "El servicio de correo no está configurado — contacta al desarrollador",
-            .adminInviteErrSend: "No se pudo enviar el correo (dominio o dirección del remitente rechazada). Inténtalo de nuevo.",
-            .adminInviteErrGeneric: "No se pudo enviar la invitación. Inténtalo de nuevo.",
+            .adminInviteErrGeneric: "No se pudo agregar la invitación. Inténtalo de nuevo.",
             .reportTitle: "Reportar",
             .reportSubtitle: "Cuéntanos qué ocurre. Los reportes son confidenciales y se revisan en 24 horas.",
             .reportReasonSpam: "Spam o estafa",

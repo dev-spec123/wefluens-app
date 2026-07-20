@@ -21,6 +21,7 @@ struct InviteFriendView: View {
     @State private var isLoading = true
     @State private var loadFailed = false
     @State private var toast: String?
+    @State private var showEmailInvite = false
 
     private var shareText: String {
         guard let c = codeInfo else { return "" }
@@ -66,6 +67,11 @@ struct InviteFriendView: View {
                 }
             }
             .task { await load() }
+            .sheet(isPresented: $showEmailInvite) {
+                // Reuse the existing invite-by-email sheet (whitelists the email for
+                // signup); refresh the count after, since it spends one invite.
+                InviteUserSheet { Task { await load() } }
+            }
         }
     }
 
@@ -112,6 +118,23 @@ struct InviteFriendView: View {
                     pill(icon: "square.and.arrow.up", text: l10n.t(.inviteFriendShare), filled: true)
                 }
             }
+
+            // Invite a specific person by email — spends one of the same invites.
+            Button { showEmailInvite = true } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "envelope.fill").font(.system(size: 14, weight: .bold))
+                    Text(l10n.t(.inviteFriendByEmail)).font(.system(size: 15, weight: .semibold))
+                }
+                .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Theme.cardSubtle(for: colorScheme))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Theme.hairline(for: colorScheme), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .disabled(max(0, c.maxUses - c.uses) == 0)
+            .opacity(max(0, c.maxUses - c.uses) == 0 ? 0.5 : 1)
 
             Spacer()
         }
