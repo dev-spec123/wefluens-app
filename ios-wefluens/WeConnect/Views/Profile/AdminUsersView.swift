@@ -460,7 +460,8 @@ private struct UserRow: View {
 
 // MARK: - Invite User Sheet
 // Internal (not private) so the user-facing Invite a Friend screen can present it —
-// inviting by email is available to every user now, not just admins.
+// inviting by email is available to every user now, not just admins. No email is
+// sent: the entered address is whitelisted so it can sign up without a code.
 
 struct InviteUserSheet: View {
     @Environment(LocalizationManager.self) private var l10n
@@ -494,7 +495,7 @@ struct InviteUserSheet: View {
                         Circle()
                             .fill(Theme.sunset.opacity(0.15))
                             .frame(width: 84, height: 84)
-                        Image(systemName: "paperplane.fill")
+                        Image(systemName: "person.crop.circle.badge.checkmark")
                             .font(.system(size: 32, weight: .medium))
                             .foregroundStyle(Theme.coral)
                     }
@@ -635,8 +636,6 @@ struct InviteUserSheet: View {
         switch code {
         case "INVALID_EMAIL": return l10n.t(.adminInviteErrInvalid)
         case "ALREADY_REGISTERED": return l10n.t(.adminInviteErrExists)
-        case "EMAIL_NOT_CONFIGURED": return l10n.t(.adminInviteErrEmail)
-        case "EMAIL_SEND_FAILED": return l10n.t(.adminInviteErrSend)
         case "NO_INVITES_LEFT": return l10n.t(.inviteFriendNoneLeft)
         default: return l10n.t(.adminInviteErrGeneric)
         }

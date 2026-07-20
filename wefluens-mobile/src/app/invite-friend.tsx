@@ -26,7 +26,8 @@ export default function InviteFriend() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  // Invite by email — spends one of the same invites.
+  // Invite by email — whitelists the address for signup (no email is sent);
+  // spends one of the same invites.
   const [emailInput, setEmailInput] = useState('');
   const [sending, setSending] = useState(false);
   const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null);

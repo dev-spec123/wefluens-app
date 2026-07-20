@@ -68,8 +68,8 @@ struct InviteFriendView: View {
             }
             .task { await load() }
             .sheet(isPresented: $showEmailInvite) {
-                // Reuse the existing invite-by-email sheet; refresh the count after,
-                // since a sent invite spends one of this user's invites.
+                // Reuse the existing invite-by-email sheet (whitelists the email for
+                // signup); refresh the count after, since it spends one invite.
                 InviteUserSheet { Task { await load() } }
             }
         }
