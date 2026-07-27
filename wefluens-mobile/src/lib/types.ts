@@ -189,6 +189,51 @@ export interface Campaign {
   applied: boolean;
 }
 
+/** A Discover event an admin publishes and creators sign up to participate in.
+ *  Drafts (`published` false) only ever reach the admin screens — the public
+ *  Discover read filters them out server-side. */
+export interface Event {
+  id: string;
+  title: string;
+  description: string;
+  location: string;
+  /** ISO timestamps; null when the admin hasn't dated the event yet. */
+  startsAt: string | null;
+  endsAt: string | null;
+  /** Total participant slots; null = uncapped. */
+  capacity: number | null;
+  /** Remaining slots, derived server-side from the live signup count. Null when
+   *  uncapped (the UI then shows no spots figure). */
+  spotsLeft: number | null;
+  tags: string[];
+  brand: string;
+  brandId: string | null;
+  symbol: string;
+  colors: [string, string];
+  /** Public URL of an admin-uploaded event icon; null = fall back to gradient+symbol. */
+  iconUrl: string | null;
+  /** False = draft (admin-only, rejects signups); true = live on Discover. */
+  published: boolean;
+  /** How many creators have signed up (server-side count). */
+  signupCount: number;
+  /** True when the current user has already signed up. */
+  signedUp: boolean;
+}
+
+/** One participant on an event's roster. Admin-only — influencers only ever see
+ *  the aggregate signup count. */
+export interface EventSignup {
+  id: string;
+  name: string;
+  handle: string;
+  role: string;
+  email: string;
+  avatarUrl: string | null;
+  followers: string;
+  /** ISO timestamp of when they signed up. */
+  signedUpAt: string | null;
+}
+
 // MARK: - Groups
 
 export interface GroupMember {

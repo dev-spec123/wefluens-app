@@ -12,6 +12,8 @@ struct DiscoverView: View {
 
     private var brands: [Brand] { data.brands }
     private var campaigns: [Campaign] { data.campaigns }
+    /// Published events only — the server read never returns drafts.
+    private var events: [Event] { data.events }
 
     /// "精选 / Featured" = brands an admin has featured (featured_rank not null), in rank order.
     private var featuredBrands: [Brand] {
@@ -36,6 +38,10 @@ struct DiscoverView: View {
     /// Seeded on appear; mutated optimistically by the apply/withdraw toggle.
     @State private var appliedIds: Set<UUID> = []
     @State private var applyError: String? = nil
+    /// Server-seeded set of signed-up event ids (source of truth =
+    /// list_my_event_signups), mutated optimistically by the sign-up toggle.
+    @State private var signedUpIds: Set<UUID> = []
+    @State private var signUpError: String? = nil
 
     private var filters: [(key: L10n, label: String)] {
         [
@@ -89,6 +95,7 @@ struct DiscoverView: View {
                     filterBar
                     featuredSection
                     hotSection
+                    eventsSection
                     campaignsSection
                 }
                 .padding(.bottom, 24)
@@ -98,6 +105,11 @@ struct DiscoverView: View {
             .navigationDestination(for: UUID.self) { id in
                 if let campaign = campaigns.first(where: { $0.id == id }) {
                     CampaignDetailView(campaign: campaign)
+                }
+            }
+            .navigationDestination(for: EventRoute.self) { route in
+                if let event = events.first(where: { $0.id == route.id }) {
+                    EventDetailView(event: event)
                 }
             }
             // Refresh on each appearance (e.g. returning from the admin curation
@@ -111,6 +123,12 @@ struct DiscoverView: View {
             )) {
                 Button("OK", role: .cancel) { applyError = nil }
             }
+            .alert(l10n.t(.discoverSignUpFailed), isPresented: Binding(
+                get: { signUpError != nil },
+                set: { if !$0 { signUpError = nil } }
+            )) {
+                Button("OK", role: .cancel) { signUpError = nil }
+            }
         }
     }
 
@@ -123,6 +141,12 @@ struct DiscoverView: View {
             // Fall back to seeding from the campaigns' own `applied` flag if the
             // dedicated applications read fails — the server still drives state.
             appliedIds = Set(data.campaigns.filter { $0.applied }.map { $0.id })
+        }
+        do {
+            let ids = try await data.loadMyEventSignups()
+            signedUpIds = Set(ids)
+        } catch {
+            signedUpIds = Set(data.events.filter { $0.signedUp }.map { $0.id })
         }
     }
 
@@ -158,7 +182,63 @@ struct DiscoverView: View {
         }
     }
 
+    // MARK: - Event sign-up
+
+    private func isSignedUp(_ event: Event) -> Bool {
+        signedUpIds.contains(event.id) || event.signedUp
+    }
+
+    private func toggleSignUp(_ event: Event) {
+        let currently = isSignedUp(event)
+        // A full event can still be left, just not joined.
+        if !currently && event.isFull { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            if currently { signedUpIds.remove(event.id) }
+            else { signedUpIds.insert(event.id) }
+        }
+        Task {
+            do {
+                if currently {
+                    try await data.cancelEventSignup(event.id)
+                } else {
+                    try await data.signUpForEvent(event.id)
+                }
+                await reload()
+            } catch {
+                withAnimation {
+                    if currently { signedUpIds.insert(event.id) }
+                    else { signedUpIds.remove(event.id) }
+                }
+                signUpError = error.localizedDescription
+            }
+        }
+    }
+
     // MARK: - Sections
+
+    /// Events an admin has published, soonest first (server-ordered). Hidden
+    /// entirely when there are none, so Discover looks unchanged until the first
+    /// event goes live.
+    @ViewBuilder
+    private var eventsSection: some View {
+        if !events.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionTitle(l10n.t(.discoverEvents))
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 14) {
+                        ForEach(events) { event in
+                            EventCard(
+                                event: event,
+                                signedUp: isSignedUp(event),
+                                onToggle: { toggleSignUp(event) }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                }
+            }
+        }
+    }
 
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -327,6 +407,104 @@ private struct BrandCard: View {
             RoundedRectangle(cornerRadius: 22)
                 .strokeBorder(selected ? Theme.coral : Color.clear, lineWidth: 2)
         )
+    }
+}
+
+/// A horizontal-strip card for one published event, with an inline sign-up toggle.
+private struct EventCard: View {
+    @Environment(LocalizationManager.self) private var l10n
+    @Environment(\.colorScheme) private var colorScheme
+    let event: Event
+    let signedUp: Bool
+    let onToggle: () -> Void
+
+    /// Full only blocks people who aren't already in.
+    private var isFull: Bool { event.isFull && !signedUp }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            NavigationLink(value: EventRoute(id: event.id)) {
+                VStack(alignment: .leading, spacing: 10) {
+                    DiscoverIcon(iconUrl: event.iconUrl, symbol: event.symbol, colors: event.colors,
+                                 size: 56, corner: 18, symbolSize: 24)
+
+                    Text(event.title)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(Theme.ink(for: colorScheme))
+                        .lineLimit(2)
+                        .frame(height: 42, alignment: .top)
+                        .multilineTextAlignment(.leading)
+
+                    HStack(spacing: 5) {
+                        Image(systemName: "calendar").font(.system(size: 11))
+                        Text(formatEventDate(event.startsAt, fallback: l10n.t(.eventDetailTBA)))
+                            .font(.system(size: 12, weight: .medium))
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+
+                    if !event.location.isEmpty {
+                        HStack(spacing: 5) {
+                            Image(systemName: "mappin.and.ellipse").font(.system(size: 11))
+                            Text(event.location)
+                                .font(.system(size: 12, weight: .medium))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                    }
+
+                    HStack(spacing: 5) {
+                        Image(systemName: "person.2.fill").font(.system(size: 10))
+                        Text("\(event.signupCount) \(l10n.t(.discoverParticipants))")
+                            .font(.system(size: 11.5, weight: .semibold))
+                    }
+                    .foregroundStyle(Theme.inkTertiary(for: colorScheme))
+                }
+                .frame(width: 200, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+
+            signUpButton
+        }
+        .padding(16)
+        .frame(width: 232, alignment: .leading)
+        .cardStyle(cornerRadius: 22)
+    }
+
+    @ViewBuilder
+    private var signUpButton: some View {
+        if signedUp {
+            Button(action: onToggle) {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 13))
+                    Text(l10n.t(.discoverJoined)).font(.system(size: 13.5, weight: .bold))
+                }
+                .foregroundStyle(Theme.coral)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 9)
+                .background(Theme.coral.opacity(0.08), in: Capsule())
+                .overlay(Capsule().strokeBorder(Theme.coral, lineWidth: 1.5))
+            }
+            .buttonStyle(.plain)
+        } else if isFull {
+            Text(l10n.t(.discoverEventFull))
+                .font(.system(size: 13.5, weight: .bold))
+                .foregroundStyle(Theme.inkSecondary(for: colorScheme))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 9)
+                .background(Theme.inkTertiary(for: colorScheme).opacity(0.15), in: Capsule())
+        } else {
+            Button(action: onToggle) {
+                Text(l10n.t(.discoverJoin))
+                    .font(.system(size: 13.5, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Theme.sunset)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
     }
 }
 

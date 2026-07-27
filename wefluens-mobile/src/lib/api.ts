@@ -44,8 +44,9 @@ async function maybeCompressVideo(uri: string): Promise<string> {
   }
 }
 import type {
-  AdminUser, Brand, Campaign, ChatMessage, Contact, Conversation, FriendRequest,
-  GroupMember, GroupMessage, ProfileRow, ReportReason, SearchUserResult, UserProfile,
+  AdminUser, Brand, Campaign, ChatMessage, Contact, Conversation, Event, EventSignup,
+  FriendRequest, GroupMember, GroupMessage, ProfileRow, ReportReason, SearchUserResult,
+  UserProfile,
 } from './types';
 
 // ─────────────────────────── Profile ───────────────────────────
@@ -882,20 +883,67 @@ function mapDiscoverCampaign(r: any): Campaign {
   };
 }
 
-export async function loadDiscover(): Promise<{ brands: Brand[]; campaigns: Campaign[] }> {
+/** Map a list_discover_events() / list_admin_events() row to an Event. Both RPCs
+ *  return the same columns on purpose, so one mapper serves drafts and live rows. */
+function mapEvent(r: any): Event {
+  return {
+    id: r.id,
+    title: r.title,
+    description: r.description ?? '',
+    location: r.location ?? '',
+    startsAt: r.starts_at ?? null,
+    endsAt: r.ends_at ?? null,
+    capacity: r.capacity ?? null,
+    spotsLeft: r.spots_left ?? null,
+    tags: r.tags ?? [],
+    brand: r.brand ?? '',
+    brandId: r.brand_id ?? null,
+    symbol: r.symbol ?? 'calendar',
+    colors: parseColors(r.colors),
+    iconUrl: r.icon_url ?? null,
+    published: !!r.published,
+    signupCount: Number(r.signup_count ?? 0),
+    signedUp: !!r.signed_up,
+  };
+}
+
+export async function loadDiscover(): Promise<{ brands: Brand[]; campaigns: Campaign[]; events: Event[] }> {
   try {
-    const [{ data: b, error: be }, { data: c, error: ce }] = await Promise.all([
+    // Each read is independent: a failure in one shouldn't blank the others, so
+    // they're settled separately rather than short-circuiting the whole load.
+    const [b, c, e] = await Promise.all([
       supabase.rpc('list_discover_brands'),
       supabase.rpc('list_discover_campaigns'),
+      supabase.rpc('list_discover_events'),
     ]);
-    if (be || ce) return { brands: [], campaigns: [] };
     return {
-      brands: ((b as any[]) ?? []).map(mapDiscoverBrand),
-      campaigns: ((c as any[]) ?? []).map(mapDiscoverCampaign),
+      brands: b.error ? [] : ((b.data as any[]) ?? []).map(mapDiscoverBrand),
+      campaigns: c.error ? [] : ((c.data as any[]) ?? []).map(mapDiscoverCampaign),
+      events: e.error ? [] : ((e.data as any[]) ?? []).map(mapEvent),
     };
   } catch {
-    return { brands: [], campaigns: [] };
+    return { brands: [], campaigns: [], events: [] };
   }
+}
+
+/** Sign up for a published event. The server rejects drafts and full events, so
+ *  callers surface the error rather than assuming success. */
+export async function signUpForEvent(eventId: string): Promise<void> {
+  const { error } = await supabase.rpc('sign_up_for_event', { p_event: eventId });
+  if (error) throw error;
+}
+
+/** Cancel the caller's signup (frees the slot). */
+export async function cancelEventSignup(eventId: string): Promise<void> {
+  const { error } = await supabase.rpc('cancel_event_signup', { p_event: eventId });
+  if (error) throw error;
+}
+
+/** The caller's signed-up event ids — the server is the source of truth. */
+export async function loadMyEventSignups(): Promise<string[]> {
+  const { data, error } = await supabase.rpc('list_my_event_signups');
+  if (error || !data) return [];
+  return (data as any[]).map((row) => (typeof row === 'string' ? row : (row.id ?? row))).filter(Boolean);
 }
 
 /** Apply to a campaign (idempotent; server decrements spots_left once). */
@@ -921,7 +969,7 @@ export async function loadMyApplications(): Promise<string[]> {
 
 /** Uploads a brand/campaign icon to the public `discover` bucket and returns its
  *  public URL (stored on the row via the admin upsert RPCs). */
-export async function uploadDiscoverIcon(kind: 'brands' | 'campaigns', id: string, uri: string): Promise<string> {
+export async function uploadDiscoverIcon(kind: 'brands' | 'campaigns' | 'events', id: string, uri: string): Promise<string> {
   const img = await maybeCompressImage(uri);
   const path = `${kind}/${id}-${cryptoRandom()}.jpg`;
   await uploadFile('discover', path, img.uri, 'image/jpeg', true);
@@ -1077,6 +1125,89 @@ export async function adminUpsertCampaign(args: {
 /** Admin: delete a campaign (admin_delete_campaign RPC). */
 export async function adminDeleteCampaign(id: string): Promise<void> {
   const { error } = await supabase.rpc('admin_delete_campaign', { target: id });
+  if (error) throw error;
+}
+
+// ─────────────────── Admin event curation (is_admin-gated RPCs) ───────────────────
+
+/** Admin: every event INCLUDING drafts, drafts first. Mirrors Swift's
+ *  loadEventsForAdmin. The public Discover read only returns published rows. */
+export async function loadEventsForAdmin(): Promise<Event[]> {
+  const { data, error } = await supabase.rpc('list_admin_events');
+  if (error) throw error;
+  return ((data as any[]) ?? []).map(mapEvent);
+}
+
+/** Admin: create (id null) or update an event. Deliberately does NOT change the
+ *  published flag — that's adminSetEventPublished, so saving an edit can never
+ *  take a draft live by accident. Returns the event id. */
+export async function adminUpsertEvent(args: {
+  id?: string | null;
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  /** ISO timestamps. */
+  startsAt?: string | null;
+  endsAt?: string | null;
+  capacity?: number | null;
+  tags?: string[] | null;
+  brand?: string | null;
+  brandId?: string | null;
+  symbol?: string | null;
+  color1?: string;
+  color2?: string;
+  iconUrl?: string | null;
+}): Promise<string> {
+  // colors/symbol are only the DEFAULT fallback look (an uploaded icon takes
+  // over), so send the brand defaults the rest of Discover uses.
+  const a = hexToInt(args.color1 ?? '', 0xff4d6d);
+  const b = hexToInt(args.color2 ?? '', 0xff9a5a);
+  const { data, error } = await supabase.rpc('admin_upsert_event', {
+    event_id: args.id ?? null,
+    p_title: args.title,
+    p_description: args.description ?? null,
+    p_location: args.location ?? null,
+    p_starts_at: args.startsAt ?? null,
+    p_ends_at: args.endsAt ?? null,
+    p_capacity: args.capacity ?? null,
+    p_tags: args.tags ?? null,
+    p_brand: args.brand ?? null,
+    p_brand_id: args.brandId ?? null,
+    p_symbol: args.symbol ?? null,
+    p_color_a: String(a),
+    p_color_b: String(b),
+    p_icon_url: args.iconUrl ?? null,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+/** Admin: publish an event to Discover (true) or pull it back to draft (false). */
+export async function adminSetEventPublished(id: string, published: boolean): Promise<void> {
+  const { error } = await supabase.rpc('admin_set_event_published', { target: id, make_published: published });
+  if (error) throw error;
+}
+
+/** Admin: the participant roster for one event, newest signup first. The RPC is
+ *  is_admin-gated server-side, so a non-admin caller gets an empty list. */
+export async function loadEventSignups(eventId: string): Promise<EventSignup[]> {
+  const { data, error } = await supabase.rpc('admin_list_event_signups', { p_event: eventId });
+  if (error) throw error;
+  return ((data as any[]) ?? []).map((r) => ({
+    id: r.id,
+    name: r.name ?? '',
+    handle: r.handle ?? '',
+    role: r.role ?? '',
+    email: r.email ?? '',
+    avatarUrl: r.avatar_url ?? null,
+    followers: r.followers ?? '',
+    signedUpAt: r.signed_up_at ?? null,
+  }));
+}
+
+/** Admin: delete an event (cascades its signups). */
+export async function adminDeleteEvent(id: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_delete_event', { target: id });
   if (error) throw error;
 }
 

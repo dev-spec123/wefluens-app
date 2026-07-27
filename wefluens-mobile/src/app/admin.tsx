@@ -214,6 +214,12 @@ export default function Admin() {
                     title={t('adminManageCampaigns')}
                     onPress={() => router.push('/admin/campaigns' as Href)}
                   />
+                  <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: 60 }} />
+                  <CurationRow
+                    icon="calendar"
+                    title={t('adminManageEvents')}
+                    onPress={() => router.push('/admin/events' as Href)}
+                  />
                 </Card>
               </View>
               <View style={styles.header}>

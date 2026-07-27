@@ -29,6 +29,9 @@ struct DeveloperPanelView: View {
                     navRow(icon: "megaphone.fill", title: "Manage Campaigns",
                            subtitle: "Publish, edit, delete open campaigns") { ManageCampaignsView() }
                     rowDivider
+                    navRow(icon: "calendar.badge.plus", title: "Manage Events",
+                           subtitle: "Draft, publish & fill Discover events") { ManageEventsView() }
+                    rowDivider
                     navRow(icon: "ticket.fill", title: "Invite Codes",
                            subtitle: "Mint & manage invite codes") { InviteCodesView() }
                 }
