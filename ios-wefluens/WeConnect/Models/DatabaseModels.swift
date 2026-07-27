@@ -950,3 +950,95 @@ nonisolated struct DeleteCampaignParams: Encodable, Sendable {
 nonisolated struct CampaignApplyParams: Encodable, Sendable {
     let p_campaign: String
 }
+
+// MARK: - Event
+
+/// Decodes both `list_discover_events` and `list_admin_events` — they return the
+/// same columns on purpose, so drafts and live rows share one decoder.
+nonisolated struct EventRow: Codable, Identifiable, Sendable {
+    let id: UUID
+    let title: String
+    let description: String?
+    let location: String?
+    let startsAt: Date?
+    let endsAt: Date?
+    let capacity: Int?
+    /// Derived server-side (capacity − signups); nil when the event is uncapped.
+    let spotsLeft: Int?
+    let tags: [String]?
+    let brand: String?
+    let brandId: UUID?
+    let symbol: String?
+    let colors: String?
+    let iconUrl: String?
+    let published: Bool?
+    let signupCount: Int?
+    let signedUp: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, description, location, capacity, tags, brand, symbol, colors, published
+        case startsAt = "starts_at"
+        case endsAt = "ends_at"
+        case spotsLeft = "spots_left"
+        case brandId = "brand_id"
+        case iconUrl = "icon_url"
+        case signupCount = "signup_count"
+        case signedUp = "signed_up"
+    }
+}
+
+// MARK: - Admin event curation RPC params
+//
+// Property names match the `admin_upsert_event` / `admin_set_event_published` /
+// `admin_delete_event` SQL named params EXACTLY. Timestamps travel as ISO-8601
+// strings so this encoder never has to agree with the client's date strategy.
+
+nonisolated struct UpsertEventParams: Encodable, Sendable {
+    let event_id: String?
+    let p_title: String
+    let p_description: String?
+    let p_location: String?
+    let p_starts_at: String?
+    let p_ends_at: String?
+    let p_capacity: Int?
+    let p_tags: [String]?
+    let p_brand: String?
+    let p_brand_id: String?
+    let p_symbol: String?
+    let p_color_a: String?
+    let p_color_b: String?
+    let p_icon_url: String?
+}
+
+nonisolated struct SetEventPublishedParams: Encodable, Sendable {
+    let target: String
+    let make_published: Bool
+}
+
+nonisolated struct DeleteEventParams: Encodable, Sendable {
+    let target: String
+}
+
+/// Matches the `sign_up_for_event` / `cancel_event_signup` named param `p_event`.
+nonisolated struct EventSignupParams: Encodable, Sendable {
+    let p_event: String
+}
+
+/// One participant on an event's roster (from `admin_list_event_signups`).
+/// Admin-only — influencers only ever see the aggregate signup count.
+nonisolated struct EventSignupRow: Codable, Identifiable, Sendable {
+    let id: UUID
+    let name: String
+    let handle: String
+    let role: String
+    let email: String
+    let avatarUrl: String?
+    let followers: String
+    let signedUpAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, handle, role, email, followers
+        case avatarUrl = "avatar_url"
+        case signedUpAt = "signed_up_at"
+    }
+}

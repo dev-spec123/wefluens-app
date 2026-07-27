@@ -9,7 +9,7 @@ import * as api from '@/lib/api';
 import { getMutedSet, getPinnedSet } from '@/lib/convPrefs';
 import { supabase } from '@/lib/supabase';
 import { getCachedMessages, getMemCachedMessages, setCachedMessages } from '@/lib/messageCache';
-import type { Brand, Campaign, Contact, Conversation, FriendRequest } from '@/lib/types';
+import type { Brand, Campaign, Contact, Conversation, Event, FriendRequest } from '@/lib/types';
 import { useAuth } from './AuthContext';
 
 interface AppDataValue {
@@ -21,6 +21,8 @@ interface AppDataValue {
   friendRequests: FriendRequest[];
   brands: Brand[];
   campaigns: Campaign[];
+  /** Published Discover events (drafts never reach here — the server filters them). */
+  events: Event[];
   unreadTotal: number;
   loadingConversations: boolean;
   loadingContacts: boolean;
@@ -46,6 +48,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(false);
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [friendAcceptedNames, setFriendAcceptedNames] = useState<string[]>([]);
@@ -99,9 +102,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, [userId]);
 
   const refreshDiscover = useCallback(async () => {
-    const { brands: b, campaigns: c } = await api.loadDiscover();
+    const { brands: b, campaigns: c, events: e } = await api.loadDiscover();
     setBrands(b);
     setCampaigns(c);
+    setEvents(e);
   }, []);
 
   const block = useCallback(async (otherId: string) => {
@@ -167,10 +171,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<AppDataValue>(() => ({
-    blockedIds, mutedIds, pinnedIds, conversations, contacts, friendRequests, brands, campaigns, unreadTotal,
+    blockedIds, mutedIds, pinnedIds, conversations, contacts, friendRequests, brands, campaigns, events, unreadTotal,
     loadingConversations, loadingContacts, friendAcceptedNames, acknowledgeFriendAccepted,
     refreshConversations, refreshContacts, refreshDiscover, block, unblock,
-  }), [blockedIds, mutedIds, pinnedIds, conversations, contacts, friendRequests, brands, campaigns, unreadTotal,
+  }), [blockedIds, mutedIds, pinnedIds, conversations, contacts, friendRequests, brands, campaigns, events, unreadTotal,
     loadingConversations, loadingContacts, friendAcceptedNames, acknowledgeFriendAccepted,
     refreshConversations, refreshContacts, refreshDiscover, block, unblock]);
 

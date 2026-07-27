@@ -392,6 +392,70 @@ struct Campaign: Identifiable {
     }
 }
 
+/// A Discover event an admin publishes and creators sign up to participate in.
+/// Drafts (`published == false`) only ever reach the admin screens — the public
+/// Discover read filters them out server-side.
+struct Event: Identifiable {
+    let id: UUID
+    let title: String
+    let description: String
+    let location: String
+    /// Start/end instants. Nil when the admin hasn't dated the event yet.
+    let startsAt: Date?
+    let endsAt: Date?
+    /// Total participant slots; nil = uncapped.
+    let capacity: Int?
+    /// Remaining slots, derived server-side from the live signup count. Nil when
+    /// the event is uncapped (the UI then shows no spots figure).
+    let spotsLeft: Int?
+    let tags: [String]
+    let brand: String
+    let brandId: UUID?
+    let symbol: String
+    let colors: [UInt]
+    /// Public URL of an uploaded event icon (in the `discover` Storage bucket).
+    /// Nil falls back to the gradient + SF-symbol look, like brands/campaigns.
+    let iconUrl: String?
+    /// False = draft (admin-only, rejects signups); true = live on Discover.
+    let published: Bool
+    /// How many creators have signed up (server-side count).
+    let signupCount: Int
+    /// True when the current user has already signed up.
+    let signedUp: Bool
+
+    /// True when the event is capped and every slot is taken — the sign-up button
+    /// renders disabled rather than failing the RPC.
+    var isFull: Bool {
+        guard let spotsLeft else { return false }
+        return spotsLeft <= 0
+    }
+
+    init(id: UUID = UUID(), title: String, description: String = "", location: String = "",
+         startsAt: Date? = nil, endsAt: Date? = nil, capacity: Int? = nil, spotsLeft: Int? = nil,
+         tags: [String] = [], brand: String = "", brandId: UUID? = nil,
+         symbol: String = "calendar", colors: [UInt] = [0xFF4D6D, 0xFF9A5A],
+         iconUrl: String? = nil, published: Bool = false,
+         signupCount: Int = 0, signedUp: Bool = false) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.location = location
+        self.startsAt = startsAt
+        self.endsAt = endsAt
+        self.capacity = capacity
+        self.spotsLeft = spotsLeft
+        self.tags = tags
+        self.brand = brand
+        self.brandId = brandId
+        self.symbol = symbol
+        self.colors = colors
+        self.iconUrl = iconUrl
+        self.published = published
+        self.signupCount = signupCount
+        self.signedUp = signedUp
+    }
+}
+
 // MARK: - User
 
 struct UserProfile {

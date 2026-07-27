@@ -8,12 +8,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState, TagChip } from '@/components/ui';
 import { useAppData } from '@/context/AppDataContext';
-import { applyToCampaign, withdrawFromCampaign } from '@/lib/api';
+import { applyToCampaign, cancelEventSignup, loadMyEventSignups, signUpForEvent, withdrawFromCampaign } from '@/lib/api';
 import { seedAppliedCampaigns, setLocalCampaignApplied } from '@/lib/campaignApplications';
 import { notify } from '@/lib/dialog';
 import { useI18n } from '@/lib/i18n';
 import { radius, space, useTheme } from '@/lib/theme';
-import type { Brand, Campaign } from '@/lib/types';
+import type { Brand, Campaign, Event } from '@/lib/types';
 
 /** Map an SF Symbol-ish name from the backend to an Ionicons glyph. */
 function iconFor(symbol: string): keyof typeof Ionicons.glyphMap {
@@ -53,6 +53,18 @@ function formatDeadline(raw: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+/** "Sat, 12 Jul \u00b7 7:00 PM" — the one date style used across the event surfaces.
+ *  Returns the fallback when the event has no start date yet. */
+function formatEventDate(raw: string | null, fallback: string): string {
+  if (!raw) return fallback;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return fallback;
+  return d.toLocaleString(undefined, {
+    weekday: 'short', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  });
+}
+
 const FILTERS = [
   { key: 'filterAll', match: null },
   { key: 'filterBeauty', match: 'beauty' },
@@ -65,7 +77,7 @@ export default function DiscoverScreen() {
   const c = useTheme();
   const { t } = useI18n();
   const router = useRouter();
-  const { brands, campaigns, refreshDiscover } = useAppData();
+  const { brands, campaigns, events, refreshDiscover } = useAppData();
 
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<string>('filterAll');
@@ -77,11 +89,25 @@ export default function DiscoverScreen() {
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  // Server-seeded signed-up state, keyed by event id. Seeded from each event's
+  // own signed_up flag, then refined against list_my_event_signups.
+  const [signedUpIds, setSignedUpIds] = useState<Set<string>>(new Set());
+  const [busyEventId, setBusyEventId] = useState<string | null>(null);
+
   useEffect(() => {
     const ids = campaigns.filter((cm) => cm.applied).map((cm) => cm.id);
     setAppliedIds(new Set(ids));
     void seedAppliedCampaigns(ids);
   }, [campaigns]);
+
+  useEffect(() => {
+    setSignedUpIds(new Set(events.filter((e) => e.signedUp).map((e) => e.id)));
+    let active = true;
+    loadMyEventSignups()
+      .then((ids) => { if (active && ids.length) setSignedUpIds(new Set(ids)); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [events]);
 
   async function onRefresh() {
     setRefreshing(true);
@@ -95,6 +121,40 @@ export default function DiscoverScreen() {
   function openCampaign(campaign: Campaign) {
     router.push({ pathname: '/campaign/[id]', params: { id: campaign.id } });
   }
+
+  function openEvent(event: Event) {
+    router.push({ pathname: '/event/[id]', params: { id: event.id } });
+  }
+
+  // Sign up / cancel toggle with optimistic UI + server refresh, mirroring the
+  // campaign apply toggle. A full event can be left but not joined.
+  const toggleSignUp = useCallback(async (event: Event) => {
+    if (busyEventId) return;
+    const id = event.id;
+    const wasSignedUp = signedUpIds.has(id);
+    const isFull = event.spotsLeft != null && event.spotsLeft <= 0;
+    if (!wasSignedUp && isFull) return;
+    setBusyEventId(id);
+    setSignedUpIds((prev) => {
+      const next = new Set(prev);
+      if (wasSignedUp) next.delete(id); else next.add(id);
+      return next;
+    });
+    try {
+      if (wasSignedUp) await cancelEventSignup(id);
+      else await signUpForEvent(id);
+      await refreshDiscover();
+    } catch {
+      setSignedUpIds((prev) => {
+        const next = new Set(prev);
+        if (wasSignedUp) next.add(id); else next.delete(id);
+        return next;
+      });
+      notify(t('discoverSignUpFailed'));
+    } finally {
+      setBusyEventId(null);
+    }
+  }, [busyEventId, refreshDiscover, signedUpIds, t]);
 
   // Apply / withdraw toggle with optimistic UI + server refresh. The server is
   // the source of truth: on success we refresh so spots_left / application_count
@@ -156,7 +216,7 @@ export default function DiscoverScreen() {
     return matched.length > 0 ? matched : campaigns;
   }, [campaigns, filter, selectedBrand]);
 
-  const hasContent = brands.length > 0 || campaigns.length > 0;
+  const hasContent = brands.length > 0 || campaigns.length > 0 || events.length > 0;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.paper }} edges={['top']}>
@@ -221,6 +281,33 @@ export default function DiscoverScreen() {
                       brand={brand}
                       selected={selectedBrand === brand.name}
                       onPress={() => setSelectedBrand((cur) => (cur === brand.name ? null : brand.name))}
+                    />
+                  ))}
+                </ScrollView>
+              </>
+            ) : null}
+
+            {/* Events — admin-published, soonest first (server-ordered). Hidden
+                entirely when there are none, so Discover looks unchanged until
+                the first event goes live. */}
+            {events.length > 0 ? (
+              <>
+                <Text style={[styles.sectionTitle, { color: c.ink, marginTop: 26 }]}>
+                  {t('discoverEvents')}
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.brandRow}
+                >
+                  {events.map((event) => (
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      signedUp={signedUpIds.has(event.id)}
+                      busy={busyEventId === event.id}
+                      onPress={() => openEvent(event)}
+                      onToggle={() => toggleSignUp(event)}
                     />
                   ))}
                 </ScrollView>
@@ -334,6 +421,80 @@ function BrandCard({ brand, selected, onPress }: { brand: Brand; selected: boole
           {brand.activeCampaigns} {t('discoverActive')}
         </Text>
       </View>
+    </Pressable>
+  );
+}
+
+/** A horizontal-strip card for one published event, with an inline sign-up toggle. */
+function EventCard({
+  event, signedUp, busy, onPress, onToggle,
+}: {
+  event: Event; signedUp: boolean; busy: boolean;
+  onPress: () => void; onToggle: () => void;
+}) {
+  const c = useTheme();
+  const { t } = useI18n();
+  // Full only blocks people who aren't already in — their own slot is theirs.
+  const isFull = event.spotsLeft != null && event.spotsLeft <= 0 && !signedUp;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.eventCard,
+        { backgroundColor: pressed ? c.cardSubtle : c.card, borderColor: c.hairline },
+      ]}
+    >
+      <DiscoverIcon iconUrl={event.iconUrl} colors={event.colors} symbol={event.symbol} size={56} rounding={18} />
+
+      <Text style={[styles.eventTitle, { color: c.ink }]} numberOfLines={2}>{event.title}</Text>
+
+      <View style={styles.eventInfoRow}>
+        <Ionicons name="calendar-outline" size={12} color={c.inkSecondary} />
+        <Text style={[styles.eventInfoText, { color: c.inkSecondary }]} numberOfLines={1}>
+          {formatEventDate(event.startsAt, t('eventDetailTBA'))}
+        </Text>
+      </View>
+
+      {event.location ? (
+        <View style={styles.eventInfoRow}>
+          <Ionicons name="location-outline" size={12} color={c.inkTertiary} />
+          <Text style={[styles.eventInfoText, { color: c.inkTertiary }]} numberOfLines={1}>
+            {event.location}
+          </Text>
+        </View>
+      ) : null}
+
+      <View style={styles.eventInfoRow}>
+        <Ionicons name="people-outline" size={12} color={c.inkTertiary} />
+        <Text style={[styles.eventCount, { color: c.inkTertiary }]}>
+          {event.signupCount} {t('discoverParticipants')}
+        </Text>
+      </View>
+
+      {isFull ? (
+        <View style={[styles.eventBtn, { backgroundColor: c.inkTertiary + '26', borderColor: 'transparent' }]}>
+          <Text style={[styles.eventBtnText, { color: c.inkSecondary }]}>{t('discoverEventFull')}</Text>
+        </View>
+      ) : (
+        <Pressable
+          onPress={onToggle}
+          disabled={busy}
+          hitSlop={6}
+          style={[
+            styles.eventBtn,
+            signedUp
+              ? { backgroundColor: c.coral + '14', borderColor: c.coral }
+              : { backgroundColor: c.coral, borderColor: c.coral },
+            busy && { opacity: 0.6 },
+          ]}
+        >
+          {signedUp ? <Ionicons name="checkmark" size={14} color={c.coral} /> : null}
+          <Text style={[styles.eventBtnText, { color: signedUp ? c.coral : '#fff' }]}>
+            {signedUp ? t('discoverJoined') : t('discoverJoin')}
+          </Text>
+        </Pressable>
+      )}
     </Pressable>
   );
 }
@@ -454,6 +615,24 @@ const styles = StyleSheet.create({
   brandActiveRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   brandActiveText: { fontSize: 12, fontWeight: '600' },
+
+  eventCard: {
+    width: 232,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    padding: 16,
+    gap: 8,
+  },
+  eventTitle: { fontSize: 16, fontWeight: '700', marginTop: 4, height: 42 },
+  eventInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  eventInfoText: { fontSize: 12, fontWeight: '500', flex: 1 },
+  eventCount: { fontSize: 11.5, fontWeight: '600' },
+  eventBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
+    borderRadius: radius.pill, borderWidth: 1.5,
+    paddingVertical: 9, marginTop: 4,
+  },
+  eventBtnText: { fontSize: 13.5, fontWeight: '700' },
 
   campaignList: { paddingHorizontal: 18, gap: 14 },
   campaignCard: {

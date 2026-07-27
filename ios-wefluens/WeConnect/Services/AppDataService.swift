@@ -20,6 +20,9 @@ final class AppDataService {
     var friendAcceptedNames: [String] = []
     var brands: [Brand] = []
     var campaigns: [Campaign] = []
+    /// Published Discover events (drafts never reach this list — the server read
+    /// filters them out). Admin screens load drafts separately.
+    var events: [Event] = []
     var profile: UserProfile?
 
     /// UUIDs of users I've blocked. Maintained in memory and refreshed by
@@ -913,6 +916,69 @@ final class AppDataService {
     func adminDeleteCampaign(id: UUID) async throws {
         try await supabase
             .rpc("admin_delete_campaign", params: DeleteCampaignParams(target: id.uuidString))
+            .execute()
+    }
+
+    // MARK: - Admin event curation
+
+    /// Every event INCLUDING drafts, drafts first (they're the ones awaiting a
+    /// publish). The public Discover read only ever returns published rows.
+    @MainActor
+    func loadEventsForAdmin() async throws -> [Event] {
+        let rows: [EventRow] = try await supabase
+            .rpc("list_admin_events")
+            .execute()
+            .value
+        return rows.map(Self.mapEvent)
+    }
+
+    /// Create (id nil) or update an event. Returns the event id. Deliberately does
+    /// NOT change the published flag — that's `adminSetEventPublished`, so saving
+    /// an edit can never take a draft live by accident.
+    @MainActor
+    @discardableResult
+    func adminUpsertEvent(id: UUID?, title: String, description: String?, location: String?,
+                          startsAt: Date?, endsAt: Date?, capacity: Int?, tags: [String]?,
+                          brand: String?, brandId: UUID?, symbol: String?,
+                          colorA: String?, colorB: String?, iconUrl: String? = nil) async throws -> UUID {
+        let iso = ISO8601DateFormatter()
+        let newId: UUID = try await supabase
+            .rpc("admin_upsert_event", params: UpsertEventParams(
+                event_id: id?.uuidString, p_title: title, p_description: description,
+                p_location: location,
+                p_starts_at: startsAt.map { iso.string(from: $0) },
+                p_ends_at: endsAt.map { iso.string(from: $0) },
+                p_capacity: capacity, p_tags: tags, p_brand: brand,
+                p_brand_id: brandId?.uuidString, p_symbol: symbol,
+                p_color_a: colorA, p_color_b: colorB, p_icon_url: iconUrl))
+            .execute()
+            .value
+        return newId
+    }
+
+    /// Publishes an event to Discover (true) or pulls it back to draft (false).
+    @MainActor
+    func adminSetEventPublished(id: UUID, published: Bool) async throws {
+        try await supabase
+            .rpc("admin_set_event_published",
+                 params: SetEventPublishedParams(target: id.uuidString, make_published: published))
+            .execute()
+    }
+
+    /// The participant roster for one event, newest signup first. Admin-gated
+    /// server-side — a non-admin caller gets an empty list, not an error.
+    @MainActor
+    func loadEventSignups(eventId: UUID) async throws -> [EventSignupRow] {
+        try await supabase
+            .rpc("admin_list_event_signups", params: EventSignupParams(p_event: eventId.uuidString))
+            .execute()
+            .value
+    }
+
+    @MainActor
+    func adminDeleteEvent(id: UUID) async throws {
+        try await supabase
+            .rpc("admin_delete_event", params: DeleteEventParams(target: id.uuidString))
             .execute()
     }
 
@@ -2160,6 +2226,56 @@ final class AppDataService {
         } catch {
             print("⚠️ Campaigns load failed: \(error)")
         }
+
+        do {
+            let eRows: [EventRow] = try await supabase
+                .rpc("list_discover_events")
+                .execute()
+                .value
+            events = eRows.map(Self.mapEvent)
+        } catch {
+            print("⚠️ Events load failed: \(error)")
+        }
+    }
+
+    /// Shared EventRow → Event mapping for both the Discover and admin reads (the
+    /// two RPCs return identical columns).
+    nonisolated static func mapEvent(_ row: EventRow) -> Event {
+        Event(
+            id: row.id, title: row.title, description: row.description ?? "",
+            location: row.location ?? "", startsAt: row.startsAt, endsAt: row.endsAt,
+            capacity: row.capacity, spotsLeft: row.spotsLeft, tags: row.tags ?? [],
+            brand: row.brand ?? "", brandId: row.brandId,
+            symbol: row.symbol ?? "calendar", colors: parseColors(row.colors),
+            iconUrl: row.iconUrl, published: row.published ?? false,
+            signupCount: row.signupCount ?? 0, signedUp: row.signedUp ?? false
+        )
+    }
+
+    /// Signs the current user up for a published event. The server rejects drafts
+    /// and full events, so callers surface the error rather than assuming success.
+    @MainActor
+    func signUpForEvent(_ id: UUID) async throws {
+        try await supabase
+            .rpc("sign_up_for_event", params: EventSignupParams(p_event: id.uuidString))
+            .execute()
+    }
+
+    /// Cancels the current user's signup (frees the slot).
+    @MainActor
+    func cancelEventSignup(_ id: UUID) async throws {
+        try await supabase
+            .rpc("cancel_event_signup", params: EventSignupParams(p_event: id.uuidString))
+            .execute()
+    }
+
+    /// The caller's signed-up event ids (server is the source of truth).
+    @MainActor
+    func loadMyEventSignups() async throws -> [UUID] {
+        try await supabase
+            .rpc("list_my_event_signups")
+            .execute()
+            .value
     }
 
     /// Applies the current user to a campaign (idempotent server-side; decrements

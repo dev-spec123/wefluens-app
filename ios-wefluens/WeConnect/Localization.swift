@@ -123,6 +123,13 @@ enum L10n: String {
     case campaignDetailApply, campaignDetailApplied, campaignDetailAbout, campaignDetailDeliverables
     case campaignDetailEstimatedPayout
 
+    // Events (Discover strip + EventDetail)
+    case discoverEvents, discoverNoEvents, discoverJoin, discoverJoined
+    case discoverParticipants, discoverEventFull, discoverSignUpFailed
+    case eventDetailAbout, eventDetailWhen, eventDetailWhere, eventDetailSpots
+    case eventDetailSignUp, eventDetailSignedUp, eventDetailCancelSignup
+    case eventDetailCancelConfirm, eventDetailTBA, eventDetailOpenToAll
+
     // Edit Profile
     case editProfileTitle, editProfileName, editProfileBio, editProfileLocation, editProfileSave
     case editProfileLocationPlaceholder, editProfileAutoLocate, editProfileLocating
@@ -385,6 +392,16 @@ final class LocalizationManager {
             .campaignDetailSpots: "Spots", .campaignDetailApply: "Apply now", .campaignDetailApplied: "Applied ✓",
             .campaignDetailAbout: "About this campaign", .campaignDetailDeliverables: "Deliverables",
             .campaignDetailEstimatedPayout: "Estimated payout",
+            .discoverEvents: "Events", .discoverNoEvents: "No upcoming events",
+            .discoverJoin: "Sign up", .discoverJoined: "Signed up",
+            .discoverParticipants: "signed up", .discoverEventFull: "Full",
+            .discoverSignUpFailed: "Couldn't update your sign-up. Please try again.",
+            .eventDetailAbout: "About this event", .eventDetailWhen: "When",
+            .eventDetailWhere: "Where", .eventDetailSpots: "Spots",
+            .eventDetailSignUp: "Sign up", .eventDetailSignedUp: "Signed up ✓",
+            .eventDetailCancelSignup: "Cancel sign-up",
+            .eventDetailCancelConfirm: "Cancel your sign-up for this event?",
+            .eventDetailTBA: "TBA", .eventDetailOpenToAll: "Open to all",
             .editProfileTitle: "Edit Profile", .editProfileName: "Full Name",
             .editProfileBio: "Bio", .editProfileLocation: "Location", .editProfileSave: "Save Changes",
             .editProfileLocationPlaceholder: "Tap the pin to auto-locate", .editProfileAutoLocate: "Auto-locate", .editProfileLocating: "Locating…",
@@ -701,6 +718,16 @@ final class LocalizationManager {
             .campaignDetailSpots: "名额", .campaignDetailApply: "立即申请", .campaignDetailApplied: "已申请 ✓",
             .campaignDetailAbout: "活动简介", .campaignDetailDeliverables: "交付物",
             .campaignDetailEstimatedPayout: "预估报酬",
+            .discoverEvents: "活动", .discoverNoEvents: "暂无即将举行的活动",
+            .discoverJoin: "报名", .discoverJoined: "已报名",
+            .discoverParticipants: "人已报名", .discoverEventFull: "已满",
+            .discoverSignUpFailed: "更新报名失败，请重试。",
+            .eventDetailAbout: "活动简介", .eventDetailWhen: "时间",
+            .eventDetailWhere: "地点", .eventDetailSpots: "名额",
+            .eventDetailSignUp: "立即报名", .eventDetailSignedUp: "已报名 ✓",
+            .eventDetailCancelSignup: "取消报名",
+            .eventDetailCancelConfirm: "确定取消本次活动的报名吗？",
+            .eventDetailTBA: "待定", .eventDetailOpenToAll: "不限人数",
             .editProfileTitle: "编辑资料", .editProfileName: "姓名",
             .editProfileBio: "简介", .editProfileLocation: "所在地", .editProfileSave: "保存",
             .editProfileLocationPlaceholder: "点击定位图标自动获取", .editProfileAutoLocate: "自动定位", .editProfileLocating: "定位中…",
@@ -1017,6 +1044,16 @@ final class LocalizationManager {
             .campaignDetailSpots: "Cupos", .campaignDetailApply: "Aplicar", .campaignDetailApplied: "Aplicado ✓",
             .campaignDetailAbout: "Sobre esta campaña", .campaignDetailDeliverables: "Entregables",
             .campaignDetailEstimatedPayout: "Pago estimado",
+            .discoverEvents: "Eventos", .discoverNoEvents: "No hay eventos próximos",
+            .discoverJoin: "Apuntarse", .discoverJoined: "Apuntado",
+            .discoverParticipants: "apuntados", .discoverEventFull: "Completo",
+            .discoverSignUpFailed: "No se pudo actualizar tu inscripción. Inténtalo de nuevo.",
+            .eventDetailAbout: "Sobre este evento", .eventDetailWhen: "Cuándo",
+            .eventDetailWhere: "Dónde", .eventDetailSpots: "Plazas",
+            .eventDetailSignUp: "Apuntarse", .eventDetailSignedUp: "Apuntado ✓",
+            .eventDetailCancelSignup: "Cancelar inscripción",
+            .eventDetailCancelConfirm: "¿Cancelar tu inscripción a este evento?",
+            .eventDetailTBA: "Por confirmar", .eventDetailOpenToAll: "Plazas ilimitadas",
             .editProfileTitle: "Editar Perfil", .editProfileName: "Nombre completo",
             .editProfileBio: "Bio", .editProfileLocation: "Ubicación", .editProfileSave: "Guardar Cambios",
             .editProfileLocationPlaceholder: "Toca el pin para auto-ubicar", .editProfileAutoLocate: "Auto-ubicar", .editProfileLocating: "Ubicando…",
